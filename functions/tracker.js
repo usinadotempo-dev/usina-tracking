@@ -1,3 +1,5 @@
+import { resolveHost } from './_lib/workspace.js';
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -6,6 +8,11 @@ export async function onRequestPost(context) {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
+
+  // Resolve workspace from Host (custom domain) or from Origin header (when
+  // tracker is called from a landing page; the request Host is the API host).
+  const hostInfo = await resolveHost(context);
+  const workspaceId = hostInfo.workspace?.id || null;
 
   try {
     const body = await request.json();
@@ -173,7 +180,7 @@ export async function onRequestPost(context) {
           if (env.DB && shouldLogEvent) {
             await env.DB.prepare(`
               INSERT INTO event_log (
-                session_id, event_name, event_id, timestamp,
+                session_id, workspace_id, event_name, event_id, timestamp,
                 browser, browser_version, os, is_mobile,
                 pixel_was_blocked, fbp_source, fbc_source, fbclid_source,
                 ga_cookie_present, ga_client_id_fallback, itp_cookie_extended,
@@ -182,9 +189,9 @@ export async function onRequestPost(context) {
                 sent_to_ga4, ga4_status_code, ga4_response_ok, ga4_response_body, ga4_payload_sent,
                 has_email, has_phone, has_name,
                 raw_email
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
-              sessionId, body.event_name, body.event_id, body.event_time,
+              sessionId, workspaceId, body.event_name, body.event_id, body.event_time,
               browserInfo.browser, browserInfo.version, browserInfo.os, browserInfo.isMobile ? 1 : 0,
               pixelWasBlocked, fbpSource, fbcSource, fbclidSource,
               gaCookiePresent, gaClientIdFallback, fbpSource === 'middleware_http' ? 1 : 0,

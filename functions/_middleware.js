@@ -1,10 +1,16 @@
+import { resolveHost } from './_lib/workspace.js';
+
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
 
+  // Resolve tenant/workspace from Host once per request and cache in context.data
+  // so downstream functions (tracker, checkout-session, api/*) can read it.
+  if (!context.data) context.data = {};
+  const hostInfo = await resolveHost(context);
+
   // Only intercept HTML page requests, skip static assets, API endpoints,
-  // and the operator-facing dashboard (we don't want tracking cookies set
-  // when an admin checks metrics).
+  // platform-internal routes (admin, dash, auth), and tracker beacons.
   const isPageRequest = !url.pathname.match(
     /\.(js|css|png|jpg|jpeg|gif|svg|ico|woff2?|ttf|eot|map|json|webp|avif|mp4|webm|pdf|xml|txt|robots)$/i
   ) && !url.pathname.startsWith('/tracker')
@@ -13,9 +19,14 @@ export async function onRequest(context) {
     && !url.pathname.startsWith('/webhook/')
     && !url.pathname.startsWith('/checkout-session')
     && !url.pathname.startsWith('/api/')
-    && !url.pathname.startsWith('/dash');
+    && !url.pathname.startsWith('/auth/')
+    && !url.pathname.startsWith('/admin')
+    && !url.pathname.startsWith('/dash')
+    && !url.pathname.startsWith('/setup');
 
-  if (!isPageRequest) {
+  // Don't set first-party tracking cookies on platform hosts (admin/tenant dashboards).
+  // Those cookies belong to landing pages on workspace custom domains.
+  if (!isPageRequest || hostInfo.kind === 'admin' || hostInfo.kind === 'tenant' || hostInfo.kind === 'dev') {
     return next();
   }
 
@@ -98,13 +109,14 @@ export async function onRequest(context) {
   });
 
   // --- D1 UPSERT (background, non-blocking) ---
+  const workspaceId = hostInfo.workspace?.id || null;
   context.waitUntil(
     (async () => {
       try {
         if (env.DB) {
           await env.DB.prepare(`
-            INSERT INTO sessions (session_id, external_id, fbclid, gclid, msclkid, fbc, fbp, ip_address, user_agent, referrer, landing_url, utm_source, utm_medium, utm_campaign, utm_content, utm_term, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO sessions (session_id, external_id, fbclid, gclid, msclkid, fbc, fbp, ip_address, user_agent, referrer, landing_url, utm_source, utm_medium, utm_campaign, utm_content, utm_term, workspace_id, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(session_id) DO UPDATE SET
               fbclid = CASE WHEN excluded.fbclid != '' THEN excluded.fbclid ELSE sessions.fbclid END,
               gclid = CASE WHEN excluded.gclid != '' THEN excluded.gclid ELSE sessions.gclid END,
@@ -115,8 +127,9 @@ export async function onRequest(context) {
               utm_campaign = CASE WHEN excluded.utm_campaign != '' THEN excluded.utm_campaign ELSE sessions.utm_campaign END,
               utm_content = CASE WHEN excluded.utm_content != '' THEN excluded.utm_content ELSE sessions.utm_content END,
               utm_term = CASE WHEN excluded.utm_term != '' THEN excluded.utm_term ELSE sessions.utm_term END,
+              workspace_id = COALESCE(sessions.workspace_id, excluded.workspace_id),
               updated_at = excluded.updated_at
-          `).bind(sessionId, externalId, fbclid, gclid, msclkid, fbc, fbp, clientIp, userAgent, referrer, url.toString(), utmSource, utmMedium, utmCampaign, utmContent, utmTerm, now, now).run();
+          `).bind(sessionId, externalId, fbclid, gclid, msclkid, fbc, fbp, clientIp, userAgent, referrer, url.toString(), utmSource, utmMedium, utmCampaign, utmContent, utmTerm, workspaceId, now, now).run();
         }
       } catch (e) {
         console.error('Middleware D1 error:', e.message);

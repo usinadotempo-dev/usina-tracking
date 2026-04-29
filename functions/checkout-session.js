@@ -1,3 +1,5 @@
+import { resolveHost } from './_lib/workspace.js';
+
 export async function onRequestPost(context) {
   const { request, env } = context;
 
@@ -6,6 +8,9 @@ export async function onRequestPost(context) {
     'Access-Control-Allow-Methods': 'POST, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
   };
+
+  const hostInfo = await resolveHost(context);
+  const workspaceId = hostInfo.workspace?.id || null;
 
   try {
     const body = await request.json();
@@ -52,13 +57,13 @@ export async function onRequestPost(context) {
     if (env.DB) {
       await env.DB.prepare(`
         INSERT OR REPLACE INTO checkout_sessions (
-          trk, session_id, ip_address, user_agent, external_id,
+          trk, session_id, workspace_id, ip_address, user_agent, external_id,
           fbp, fbc, gclid, gbraid, wbraid, ga_client_id,
           utm_source, utm_medium, utm_campaign, utm_content, utm_term,
           event_source_url, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
-        trk, sessionId, clientIp, userAgent, externalId,
+        trk, sessionId, workspaceId, clientIp, userAgent, externalId,
         fbp, fbc, gclid, gbraid, wbraid, gaClientId,
         body.utm_source || '', body.utm_medium || '', body.utm_campaign || '',
         body.utm_content || '', body.utm_term || '',
