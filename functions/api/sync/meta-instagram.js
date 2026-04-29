@@ -136,17 +136,20 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     status = 'error';
   }
 
-  // 2. Latest media (+ per-media insights for all 50)
-  // Workers Paid plan: 1000 subrequests/invocation, so we can afford full coverage.
+  // 2. Latest media + per-media insights for the most recent 20.
+  // Pages Functions still cap subrequests around 50/invocation even on the
+  // Workers Paid plan, so we keep this tight: 1 (list) + 20 (per-media) = 21.
+  // Older posts already have like/comment counters denormalized.
   try {
     const media = await meta.fetchAll(
       `/${igId}/media?fields=id,media_type,caption,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=50`,
       { safety: 2 }
     );
+    const topRecent = media.slice(0, 20);
     const insightsByMedia = {};
     // Parallel batches of 10.
-    for (let i = 0; i < media.length; i += 10) {
-      const batch = media.slice(i, i + 10);
+    for (let i = 0; i < topRecent.length; i += 10) {
+      const batch = topRecent.slice(i, i + 10);
       const promises = batch.map(async (m) => {
         const metricList = m.media_type === 'VIDEO' || m.media_type === 'REELS'
           ? 'reach,saved,video_views,plays'
@@ -205,7 +208,6 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 3. Account insights (last N days)
-  let _debugDataByDay = null;
   // Meta IG splits metrics into two shapes — and any one metric being
   // unavailable for the account fails the whole combined call. We call
   // each metric independently so unsupported ones (e.g. email_contacts on
@@ -231,30 +233,22 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       } catch (_) { /* skip — metric not available */ }
     }
 
-    // total_value: aggregate over the range, stored against dateTo
-    const totalValueMetrics = [
-      'profile_views', 'website_clicks', 'email_contacts',
-      'phone_call_clicks', 'get_directions_clicks', 'accounts_engaged',
-    ];
+    // total_value: combined call (1 subrequest) — Meta returns data[] with
+    // entries only for metrics that succeeded; metrics not configured for
+    // the account are silently dropped from the response (no error).
     const aggRow = (dataByDay[dateTo] ||= {});
-    const _debugCalls = [];
-    for (const m of totalValueMetrics) {
-      try {
-        const r = await meta.get(
-          `/${igId}/insights?metric=${m}&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
-        );
-        _debugCalls.push({ metric: m, response_keys: Object.keys(r || {}), data_len: (r.data || []).length, first_total: r.data?.[0]?.total_value, error: r.error });
-        const series = r.data?.[0];
-        const total = series?.total_value?.value;
+    try {
+      const r = await meta.get(
+        `/${igId}/insights?metric=profile_views,website_clicks,email_contacts,phone_call_clicks,get_directions_clicks,accounts_engaged&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
+      );
+      for (const series of r.data || []) {
+        const m = series.name;
+        const total = series.total_value?.value;
         if (total !== undefined && total !== null) {
           aggRow[m] = toInt(total);
         }
-      } catch (e) {
-        _debugCalls.push({ metric: m, exception: e.message });
       }
-    }
-    aggRow._debug_calls = _debugCalls;
-    _debugDataByDay = JSON.parse(JSON.stringify(dataByDay));
+    } catch (_) { /* skip */ }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
@@ -356,7 +350,6 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     audience: audienceCount,
     duration_ms: durationMs,
     errors: errors.length ? errors : undefined,
-    _debug_account_insights: _debugDataByDay,
   };
 }
 
