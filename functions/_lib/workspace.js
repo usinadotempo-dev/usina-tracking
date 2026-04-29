@@ -24,14 +24,12 @@ export async function resolveHost(context) {
 async function resolveHostInner(host, env) {
   if (!host) return { kind: 'unknown', host: '', tenant: null, workspace: null };
 
+  // 1. Admin platform host — highest priority, never overrideable.
   if (host === ADMIN_HOST) {
     return { kind: 'admin', host, tenant: null, workspace: null };
   }
 
-  if (DEV_HOSTS.has(host) || host.endsWith('.usina-tracking.pages.dev')) {
-    return { kind: 'dev', host, tenant: null, workspace: null };
-  }
-
+  // 2. Tenant subdomain pattern <slug>.tracking.usinadotempo.com.br.
   if (host.endsWith(`.${PLATFORM_ROOT}`)) {
     const tenantSlug = host.slice(0, -1 - PLATFORM_ROOT.length);
     if (tenantSlug && tenantSlug !== 'admin') {
@@ -42,7 +40,9 @@ async function resolveHostInner(host, env) {
     }
   }
 
-  // Custom client domain — look up the workspace it's bound to.
+  // 3. Custom client domain mapped to a workspace.
+  // Checked BEFORE dev hosts so an operator can map usina-tracking.pages.dev
+  // (or a preview URL) to a workspace for end-to-end testing before DNS is wired.
   const row = await env.DB.prepare(`
     SELECT w.id AS workspace_id, w.slug AS workspace_slug, w.name AS workspace_name,
            t.id AS tenant_id, t.slug AS tenant_slug, t.name AS tenant_name
@@ -60,6 +60,11 @@ async function resolveHostInner(host, env) {
       tenant:    { id: row.tenant_id,    slug: row.tenant_slug,    name: row.tenant_name },
       workspace: { id: row.workspace_id, slug: row.workspace_slug, name: row.workspace_name },
     };
+  }
+
+  // 4. Dev/preview hosts — fallback only when nothing above matched.
+  if (DEV_HOSTS.has(host) || host.endsWith('.usina-tracking.pages.dev')) {
+    return { kind: 'dev', host, tenant: null, workspace: null };
   }
 
   return { kind: 'unknown', host, tenant: null, workspace: null };
