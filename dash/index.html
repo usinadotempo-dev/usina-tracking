@@ -41,22 +41,46 @@
 </head>
 <body>
 
-<!-- Auth gate: pulls ?key= from URL, falls back to sessionStorage, prompts if missing -->
+<!-- Multi-tenant dash: gates on /auth/me, redirects to /admin/ on 401 -->
 <div id="app" class="hidden min-h-screen">
 
-  <header class="border-b border-[color:var(--border)] bg-white">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-      <div class="flex items-center gap-3">
-        <div class="w-9 h-9 rounded-lg bg-[color:var(--text)] text-white flex items-center justify-center font-bold">T</div>
-        <div>
-          <div class="font-semibold">Tracking Dashboard</div>
-          <div class="text-xs text-[color:var(--muted)]">Attribution &amp; performance for this deployment</div>
+  <header class="border-b border-[color:var(--border)] bg-white sticky top-0 z-30">
+    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+      <a href="#" class="flex items-center gap-3 flex-shrink-0" aria-label="Usina do Tempo Tracking">
+        <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-7">
+      </a>
+
+      <div class="flex items-center gap-3 flex-1 justify-end min-w-0">
+        <select id="workspace-selector"
+                class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm font-medium bg-white text-[color:var(--text)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-100 truncate"
+                style="max-width: 260px;"
+                aria-label="Selecionar workspace">
+          <option>Carregando…</option>
+        </select>
+
+        <div class="flex items-center gap-1" id="range-picker">
+          <button class="range-btn" data-days="7">7d</button>
+          <button class="range-btn active" data-days="30">30d</button>
+          <button class="range-btn" data-days="90">90d</button>
         </div>
-      </div>
-      <div class="flex items-center gap-2" id="range-picker">
-        <button class="range-btn" data-days="7">7d</button>
-        <button class="range-btn active" data-days="30">30d</button>
-        <button class="range-btn" data-days="90">90d</button>
+
+        <div class="flex items-center gap-2 pl-3 border-l border-[color:var(--border)]">
+          <div id="user-pill" class="hidden sm:flex items-center gap-2 text-sm">
+            <div id="user-avatar-dash"
+                 class="w-8 h-8 rounded-full text-white font-semibold text-xs flex items-center justify-center"
+                 style="background: linear-gradient(135deg, #dc4a30 0%, #f5a82a 50%, #7fc7b8 100%);">—</div>
+            <div class="hidden lg:block min-w-0">
+              <div id="user-name-dash" class="text-[13px] font-medium text-[color:var(--text)] leading-tight truncate" style="max-width: 140px;">—</div>
+              <div id="user-email-dash" class="text-[11px] text-[color:var(--muted)] truncate" style="max-width: 140px;">—</div>
+            </div>
+          </div>
+          <a href="/admin/" id="admin-link" class="hidden text-xs text-[color:var(--muted)] hover:text-[color:var(--text)] px-2 py-1 rounded hover:bg-gray-50 transition" title="Painel admin">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 2 4 7v6c0 5 3.5 8.5 8 9 4.5-.5 8-4 8-9V7l-8-5z"/></svg>
+          </a>
+          <button id="logout-dash" class="text-xs text-[color:var(--muted)] hover:text-[color:var(--text)] px-2 py-1 rounded hover:bg-gray-50 transition" title="Sair" aria-label="Sair">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+          </button>
+        </div>
       </div>
     </div>
   </header>
@@ -323,16 +347,30 @@
   </main>
 </div>
 
-<!-- Auth prompt shown when no key is set -->
-<div id="auth-gate" class="min-h-screen flex items-center justify-center hidden">
-  <div class="card p-6 max-w-sm w-full">
-    <div class="font-semibold mb-2">Dashboard key required</div>
-    <div class="text-sm text-[color:var(--dim)] mb-4">
-      Paste the <code>DASH_KEY</code> you set in Cloudflare environment variables.
+<!-- Splash while bootstrapping (auth + workspaces) -->
+<div id="splash" class="min-h-screen flex items-center justify-center">
+  <div class="flex flex-col items-center gap-5">
+    <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-10 opacity-90">
+    <div class="flex items-center gap-2">
+      <span class="w-2 h-2 rounded-full bg-[#dc4a30] animate-pulse"></span>
+      <span class="w-2 h-2 rounded-full bg-[#f5a82a] animate-pulse" style="animation-delay: 120ms"></span>
+      <span class="w-2 h-2 rounded-full bg-[#7fc7b8] animate-pulse" style="animation-delay: 240ms"></span>
     </div>
-    <input id="auth-input" type="password" placeholder="DASH_KEY" class="w-full border border-[color:var(--border)] rounded-lg px-3 py-2 text-sm mb-3 font-mono">
-    <button id="auth-submit" class="w-full bg-[color:var(--text)] text-white rounded-lg py-2 text-sm font-semibold">Open dashboard</button>
-    <div id="auth-error" class="text-xs text-[color:var(--accent-red)] mt-2 hidden">Invalid key.</div>
+  </div>
+</div>
+
+<!-- Shown when authenticated but the user has no workspaces assigned -->
+<div id="no-workspace-gate" class="min-h-screen flex items-center justify-center hidden">
+  <div class="card p-8 max-w-md w-full text-center">
+    <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center text-white"
+         style="background: linear-gradient(135deg, #dc4a30 0%, #f5a82a 50%, #7fc7b8 100%);">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+    </div>
+    <div class="font-semibold text-base mb-2">Nenhum workspace atribuído</div>
+    <div class="text-sm text-[color:var(--dim)] mb-5">
+      Sua conta ainda não tem acesso a nenhum workspace. Peça ao administrador da Usina para atribuir os negócios que você precisa acompanhar.
+    </div>
+    <button id="no-ws-logout" class="bg-[color:var(--text)] text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition">Sair</button>
   </div>
 </div>
 
@@ -355,47 +393,103 @@
   const qs  = sel => document.querySelector(sel);
   const qsa = sel => document.querySelectorAll(sel);
 
-  // -------- Auth --------
-  const url = new URL(window.location.href);
-  let key = url.searchParams.get('key') || sessionStorage.getItem('dashKey') || '';
-  const authGate = qs('#auth-gate');
-  const app = qs('#app');
-
-  async function openDashboard() {
-    app.classList.remove('hidden');
-    authGate.classList.add('hidden');
-    sessionStorage.setItem('dashKey', key);
-    await loadAll(currentDays);
-  }
-
-  async function probeKey(k) {
-    try {
-      const r = await fetch(`/api/revenue?key=${encodeURIComponent(k)}&days=1`);
-      return r.ok;
-    } catch (_) { return false; }
-  }
-
-  (async function gate() {
-    if (key && await probeKey(key)) { return openDashboard(); }
-    authGate.classList.remove('hidden');
-    qs('#auth-submit').addEventListener('click', async () => {
-      key = qs('#auth-input').value.trim();
-      if (!key) return;
-      if (await probeKey(key)) { openDashboard(); }
-      else { qs('#auth-error').classList.remove('hidden'); }
-    });
-    qs('#auth-input').addEventListener('keydown', e => { if (e.key === 'Enter') qs('#auth-submit').click(); });
-  })();
-
   // -------- State --------
   let currentDays = 30;
   let utmDimension = 'utm_source';
   let utmFilters = {};
   let revenueChart = null;
   let productsChart = null;
+  let currentUser = null;
+  let workspaces = [];
+  let currentWorkspaceId = null;
 
   // -------- Helpers --------
-  const fetchJson = path => fetch(`${path}${path.includes('?') ? '&' : '?'}key=${encodeURIComponent(key)}`).then(r => r.json());
+  function escAttr(s) {
+    return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function initialsFor(s) {
+    const parts = String(s || '').split(/[\s@.]+/).filter(Boolean).slice(0, 2);
+    return (parts.map(p => p[0] || '').join('') || '?').toUpperCase();
+  }
+  async function logoutAndGoAdmin() {
+    try { await fetch('/auth/logout', { method: 'POST', credentials: 'include' }); } catch {}
+    window.location.href = '/admin/';
+  }
+
+  // Cookie-authenticated fetch with auto-redirect on 401, automatically scoped to currentWorkspaceId.
+  const fetchJson = async (path) => {
+    const sep = path.includes('?') ? '&' : '?';
+    const r = await fetch(`${path}${sep}workspace=${encodeURIComponent(currentWorkspaceId)}`, { credentials: 'include' });
+    if (r.status === 401) { window.location.href = '/admin/'; return Promise.reject(new Error('Unauthorized')); }
+    return r.json();
+  };
+
+  // -------- Boot: validate session, populate workspace selector --------
+  (async function bootDash() {
+    const splash = qs('#splash');
+    const app = qs('#app');
+    const noWs = qs('#no-workspace-gate');
+
+    let me;
+    try {
+      const r = await fetch('/auth/me', { credentials: 'include' });
+      if (r.status === 401) { window.location.href = '/admin/'; return; }
+      if (!r.ok) throw new Error('Falha em /auth/me (' + r.status + ')');
+      me = await r.json();
+    } catch (e) {
+      console.error('bootDash error:', e);
+      window.location.href = '/admin/';
+      return;
+    }
+
+    currentUser = me.user;
+    workspaces = me.workspaces || [];
+
+    // Populate user pill
+    const display = currentUser.name || currentUser.email;
+    qs('#user-avatar-dash').textContent = initialsFor(display);
+    qs('#user-name-dash').textContent = display;
+    qs('#user-email-dash').textContent = currentUser.email;
+    if (currentUser.role === 'usina_admin') qs('#admin-link').classList.remove('hidden');
+
+    // Logout buttons
+    qs('#logout-dash').addEventListener('click', logoutAndGoAdmin);
+    qs('#no-ws-logout').addEventListener('click', logoutAndGoAdmin);
+
+    if (!workspaces.length) {
+      splash.classList.add('hidden');
+      noWs.classList.remove('hidden');
+      return;
+    }
+
+    // Workspace selector — group by tenant when there's more than one
+    const sel = qs('#workspace-selector');
+    const tenantGroups = {};
+    for (const w of workspaces) {
+      const key = w.tenant_id || '_';
+      if (!tenantGroups[key]) tenantGroups[key] = { name: w.tenant_name || '', items: [] };
+      tenantGroups[key].items.push(w);
+    }
+    const groups = Object.values(tenantGroups);
+    sel.innerHTML = groups.length > 1
+      ? groups.map(g => `<optgroup label="${escAttr(g.name)}">${g.items.map(w => `<option value="${escAttr(w.id)}">${escAttr(w.name)}</option>`).join('')}</optgroup>`).join('')
+      : groups[0].items.map(w => `<option value="${escAttr(w.id)}">${escAttr(w.tenant_name)} · ${escAttr(w.name)}</option>`).join('');
+
+    // Restore last selection if still accessible
+    const last = sessionStorage.getItem('currentWorkspaceId');
+    currentWorkspaceId = (last && workspaces.some(w => w.id === last)) ? last : workspaces[0].id;
+    sel.value = currentWorkspaceId;
+
+    sel.addEventListener('change', async () => {
+      currentWorkspaceId = sel.value;
+      sessionStorage.setItem('currentWorkspaceId', currentWorkspaceId);
+      await loadAll(currentDays);
+    });
+
+    splash.classList.add('hidden');
+    app.classList.remove('hidden');
+    await loadAll(currentDays);
+  })();
   const money = (n, cur = 'BRL') => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Number(n || 0));
   const fmtInt = n => new Intl.NumberFormat('en-US').format(Number(n || 0));
   const fmtDate = ts => new Date(Number(ts) * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
