@@ -214,8 +214,11 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   // an account that doesn't have an email button configured) don't tank
   // the rest. Subrequest budget is fine post-fan-out (~12 calls/workspace).
   try {
+    // Meta IG insights cap the time_range to 30 days (2,592,000 s) exact.
+    // We align both bounds to 00:00:00Z so a 30-day window is exactly
+    // 30 * 86400 s and never trips the (#100) "more than 30 days" error.
     const sinceUnix = Math.floor(new Date(dateFrom + 'T00:00:00Z').getTime() / 1000);
-    const untilUnix = Math.floor(new Date(dateTo + 'T23:59:59Z').getTime() / 1000);
+    const untilUnix = Math.floor(new Date(dateTo   + 'T00:00:00Z').getTime() / 1000);
     const dataByDay = {};
 
     // time_series: per-day values
@@ -238,8 +241,6 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       const r = await meta.get(
         `/${igId}/insights?metric=profile_views,website_clicks,accounts_engaged,total_interactions&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
       );
-      const got = (r.data || []).map(s => `${s.name}=${s.total_value?.value}`).join(',');
-      errors.push(`tv: ${got || 'EMPTY'}`);
       for (const series of r.data || []) {
         const m = series.name;
         const total = series.total_value?.value;
@@ -247,10 +248,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           aggRow[m] = toInt(total);
         }
       }
-      errors.push(`agg-keys: ${Object.keys(aggRow).join(',')}`);
-    } catch (e) {
-      errors.push(`tv-err: ${e.message.slice(0, 200)}`);
-    }
+    } catch (_) { /* metric not configured for this account */ }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
