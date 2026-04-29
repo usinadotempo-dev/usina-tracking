@@ -237,18 +237,23 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       'phone_call_clicks', 'get_directions_clicks', 'accounts_engaged',
     ];
     const aggRow = (dataByDay[dateTo] ||= {});
+    const _debugCalls = [];
     for (const m of totalValueMetrics) {
       try {
         const r = await meta.get(
           `/${igId}/insights?metric=${m}&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
         );
+        _debugCalls.push({ metric: m, response_keys: Object.keys(r || {}), data_len: (r.data || []).length, first_total: r.data?.[0]?.total_value, error: r.error });
         const series = r.data?.[0];
         const total = series?.total_value?.value;
         if (total !== undefined && total !== null) {
           aggRow[m] = toInt(total);
         }
-      } catch (_) { /* skip — metric not configured for this account */ }
+      } catch (e) {
+        _debugCalls.push({ metric: m, exception: e.message });
+      }
     }
+    aggRow._debug_calls = _debugCalls;
     _debugDataByDay = JSON.parse(JSON.stringify(dataByDay));
     const dates = Object.keys(dataByDay);
     if (dates.length) {
