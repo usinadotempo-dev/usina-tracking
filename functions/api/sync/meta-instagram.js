@@ -105,18 +105,21 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     status = 'error';
   }
 
-  // 2. Latest media (+ per-media insights, parallelized)
+  // 2. Latest media (+ per-media insights for top 15 most recent)
+  // IMPORTANT: Cloudflare Pages free tier caps at 50 subrequests per request.
+  // We list up to 30 media (single page) and only fetch insights for the 15
+  // most recent — older posts already have their counters denormalized via
+  // like_count/comments_count, and reach/impressions decay quickly anyway.
   try {
     const media = await meta.fetchAll(
-      `/${igId}/media?fields=id,media_type,caption,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=50`,
-      { safety: 2 }
+      `/${igId}/media?fields=id,media_type,caption,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=30`,
+      { safety: 1 }
     );
-    // Per-media insights: reach + saved are universal; impressions is no longer
-    // available at media level for some accounts; video_views only on VIDEO/REELS.
-    // Fetch in parallel batches of 5 to avoid hammering rate limits.
     const insightsByMedia = {};
-    for (let i = 0; i < media.length; i += 5) {
-      const batch = media.slice(i, i + 5);
+    const topRecent = media.slice(0, 15);
+    // Parallel batches of 8.
+    for (let i = 0; i < topRecent.length; i += 8) {
+      const batch = topRecent.slice(i, i + 8);
       const promises = batch.map(async (m) => {
         const metricList = m.media_type === 'VIDEO' || m.media_type === 'REELS'
           ? 'reach,saved,video_views,plays'
@@ -175,30 +178,42 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 3. Account insights (daily, last N days)
-  // The "modern" IG metrics: reach (period day), profile_views, follower_count,
-  // website_clicks, email_contacts, phone_call_clicks, get_directions_clicks,
-  // accounts_engaged. Some accounts return a (#10) error if insufficient
-  // followers; we swallow that as a warning.
+  // OPTIMIZATION: combine all 8 metrics into a single call (Meta Graph
+  // accepts comma-separated metric names). 1 subrequest instead of 8.
+  // If one metric isn't available for this account, the API still returns
+  // the others — `data` array may be shorter, and we just skip what's missing.
   try {
     const sinceUnix = Math.floor(new Date(dateFrom + 'T00:00:00Z').getTime() / 1000);
     const untilUnix = Math.floor(new Date(dateTo + 'T23:59:59Z').getTime() / 1000);
-    // Modern API requires `metric_type=total_value` for these; we use the older
-    // `period=day` which returns a values[] keyed by end_time.
-    const metrics = ['reach', 'profile_views', 'follower_count', 'website_clicks',
-                     'email_contacts', 'phone_call_clicks', 'get_directions_clicks',
-                     'accounts_engaged'];
+    const metricList = 'reach,profile_views,follower_count,website_clicks,email_contacts,phone_call_clicks,get_directions_clicks,accounts_engaged';
     const dataByDay = {};
-    for (const m of metrics) {
-      try {
-        const r = await meta.get(`/${igId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}`);
-        for (const series of r.data || []) {
-          for (const v of series.values || []) {
-            const date = (v.end_time || '').slice(0, 10);
-            if (!date) continue;
-            (dataByDay[date] ||= {})[m] = toInt(v.value);
-          }
+    try {
+      const r = await meta.get(`/${igId}/insights?metric=${metricList}&period=day&since=${sinceUnix}&until=${untilUnix}`);
+      for (const series of r.data || []) {
+        const m = series.name;
+        for (const v of series.values || []) {
+          const date = (v.end_time || '').slice(0, 10);
+          if (!date) continue;
+          (dataByDay[date] ||= {})[m] = toInt(v.value);
         }
-      } catch (_) { /* a single metric failing shouldn't tank the rest */ }
+      }
+    } catch (e) {
+      // If the combined call fails (e.g. too few followers for some metrics),
+      // fall back to fetching the safer subset one at a time — but only the
+      // 4 universally-available ones.
+      const safeMetrics = ['reach', 'profile_views', 'follower_count', 'accounts_engaged'];
+      for (const m of safeMetrics) {
+        try {
+          const r = await meta.get(`/${igId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}`);
+          for (const series of r.data || []) {
+            for (const v of series.values || []) {
+              const date = (v.end_time || '').slice(0, 10);
+              if (!date) continue;
+              (dataByDay[date] ||= {})[m] = toInt(v.value);
+            }
+          }
+        } catch (_) { /* skip */ }
+      }
     }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
@@ -239,15 +254,14 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     if (status === 'ok') status = 'partial';
   }
 
-  // 4. Audience demographics (lifetime, replaces older audience_* metrics).
-  // Modern API names them with the `engaged_audience_demographics` /
-  // `follower_demographics` family. We try the documented modern shape.
+  // 4. Audience demographics (lifetime).
+  // OPTIMIZATION: only 2 dimensions instead of 4 to keep subrequest count low.
+  // age + city are the most actionable for paid traffic decisions; gender and
+  // country can be added back once we move to Workers Paid (1000 subrequests).
   try {
     const dims = [
-      { metric: 'follower_demographics', breakdown: 'age',     dim: 'age' },
-      { metric: 'follower_demographics', breakdown: 'gender',  dim: 'gender' },
-      { metric: 'follower_demographics', breakdown: 'country', dim: 'country' },
-      { metric: 'follower_demographics', breakdown: 'city',    dim: 'city' },
+      { metric: 'follower_demographics', breakdown: 'age',  dim: 'age' },
+      { metric: 'follower_demographics', breakdown: 'city', dim: 'city' },
     ];
     const rows = [];
     for (const d of dims) {

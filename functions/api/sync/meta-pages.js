@@ -99,28 +99,41 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 2. Page insights (daily)
+  // OPTIMIZATION: combine all metrics into a single call to stay under
+  // Cloudflare Pages free-tier 50-subrequest limit. If the combined call
+  // fails, fall back to per-metric (per-metric is more lenient — page might
+  // not have some metrics enabled).
   try {
     const sinceUnix = Math.floor(new Date(dateFrom + 'T00:00:00Z').getTime() / 1000);
     const untilUnix = Math.floor(new Date(dateTo + 'T23:59:59Z').getTime() / 1000);
-    // Page-level metrics. Some are deprecated for new pages — defensive per-metric fetch.
-    const metrics = ['page_fans', 'page_fan_adds', 'page_fan_removes',
-                     'page_impressions', 'page_impressions_unique',
-                     'page_engaged_users', 'page_post_engagements', 'page_views_total'];
+    const allMetrics = 'page_fans,page_fan_adds,page_fan_removes,page_impressions,page_impressions_unique,page_engaged_users,page_post_engagements,page_views_total';
     const dataByDay = {};
-    const tokenForInsights = pageToken || meta.get; // pageToken if available
-    for (const m of metrics) {
-      try {
-        const path = `/${pageId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}` +
-          (pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '');
-        const r = await meta.get(path);
-        for (const series of r.data || []) {
-          for (const v of series.values || []) {
-            const date = (v.end_time || '').slice(0, 10);
-            if (!date) continue;
-            (dataByDay[date] ||= {})[m] = toInt(v.value);
-          }
+    const tokenSuffix = pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '';
+    try {
+      const r = await meta.get(`/${pageId}/insights?metric=${allMetrics}&period=day&since=${sinceUnix}&until=${untilUnix}${tokenSuffix}`);
+      for (const series of r.data || []) {
+        const m = series.name;
+        for (const v of series.values || []) {
+          const date = (v.end_time || '').slice(0, 10);
+          if (!date) continue;
+          (dataByDay[date] ||= {})[m] = toInt(v.value);
         }
-      } catch (_) { /* metric not available */ }
+      }
+    } catch (_) {
+      // Fallback: try a smaller safer subset (likely supported on most pages)
+      const safe = ['page_fans', 'page_impressions', 'page_engaged_users'];
+      for (const m of safe) {
+        try {
+          const r = await meta.get(`/${pageId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}${tokenSuffix}`);
+          for (const series of r.data || []) {
+            for (const v of series.values || []) {
+              const date = (v.end_time || '').slice(0, 10);
+              if (!date) continue;
+              (dataByDay[date] ||= {})[m] = toInt(v.value);
+            }
+          }
+        } catch (_) { /* skip */ }
+      }
     }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
