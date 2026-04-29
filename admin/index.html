@@ -1365,15 +1365,15 @@ async function loadWorkspaceDetail(id) {
   $$('.tab', wrap).forEach(t => {
     t.addEventListener('click', () => {
       $$('.tab', wrap).forEach(x => x.classList.toggle('active', x === t));
-      renderWsTab(t.dataset.tab, w, cfg, data.domains || []);
+      renderWsTab(t.dataset.tab, w, cfg, data.domains || [], data);
     });
   });
-  renderWsTab('config', w, cfg, data.domains || []);
+  renderWsTab('config', w, cfg, data.domains || [], data);
 }
 
-function renderWsTab(tab, w, cfg, domains) {
+function renderWsTab(tab, w, cfg, domains, fullData) {
   const body = $('#ws-detail-body');
-  if (tab === 'config') return renderWsConfigForm(body, w, cfg);
+  if (tab === 'config') return renderWsConfigForm(body, w, cfg, fullData?.presets, fullData?.dash, fullData?.module_keys, fullData?.module_labels);
   if (tab === 'domains') return renderWsDomains(body, w, domains);
   if (tab === 'danger') return renderWsDanger(body, w);
 }
@@ -1402,9 +1402,47 @@ function configCard(title, description, fields) {
     </div>`;
 }
 
-function renderWsConfigForm(body, w, cfg) {
+function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, moduleLabels) {
+  // Visualização do dashboard — preset + overrides
+  const businessTypeOptions = Object.entries(presets || {})
+    .map(([k, v]) => `<option value="${escAttr(k)}" ${k === dashResolved.business_type ? 'selected' : ''}>${escAttr(v.label)}</option>`)
+    .join('');
+  const visCardHtml = `
+    <div class="card p-6 mb-5">
+      <div class="mb-5">
+        <h3 class="display text-[15px] text-brand-navy">Visualização do dashboard</h3>
+        <p class="text-[13px] text-brand-gray mt-0.5">Define quais cards e seções aparecem no <span class="mono">/dash</span> deste workspace. Comece pelo tipo de negócio — você pode personalizar abaixo.</p>
+      </div>
+      <div class="grid gap-4">
+        <div>
+          <label class="label">Tipo de negócio</label>
+          <select id="ws-business-type" class="select">
+            ${businessTypeOptions}
+          </select>
+          <p class="help" id="ws-business-help">${escAttr(presets?.[dashResolved.business_type]?.description || '')}</p>
+        </div>
+        <div>
+          <button type="button" class="btn btn-secondary btn-sm" id="ws-toggle-modules">Personalizar módulos individualmente</button>
+        </div>
+        <div id="ws-modules-grid" class="hidden border border-brand-border rounded-lg p-4 bg-[#fafbfd]">
+          <p class="text-[12px] text-brand-gray mb-3">Marcações sobrescrevem o preset. Pra reverter, deixe como está no preset (botão "Reaplicar preset").</p>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-2 text-[13px]">
+            ${moduleKeys.map((k) => `
+              <label class="flex items-center gap-2 cursor-pointer hover:bg-white px-2 py-1 rounded">
+                <input type="checkbox" data-module="${escAttr(k)}" ${dashResolved.modules[k] ? 'checked' : ''}>
+                <span>${escAttr(moduleLabels[k] || k)}</span>
+              </label>
+            `).join('')}
+          </div>
+          <button type="button" class="btn btn-ghost btn-sm mt-3" id="ws-reapply-preset">Reaplicar preset</button>
+        </div>
+      </div>
+    </div>`;
+
   body.innerHTML = `
     <form id="ws-cfg-form" class="stagger">
+      ${visCardHtml}
+
       ${configCard('Meta CAPI', 'Pixel e token de Conversions API. Eventos server-side são enviados para este pixel.', [
         { label: 'Pixel ID',        key: 'meta_pixel_id',         value: cfg.meta_pixel_id,        mono: true, placeholder: '1234567890' },
         { label: 'Access Token',    key: 'meta_access_token',     value: cfg.meta_access_token,    mono: true, secret: true, placeholder: 'EAA…', full: true },
@@ -1445,10 +1483,55 @@ function renderWsConfigForm(body, w, cfg) {
       </div>
     </form>`;
 
+  // Wire dashboard visibility controls
+  const businessTypeEl = $('#ws-business-type');
+  const helpEl = $('#ws-business-help');
+  const modulesGrid = $('#ws-modules-grid');
+  const toggleBtn = $('#ws-toggle-modules');
+  const reapplyBtn = $('#ws-reapply-preset');
+
+  toggleBtn?.addEventListener('click', () => {
+    modulesGrid.classList.toggle('hidden');
+    toggleBtn.textContent = modulesGrid.classList.contains('hidden')
+      ? 'Personalizar módulos individualmente'
+      : 'Esconder personalização';
+  });
+
+  businessTypeEl?.addEventListener('change', () => {
+    const preset = presets[businessTypeEl.value];
+    if (!preset) return;
+    helpEl.textContent = preset.description || '';
+    // Re-mark checkboxes with the new preset's modules
+    $$('input[data-module]', modulesGrid).forEach((cb) => {
+      cb.checked = !!preset.modules[cb.dataset.module];
+    });
+  });
+
+  reapplyBtn?.addEventListener('click', () => {
+    const preset = presets[businessTypeEl.value];
+    if (!preset) return;
+    $$('input[data-module]', modulesGrid).forEach((cb) => {
+      cb.checked = !!preset.modules[cb.dataset.module];
+    });
+    toast('Preset reaplicado. Lembre de salvar.', 'info');
+  });
+
   $('#ws-cfg-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const config = {};
     $$('[data-cfg]', body).forEach(inp => { config[inp.dataset.cfg] = inp.value.trim() || null; });
+
+    // Append visibility config
+    const businessType = businessTypeEl?.value || 'education_hybrid';
+    config.business_type = businessType;
+    // Only persist dash_modules override if checkboxes deviate from the preset
+    const presetModules = presets[businessType]?.modules || {};
+    const currentModules = {};
+    $$('input[data-module]', modulesGrid).forEach((cb) => { currentModules[cb.dataset.module] = cb.checked; });
+    const deviates = Object.keys(presetModules).some((k) => !!presetModules[k] !== !!currentModules[k])
+                   || Object.keys(currentModules).some((k) => !!presetModules[k] !== !!currentModules[k]);
+    config.dash_modules = deviates ? JSON.stringify({ modules: currentModules }) : null;
+
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = 'Salvando…';
     try {
@@ -1461,6 +1544,10 @@ function renderWsConfigForm(body, w, cfg) {
     }
   });
 }
+
+// `escAttr` is defined globally below in dash but admin uses `escapeHtml`.
+// Re-export for the function signature above.
+function escAttr(s) { return escapeHtml(s); }
 
 function renderWsDomains(body, w, domains) {
   body.innerHTML = `

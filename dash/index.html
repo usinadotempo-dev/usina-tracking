@@ -87,34 +87,37 @@
 
   <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
 
-    <!-- Revenue Overview -->
-    <section class="fade-in">
+    <!-- KPI Strip — variantes (full | lead_focus | roas_focus | ecommerce) -->
+    <section class="fade-in" data-module="kpi_strip">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <div class="card p-5">
-          <div class="kpi-label">Receita bruta</div>
-          <div class="kpi-value mono accent-amber mt-1" id="kpi-revenue">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-revenue-sub">&nbsp;</div>
-        </div>
-        <div class="card p-5">
-          <div class="kpi-label">Vendas</div>
-          <div class="kpi-value mono mt-1" id="kpi-sales">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Transações pagas</div>
-        </div>
-        <div class="card p-5">
-          <div class="kpi-label">Ticket médio</div>
-          <div class="kpi-value mono accent-blue mt-1" id="kpi-aov">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Receita / vendas</div>
-        </div>
-        <div class="card p-5">
-          <div class="kpi-label">Leads</div>
-          <div class="kpi-value mono accent-green mt-1" id="kpi-leads">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div>
-        </div>
+        <!-- Variant: full (default — Educação híbrida) -->
+        <div class="card p-5" data-variant="full"><div class="kpi-label">Receita bruta</div><div class="kpi-value mono accent-amber mt-1" id="kpi-revenue">—</div><div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-revenue-sub">&nbsp;</div></div>
+        <div class="card p-5" data-variant="full"><div class="kpi-label">Vendas</div><div class="kpi-value mono mt-1" id="kpi-sales">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Transações pagas</div></div>
+        <div class="card p-5" data-variant="full"><div class="kpi-label">Ticket médio</div><div class="kpi-value mono accent-blue mt-1" id="kpi-aov">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Receita / vendas</div></div>
+        <div class="card p-5" data-variant="full"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-leads">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div></div>
+
+        <!-- Variant: lead_focus (Captação local, B2B) -->
+        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-lead-count">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div></div>
+        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">CPL</div><div class="kpi-value mono accent-amber mt-1" id="kpi-lead-cpl">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Custo médio por lead</div></div>
+        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Investimento</div><div class="kpi-value mono accent-blue mt-1" id="kpi-lead-spend">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total de campanhas Meta</div></div>
+        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Alcance</div><div class="kpi-value mono mt-1" id="kpi-lead-reach">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Pessoas únicas atingidas</div></div>
+
+        <!-- Variant: roas_focus (Infoproduto) -->
+        <div class="card p-5 hidden" data-variant="roas_focus"><div class="kpi-label">Receita</div><div class="kpi-value mono accent-amber mt-1" id="kpi-roas-revenue">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total no período</div></div>
+        <div class="card p-5 hidden" data-variant="roas_focus"><div class="kpi-label">ROAS</div><div class="kpi-value mono accent-green mt-1" id="kpi-roas-roas">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Receita / investido</div></div>
+        <div class="card p-5 hidden" data-variant="roas_focus"><div class="kpi-label">Vendas</div><div class="kpi-value mono mt-1" id="kpi-roas-sales">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Pedidos pagos</div></div>
+        <div class="card p-5 hidden" data-variant="roas_focus"><div class="kpi-label">Ticket</div><div class="kpi-value mono accent-blue mt-1" id="kpi-roas-aov">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Receita / vendas</div></div>
+
+        <!-- Variant: ecommerce -->
+        <div class="card p-5 hidden" data-variant="ecommerce"><div class="kpi-label">Receita</div><div class="kpi-value mono accent-amber mt-1" id="kpi-ec-revenue">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total no período</div></div>
+        <div class="card p-5 hidden" data-variant="ecommerce"><div class="kpi-label">Pedidos</div><div class="kpi-value mono mt-1" id="kpi-ec-orders">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Pedidos pagos</div></div>
+        <div class="card p-5 hidden" data-variant="ecommerce"><div class="kpi-label">AOV</div><div class="kpi-value mono accent-blue mt-1" id="kpi-ec-aov">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Ticket médio</div></div>
+        <div class="card p-5 hidden" data-variant="ecommerce"><div class="kpi-label">ROAS</div><div class="kpi-value mono accent-green mt-1" id="kpi-ec-roas">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Receita / investido</div></div>
       </div>
     </section>
 
     <!-- Revenue time series -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="revenue_chart">
       <div class="flex items-center justify-between mb-3">
         <div>
           <div class="font-semibold">Receita ao longo do tempo</div>
@@ -125,7 +128,7 @@
     </section>
 
     <!-- Product cards + time series -->
-    <section class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 fade-in">
+    <section class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 fade-in" data-module="products">
       <div class="card p-5">
         <div class="font-semibold mb-3">Produtos</div>
         <div id="product-cards" class="space-y-2">
@@ -139,7 +142,7 @@
     </section>
 
     <!-- Paid Traffic Attribution -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="attribution">
       <div class="flex items-center justify-between mb-4">
         <div>
           <div class="font-semibold">Atribuição de tráfego pago</div>
@@ -221,7 +224,7 @@
     </section>
 
     <!-- Meta Campaigns -->
-    <section class="card p-5 fade-in" id="campaigns-section">
+    <section class="card p-5 fade-in" id="campaigns-section" data-module="campaigns">
       <div class="flex items-center justify-between mb-4 gap-3">
         <div>
           <div class="font-semibold">Campanhas Meta</div>
@@ -299,7 +302,7 @@
     </section>
 
     <!-- Instagram -->
-    <section class="card p-5 fade-in" id="ig-section">
+    <section class="card p-5 fade-in" id="ig-section" data-module="instagram">
       <div class="flex items-center justify-between mb-4 gap-3">
         <div>
           <div class="font-semibold">Instagram</div>
@@ -371,7 +374,7 @@
     </section>
 
     <!-- Facebook Page -->
-    <section class="card p-5 fade-in" id="page-section">
+    <section class="card p-5 fade-in" id="page-section" data-module="facebook_page">
       <div class="flex items-center justify-between mb-4 gap-3">
         <div>
           <div class="font-semibold">Página do Facebook</div>
@@ -419,7 +422,7 @@
     </section>
 
     <!-- UTM Breakdown -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="utm_breakdown">
       <div class="flex items-center justify-between mb-3">
         <div class="font-semibold">Detalhamento por UTM</div>
         <div class="text-xs text-[color:var(--muted)]">Agrupado a partir de purchase_log</div>
@@ -450,7 +453,7 @@
     </section>
 
     <!-- Leads with UTMs -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="leads_table">
       <div class="flex items-center justify-between mb-3">
         <div>
           <div class="font-semibold">Leads recentes</div>
@@ -478,7 +481,7 @@
     </section>
 
     <!-- Recent purchases -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="purchases_table">
       <div class="flex items-center justify-between mb-3">
         <div>
           <div class="font-semibold">Compras recentes</div>
@@ -506,7 +509,7 @@
     </section>
 
     <!-- Tracking Health -->
-    <section class="card p-5 fade-in">
+    <section class="card p-5 fade-in" data-module="tracking_health">
       <div class="flex items-center justify-between mb-4">
         <div>
           <div class="font-semibold">Saúde do tracking</div>
@@ -692,13 +695,49 @@
     sel.addEventListener('change', async () => {
       currentWorkspaceId = sel.value;
       sessionStorage.setItem('currentWorkspaceId', currentWorkspaceId);
+      applyDashModulation();
       await loadAll(currentDays);
     });
 
     splash.classList.add('hidden');
     app.classList.remove('hidden');
+    applyDashModulation();
     await loadAll(currentDays);
   })();
+
+  // Apply module visibility + KPI strip variant based on the active workspace's
+  // resolved dash config (server merged preset + override into workspace.dash_modules).
+  function applyDashModulation() {
+    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+    if (!ws) return;
+    const modules = ws.dash_modules || {};
+    const variants = ws.dash_variants || {};
+
+    qsa('section[data-module]').forEach((sec) => {
+      const k = sec.getAttribute('data-module');
+      const enabled = modules[k] !== false; // default enabled if undefined
+      sec.style.display = enabled ? '' : 'none';
+    });
+
+    // KPI strip variant — show one of the 4 sets.
+    const kpiVariant = variants.kpi_strip || 'full';
+    qsa('section[data-module="kpi_strip"] [data-variant]').forEach((card) => {
+      const matches = card.getAttribute('data-variant') === kpiVariant;
+      card.classList.toggle('hidden', !matches);
+    });
+
+    // Attribution variant — `lead_only` hides spend/CPA/ROAS.
+    const attrVariant = variants.attribution || 'full';
+    if (attrVariant === 'lead_only') {
+      qsa('#attribution-sync-note ~ *, [id^="meta-spend"], [id^="meta-cpa"], [id^="meta-roas"]').forEach(() => {});
+      // Hide rows holding Spend / CPA / ROAS (variant-aware tweak)
+      const metaSpend = qs('#meta-spend')?.closest('div.col-span-2, div');
+      const metaCpa = qs('#meta-cpa')?.closest('div.col-span-2, div');
+      const metaRoas = qs('#meta-roas')?.closest('div.col-span-2, div');
+      [metaSpend, metaCpa, metaRoas].forEach((el) => { if (el) el.style.display = 'none'; });
+    }
+  }
+  window.applyDashModulation = applyDashModulation;
   const money = (n, cur = 'BRL') => new Intl.NumberFormat('en-US', { style: 'currency', currency: cur, maximumFractionDigits: 0 }).format(Number(n || 0));
   const fmtInt = n => new Intl.NumberFormat('en-US').format(Number(n || 0));
   const fmtDate = ts => new Date(Number(ts) * 1000).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
@@ -1042,18 +1081,75 @@
 
   async function loadAll(days) {
     currentDays = days;
-    await Promise.all([
-      loadRevenue(days),
-      loadProducts(days),
-      loadAttribution(days),
-      loadCampaigns(days),
-      loadInstagram(days),
-      loadPage(days),
-      loadUtm(),
-      loadLeads(days),
-      loadPurchases(),
-      loadHealth(),
-    ]);
+    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+    const modules = ws?.dash_modules || {};
+    const tasks = [];
+    if (modules.kpi_strip !== false) {
+      // KPI strip can need leads (for full/lead_focus) and revenue (for full/roas_focus/ecommerce).
+      // We always try the relevant ones; backend handles the rest.
+      tasks.push(loadRevenue(days));
+    }
+    if (modules.revenue_chart !== false) tasks.push(loadRevenue(days)); // safe to call twice; second is cached / re-runs same query
+    if (modules.products       !== false) tasks.push(loadProducts(days));
+    if (modules.attribution    !== false) tasks.push(loadAttribution(days));
+    if (modules.campaigns      !== false) tasks.push(loadCampaigns(days));
+    if (modules.instagram      !== false) tasks.push(loadInstagram(days));
+    if (modules.facebook_page  !== false) tasks.push(loadPage(days));
+    if (modules.utm_breakdown  !== false) tasks.push(loadUtm());
+    if (modules.leads_table    !== false) tasks.push(loadLeads(days));
+    if (modules.purchases_table!== false) tasks.push(loadPurchases());
+    if (modules.tracking_health!== false) tasks.push(loadHealth());
+    await Promise.all(tasks);
+    // After all data lands, populate KPI variants that depend on multiple sources.
+    populateKpiVariants();
+  }
+
+  // Fill the right KPI strip variant based on the active workspace's preset.
+  // Reads existing data already loaded into other widgets — no extra API calls.
+  function populateKpiVariants() {
+    const ws = workspaces.find((w) => w.id === currentWorkspaceId);
+    const variant = ws?.dash_variants?.kpi_strip || 'full';
+    if (variant === 'lead_focus') {
+      // Leads = use existing #kpi-leads (populated by loadRevenue)
+      const leadsTxt = qs('#kpi-leads')?.textContent || '—';
+      qs('#kpi-lead-count').textContent = leadsTxt;
+      // CPL/Spend/Reach come from campaigns totals (populated by loadCampaigns)
+      const spendTxt = qs('#camp-kpi-spend')?.textContent || '—';
+      const cplTxt   = qs('#camp-kpi-cpl')?.textContent   || '—';
+      // approximate reach: max single-day reach across campaigns isn't ideal,
+      // but the campaigns endpoint exposes a workspace-wide totals.reach via MAX
+      // — we already render that nowhere visible. Fall back to '—' for now.
+      qs('#kpi-lead-cpl').textContent   = cplTxt;
+      qs('#kpi-lead-spend').textContent = spendTxt;
+      qs('#kpi-lead-reach').textContent = '—'; // see TODO note above
+    } else if (variant === 'roas_focus' || variant === 'ecommerce') {
+      const revenueTxt = qs('#kpi-revenue')?.textContent || '—';
+      const salesTxt   = qs('#kpi-sales')?.textContent   || '—';
+      const aovTxt     = qs('#kpi-aov')?.textContent     || '—';
+      const spendTxt   = qs('#camp-kpi-spend')?.textContent || '—';
+      // Compute ROAS = revenue / spend (best-effort, since both are formatted strings)
+      const revNum   = parseMoney(revenueTxt);
+      const spendNum = parseMoney(spendTxt);
+      const roas = (revNum > 0 && spendNum > 0) ? (revNum / spendNum).toFixed(2) + 'x' : '—';
+      if (variant === 'roas_focus') {
+        qs('#kpi-roas-revenue').textContent = revenueTxt;
+        qs('#kpi-roas-roas').textContent    = roas;
+        qs('#kpi-roas-sales').textContent   = salesTxt;
+        qs('#kpi-roas-aov').textContent     = aovTxt;
+      } else {
+        qs('#kpi-ec-revenue').textContent = revenueTxt;
+        qs('#kpi-ec-orders').textContent  = salesTxt;
+        qs('#kpi-ec-aov').textContent     = aovTxt;
+        qs('#kpi-ec-roas').textContent    = roas;
+      }
+    }
+  }
+  function parseMoney(txt) {
+    // strips currency symbol/locale separators, leaves a number.
+    const m = String(txt).match(/[\d.,]+/);
+    if (!m) return 0;
+    const n = parseFloat(m[0].replace(/\./g, '').replace(',', '.'));
+    return Number.isFinite(n) ? n : 0;
   }
 
   // ---------- Instagram ----------

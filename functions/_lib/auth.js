@@ -168,30 +168,49 @@ export async function requireAuth(context, allowedRoles = null) {
 // Returns the workspaces this user can read.
 //   usina_admin   → all workspaces in the system
 //   tenant_viewer → only those in user_workspaces, AND under their tenant_id
+//
+// Each row carries the resolved dashboard modules/variants (preset merged
+// with workspace-level override) so the dash can decide what to render.
 export async function loadUserWorkspaces(env, user) {
+  let rows = [];
   if (user.role === 'usina_admin') {
     const { results } = await env.DB.prepare(`
       SELECT w.id, w.tenant_id, w.slug, w.name,
-             t.slug AS tenant_slug, t.name AS tenant_name
+             t.slug AS tenant_slug, t.name AS tenant_name,
+             c.business_type, c.dash_modules
         FROM workspaces w
         JOIN tenants t ON t.id = w.tenant_id
+        LEFT JOIN workspace_config c ON c.workspace_id = w.id
        ORDER BY t.name, w.name
     `).all();
-    return results || [];
-  }
-  if (user.role === 'tenant_viewer') {
+    rows = results || [];
+  } else if (user.role === 'tenant_viewer') {
     const { results } = await env.DB.prepare(`
       SELECT w.id, w.tenant_id, w.slug, w.name,
-             t.slug AS tenant_slug, t.name AS tenant_name
+             t.slug AS tenant_slug, t.name AS tenant_name,
+             c.business_type, c.dash_modules
         FROM user_workspaces uw
         JOIN workspaces w ON w.id = uw.workspace_id
         JOIN tenants t    ON t.id = w.tenant_id
+        LEFT JOIN workspace_config c ON c.workspace_id = w.id
        WHERE uw.user_id = ? AND w.tenant_id = ?
        ORDER BY w.name
     `).bind(user.user_id, user.tenant_id).all();
-    return results || [];
+    rows = results || [];
   }
-  return [];
+  // Resolve preset + override per workspace
+  const { resolveDashConfig } = await import('./dash-presets.js');
+  return rows.map((w) => {
+    const dash = resolveDashConfig(w.business_type, w.dash_modules);
+    return {
+      id: w.id, tenant_id: w.tenant_id, slug: w.slug, name: w.name,
+      tenant_slug: w.tenant_slug, tenant_name: w.tenant_name,
+      business_type: dash.business_type,
+      business_label: dash.business_label,
+      dash_modules: dash.modules,
+      dash_variants: dash.variants,
+    };
+  });
 }
 
 // Resolve the workspace the request wants to scope to (?workspace=<id>).

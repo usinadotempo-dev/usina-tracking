@@ -4,6 +4,7 @@
 // DELETE → only if no purchase_log / event_log / sessions reference it (otherwise 409)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
+import { BUSINESS_TYPES, MODULE_KEYS, MODULE_LABELS, resolveDashConfig } from '../../_lib/dash-presets.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -15,6 +16,8 @@ const CONFIG_FIELDS = [
   'encharge_api_key', 'manychat_key',
   'default_country_code', 'timezone_offset',
   'meta_ads_access_token', 'meta_ads_account_id',
+  'meta_ig_account_id', 'meta_page_id',
+  'business_type', 'dash_modules',
 ];
 
 export async function onRequestGet(context) {
@@ -39,7 +42,18 @@ export async function onRequestGet(context) {
     'SELECT domain, is_default, verified_at, created_at FROM workspace_domains WHERE workspace_id = ? ORDER BY domain'
   ).bind(id).all();
 
-  return jsonOk({ workspace, config, domains: domains || [] });
+  // Resolve preset + override so the UI can pre-populate the toggles.
+  const dash = resolveDashConfig(config.business_type, config.dash_modules);
+
+  return jsonOk({
+    workspace, config, domains: domains || [],
+    dash,
+    presets: Object.fromEntries(
+      Object.entries(BUSINESS_TYPES).map(([k, v]) => [k, { label: v.label, description: v.description, modules: v.modules, variants: v.variants }])
+    ),
+    module_keys: MODULE_KEYS,
+    module_labels: MODULE_LABELS,
+  });
 }
 
 export async function onRequestPatch(context) {
