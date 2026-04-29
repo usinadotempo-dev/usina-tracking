@@ -531,8 +531,10 @@
 
 <!-- ===================================================================
      APP: main admin layout
+     - mobile (<1024px): block stack (top bar + main); sidebar = drawer
+     - desktop (>=1024px): flex row (sidebar 288px + main flex-1)
      =================================================================== -->
-<div id="app-screen" class="hidden">
+<div id="app-screen" class="hidden lg:flex min-h-screen">
   <!-- Mobile top bar -->
   <div class="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-brand-border sticky top-0 z-30">
     <button id="mobile-menu-btn" class="btn btn-ghost p-2" aria-label="Abrir menu">
@@ -545,7 +547,7 @@
   <div id="sidebar-backdrop" class="fixed inset-0 bg-black/40 z-40 lg:hidden" onclick="toggleSidebar(false)"></div>
 
   <!-- Sidebar -->
-  <aside id="sidebar" class="fixed lg:sticky top-0 left-0 h-screen w-72 bg-brand-navy-2 text-white flex flex-col z-50 lg:z-10">
+  <aside id="sidebar" class="fixed lg:sticky top-0 left-0 h-screen w-72 lg:flex-shrink-0 bg-brand-navy-2 text-white flex flex-col z-50 lg:z-10">
     <div class="sidebar-rail"></div>
 
     <div class="px-6 pt-7 pb-5 flex items-center gap-3">
@@ -600,7 +602,7 @@
   </aside>
 
   <!-- Main content area -->
-  <main id="content" class="flex-1 lg:ml-0 min-h-screen">
+  <main id="content" class="flex-1 min-w-0 w-full min-h-screen">
     <!-- rendered by router -->
   </main>
 </div>
