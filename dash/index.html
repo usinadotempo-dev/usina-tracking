@@ -359,18 +359,23 @@
   </div>
 </div>
 
-<!-- Shown when authenticated but the user has no workspaces assigned -->
+<!-- Shown when authenticated but the user can't see any workspace.
+     For usina_admin: system has zero workspaces yet — invite to create one.
+     For tenant_viewer: their tenant has none assigned to them yet. -->
 <div id="no-workspace-gate" class="min-h-screen flex items-center justify-center hidden">
   <div class="card p-8 max-w-md w-full text-center">
     <div class="w-12 h-12 mx-auto mb-4 rounded-full flex items-center justify-center text-white"
          style="background: linear-gradient(135deg, #dc4a30 0%, #f5a82a 50%, #7fc7b8 100%);">
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
     </div>
-    <div class="font-semibold text-base mb-2">Nenhum workspace atribuído</div>
-    <div class="text-sm text-[color:var(--dim)] mb-5">
+    <div id="no-ws-title" class="font-semibold text-base mb-2">Nenhum workspace atribuído</div>
+    <div id="no-ws-msg" class="text-sm text-[color:var(--dim)] mb-5">
       Sua conta ainda não tem acesso a nenhum workspace. Peça ao administrador da Usina para atribuir os negócios que você precisa acompanhar.
     </div>
-    <button id="no-ws-logout" class="bg-[color:var(--text)] text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition">Sair</button>
+    <div class="flex flex-col gap-2">
+      <a id="no-ws-action" href="/admin/" class="hidden bg-[color:var(--text)] text-white rounded-lg px-4 py-2 text-sm font-semibold hover:opacity-90 transition no-underline">Abrir painel admin</a>
+      <button id="no-ws-logout" class="text-sm text-[color:var(--dim)] hover:text-[color:var(--text)] py-2 rounded-lg transition">Sair</button>
+    </div>
   </div>
 </div>
 
@@ -457,6 +462,12 @@
     qs('#no-ws-logout').addEventListener('click', logoutAndGoAdmin);
 
     if (!workspaces.length) {
+      // Tailor the empty-state message to who's looking at it.
+      if (currentUser.role === 'usina_admin') {
+        qs('#no-ws-title').textContent = 'Sistema sem workspaces';
+        qs('#no-ws-msg').textContent = 'Nenhum tenant ou workspace foi cadastrado ainda. Comece criando o primeiro tenant no painel admin.';
+        qs('#no-ws-action').classList.remove('hidden');
+      }
       splash.classList.add('hidden');
       noWs.classList.remove('hidden');
       return;
