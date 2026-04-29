@@ -4,6 +4,7 @@
 // DELETE → delete (only if no workspaces, no users)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
+import { deprovisionTenantSubdomain } from '../../_lib/domain-provisioning.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -75,6 +76,13 @@ export async function onRequestDelete(context) {
   if ((userCount?.n || 0) > 0) {
     return jsonError('Cannot delete: tenant still has users.', 409);
   }
+  // Capture slug for de-provisioning before deleting the row
+  const tenantRow = await context.env.DB.prepare('SELECT slug FROM tenants WHERE id = ?').bind(id).first();
   await context.env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id).run();
-  return jsonOk({ ok: true });
+
+  let deprovisioning = null;
+  if (tenantRow?.slug) {
+    deprovisioning = await deprovisionTenantSubdomain(context.env, tenantRow.slug);
+  }
+  return jsonOk({ ok: true, deprovisioning });
 }

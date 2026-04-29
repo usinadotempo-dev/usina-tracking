@@ -3,6 +3,7 @@
 // POST → create tenant {slug, name}
 
 import { requireAuth, jsonError, jsonOk } from '../_lib/auth.js';
+import { provisionTenantSubdomain } from '../_lib/domain-provisioning.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -44,5 +45,13 @@ export async function onRequestPost(context) {
     INSERT INTO tenants (id, slug, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?)
   `).bind(id, slug, name, now, now).run();
 
-  return jsonOk({ tenant: { id, slug, name, created_at: now } });
+  // Auto-provision the tenant subdomain (DNS + Pages custom domain).
+  // Best-effort: tenant creation succeeds even if provisioning fails — the
+  // operator can re-trigger from the UI later.
+  const provisioning = await provisionTenantSubdomain(context.env, slug);
+
+  return jsonOk({
+    tenant: { id, slug, name, created_at: now },
+    provisioning,
+  });
 }

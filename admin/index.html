@@ -1120,9 +1120,26 @@ function openTenantForm(id = null) {
     if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) { toast('Slug inválido.', 'error'); return; }
     const btn = $('#tn-save'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {
-      if (editing) await api('PATCH', `/admin/tenants/${id}`, { name, slug });
-      else         await api('POST',  '/admin/tenants',         { name, slug });
-      toast(editing ? 'Tenant atualizado.' : 'Tenant criado.', 'success');
+      let response;
+      if (editing) {
+        await api('PATCH', `/admin/tenants/${id}`, { name, slug });
+        toast('Tenant atualizado.', 'success');
+      } else {
+        response = await api('POST', '/admin/tenants', { name, slug });
+        // Surface auto-provisioning feedback so the operator knows the subdomain
+        // is on its way (or what to fix if it failed).
+        const prov = response?.provisioning;
+        if (prov?.skipped) {
+          toast('Tenant criado. (DNS auto-provisioning desabilitado: ' + (prov.reason || 'config ausente') + ')', 'info', 5500);
+        } else if (prov?.ok === false) {
+          const errSummary = (prov.errors || []).map(e => e.step).join(', ') || 'erro desconhecido';
+          toast(`Tenant criado, mas DNS falhou (${errSummary}). Cadastre manualmente no Cloudflare.`, 'error', 7000);
+        } else if (prov?.ok) {
+          toast(`Tenant criado. Subdomínio ${prov.fqdn} provisionado — propagação SSL em ~30s.`, 'success', 5500);
+        } else {
+          toast('Tenant criado.', 'success');
+        }
+      }
       closeModal();
       loadTenants();
     } catch (e) {
