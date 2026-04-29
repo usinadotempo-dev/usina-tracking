@@ -241,6 +241,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       const r = await meta.get(
         `/${igId}/insights?metric=profile_views,website_clicks,email_contacts,phone_call_clicks,get_directions_clicks,accounts_engaged&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
       );
+      errors.push(`tv-debug: data=${(r.data || []).length} keys=${(r.data || []).map(s => s.name).join(',')}`);
       for (const series of r.data || []) {
         const m = series.name;
         const total = series.total_value?.value;
@@ -248,7 +249,9 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           aggRow[m] = toInt(total);
         }
       }
-    } catch (_) { /* skip */ }
+    } catch (e) {
+      errors.push(`tv-exception: ${e.message.slice(0, 200)}`);
+    }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
