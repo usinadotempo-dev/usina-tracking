@@ -1,0 +1,1864 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usina Tracking — Admin</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><defs><linearGradient id='g' x1='0%25' y1='0%25' x2='100%25' y2='100%25'><stop offset='0%25' stop-color='%23dc4a30'/><stop offset='50%25' stop-color='%23f5a82a'/><stop offset='100%25' stop-color='%237fc7b8'/></linearGradient></defs><circle cx='32' cy='32' r='28' fill='url(%23g)'/><path d='M22 22 L42 22 L32 44 Z' fill='white' opacity='0.92'/></svg>">
+
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          'brand-navy':   '#293556',
+          'brand-navy-2': '#1f2d4a',
+          'brand-navy-3': '#172241',
+          'brand-coral':  '#dc4a30',
+          'brand-amber':  '#f5a82a',
+          'brand-teal':   '#7fc7b8',
+          'brand-gray':   '#8a8e96',
+          'brand-bg':     '#f7f8fb',
+          'brand-card':   '#ffffff',
+          'brand-border': '#e6e8ee',
+        },
+        fontFamily: {
+          display: ['Manrope', 'ui-sans-serif', 'system-ui'],
+          sans:    ['Inter', 'ui-sans-serif', 'system-ui'],
+          mono:    ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular'],
+        },
+        boxShadow: {
+          'navy-sm': '0 1px 2px 0 rgba(41, 53, 86, 0.06)',
+          'navy':    '0 4px 14px -2px rgba(41, 53, 86, 0.08), 0 2px 4px -2px rgba(41, 53, 86, 0.05)',
+          'navy-lg': '0 18px 40px -12px rgba(41, 53, 86, 0.18), 0 8px 16px -8px rgba(41, 53, 86, 0.10)',
+        },
+      },
+    },
+  };
+</script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:ital,wght@0,400..800;1,400..800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
+<style>
+  :root {
+    --brand-navy:   #293556;
+    --brand-navy-2: #1f2d4a;
+    --brand-navy-3: #172241;
+    --brand-coral:  #dc4a30;
+    --brand-amber:  #f5a82a;
+    --brand-teal:   #7fc7b8;
+    --brand-gray:   #8a8e96;
+    --brand-bg:     #f7f8fb;
+    --brand-card:   #ffffff;
+    --brand-border: #e6e8ee;
+  }
+
+  html, body { height: 100%; }
+  body {
+    font-family: 'Inter', ui-sans-serif, system-ui;
+    color: var(--brand-navy);
+    background: var(--brand-bg);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  /* Subtle noise texture on app background — gives the surface a tactile feel
+     without competing with content. Only visible on the light background. */
+  .app-bg {
+    background-color: var(--brand-bg);
+    background-image:
+      radial-gradient(at 12% 0%, rgba(127, 199, 184, 0.06) 0px, transparent 50%),
+      radial-gradient(at 88% 100%, rgba(245, 168, 42, 0.04) 0px, transparent 50%),
+      url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.16  0 0 0 0 0.21  0 0 0 0 0.34  0 0 0 0.025 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  /* Brand gradient — restricted-use accent (sidebar rail, avatar, success badges) */
+  .brand-gradient {
+    background: linear-gradient(135deg, var(--brand-coral) 0%, var(--brand-amber) 50%, var(--brand-teal) 100%);
+  }
+  .brand-gradient-vertical {
+    background: linear-gradient(180deg, var(--brand-coral) 0%, var(--brand-amber) 50%, var(--brand-teal) 100%);
+  }
+
+  /* Display headings — italic Manrope echoes the "USINA DO TEMPO" wordmark */
+  .display-italic {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 800;
+    font-style: italic;
+    letter-spacing: -0.025em;
+  }
+  .display {
+    font-family: 'Manrope', sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+  .mono { font-family: 'JetBrains Mono', ui-monospace; font-variant-numeric: tabular-nums; }
+
+  /* Sidebar — deep navy with a vertical gradient bar on its left edge:
+     a 4px brand strip that signals "this is Usina" without flooding the UI. */
+  .sidebar-rail {
+    position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+    background: linear-gradient(180deg, var(--brand-coral) 0%, var(--brand-amber) 50%, var(--brand-teal) 100%);
+  }
+
+  /* Buttons */
+  .btn {
+    display: inline-flex; align-items: center; gap: 0.5rem;
+    padding: 0.5rem 0.95rem; border-radius: 0.5rem;
+    font-weight: 600; font-size: 0.875rem;
+    transition: transform 120ms ease, box-shadow 120ms ease, background 120ms ease, border 120ms ease;
+    border: 1px solid transparent; white-space: nowrap; user-select: none;
+  }
+  .btn:focus-visible { outline: 2px solid var(--brand-amber); outline-offset: 2px; }
+  .btn-primary   { background: var(--brand-navy); color: white; }
+  .btn-primary:hover   { background: var(--brand-navy-2); transform: translateY(-1px); box-shadow: 0 6px 16px -8px rgba(41,53,86,0.4); }
+  .btn-secondary { background: white; color: var(--brand-navy); border-color: var(--brand-border); }
+  .btn-secondary:hover { background: #fafbfd; border-color: #d8dbe4; }
+  .btn-danger    { background: white; color: var(--brand-coral); border-color: rgba(220, 74, 48, 0.35); }
+  .btn-danger:hover    { background: rgba(220, 74, 48, 0.06); border-color: rgba(220, 74, 48, 0.55); }
+  .btn-ghost     { background: transparent; color: var(--brand-navy); }
+  .btn-ghost:hover     { background: rgba(41, 53, 86, 0.05); }
+  .btn-sm        { padding: 0.35rem 0.7rem; font-size: 0.8125rem; }
+
+  /* Inputs */
+  .input, .select, .textarea {
+    width: 100%;
+    background: white;
+    border: 1px solid var(--brand-border);
+    border-radius: 0.5rem;
+    padding: 0.6rem 0.85rem;
+    font-size: 0.9rem;
+    color: var(--brand-navy);
+    transition: border 120ms ease, box-shadow 120ms ease;
+  }
+  .input::placeholder { color: #b6b9c2; }
+  .input:focus, .select:focus, .textarea:focus {
+    outline: none;
+    border-color: var(--brand-navy);
+    box-shadow: 0 0 0 4px rgba(41, 53, 86, 0.08);
+  }
+  .input:disabled { background: #f3f4f8; cursor: not-allowed; }
+  .label { display: block; font-size: 0.8125rem; font-weight: 600; color: var(--brand-navy); margin-bottom: 0.375rem; }
+  .help  { font-size: 0.75rem; color: var(--brand-gray); margin-top: 0.35rem; }
+
+  /* Sidebar nav items */
+  .nav-item {
+    display: flex; align-items: center; gap: 0.75rem;
+    padding: 0.7rem 0.9rem; border-radius: 0.625rem;
+    color: rgba(255,255,255,0.72); font-weight: 500; font-size: 0.9rem;
+    transition: background 120ms ease, color 120ms ease;
+    cursor: pointer; user-select: none;
+  }
+  .nav-item:hover { background: rgba(255,255,255,0.06); color: white; }
+  .nav-item.active {
+    background: rgba(255,255,255,0.10);
+    color: white;
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06);
+  }
+  .nav-item.active .nav-dot { opacity: 1; }
+  .nav-dot {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--brand-amber);
+    opacity: 0; transition: opacity 120ms;
+  }
+
+  /* Cards & tables */
+  .card {
+    background: white;
+    border: 1px solid var(--brand-border);
+    border-radius: 14px;
+    box-shadow: 0 1px 2px rgba(41,53,86,0.04);
+  }
+  .table th {
+    text-align: left; font-weight: 600; font-size: 0.75rem;
+    color: var(--brand-gray); text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 0.85rem 1rem; border-bottom: 1px solid var(--brand-border);
+    background: #fafbfd;
+  }
+  .table td {
+    padding: 0.95rem 1rem; border-bottom: 1px solid var(--brand-border);
+    font-size: 0.9rem; color: var(--brand-navy);
+  }
+  .table tbody tr:last-child td { border-bottom: none; }
+  .table tbody tr { transition: background 120ms ease; }
+  .table tbody tr:hover { background: #fafbfd; }
+
+  /* Badges */
+  .badge {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.2rem 0.55rem; border-radius: 999px;
+    font-size: 0.72rem; font-weight: 600; line-height: 1;
+  }
+  .badge-active {
+    color: white;
+    background: linear-gradient(135deg, var(--brand-coral) 0%, var(--brand-amber) 50%, var(--brand-teal) 100%);
+    box-shadow: 0 2px 6px -2px rgba(220, 74, 48, 0.4);
+  }
+  .badge-muted   { background: #f1f3f7; color: var(--brand-gray); }
+  .badge-tenant  { background: rgba(41, 53, 86, 0.07); color: var(--brand-navy); }
+  .badge-admin   { background: var(--brand-navy); color: white; }
+  .badge-viewer  { background: rgba(127, 199, 184, 0.18); color: #2e7c6c; }
+
+  /* Avatar (gradient brand) */
+  .avatar {
+    width: 2.25rem; height: 2.25rem; border-radius: 999px;
+    display: inline-flex; align-items: center; justify-content: center;
+    color: white; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.02em;
+    background: linear-gradient(135deg, var(--brand-coral) 0%, var(--brand-amber) 55%, var(--brand-teal) 100%);
+    box-shadow: 0 2px 8px -2px rgba(220, 74, 48, 0.45);
+  }
+
+  /* Modal */
+  .modal-backdrop {
+    position: fixed; inset: 0;
+    background: rgba(23, 34, 65, 0.55);
+    backdrop-filter: blur(4px) saturate(140%);
+    -webkit-backdrop-filter: blur(4px) saturate(140%);
+    z-index: 60;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+    animation: fadeIn 160ms ease;
+  }
+  .modal-card {
+    background: white; border-radius: 16px;
+    width: 100%; max-width: 560px; max-height: 90vh; overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: 0 30px 60px -12px rgba(23,34,65,0.45), 0 0 0 1px rgba(255,255,255,0.05);
+    animation: modalIn 220ms cubic-bezier(0.18, 0.89, 0.32, 1.15);
+  }
+  .modal-card.modal-lg { max-width: 880px; }
+  .modal-header {
+    padding: 1.4rem 1.6rem 1.1rem;
+    border-bottom: 1px solid var(--brand-border);
+    background: linear-gradient(180deg, #fbfcfe 0%, #ffffff 100%);
+  }
+  .modal-body { padding: 1.4rem 1.6rem; overflow-y: auto; }
+  .modal-footer {
+    padding: 1rem 1.6rem;
+    border-top: 1px solid var(--brand-border);
+    display: flex; justify-content: flex-end; gap: 0.6rem;
+    background: #fafbfd;
+  }
+
+  /* Toast */
+  .toast-stack {
+    position: fixed; top: 1rem; right: 1rem; z-index: 80;
+    display: flex; flex-direction: column; gap: 0.5rem;
+    pointer-events: none;
+  }
+  .toast {
+    pointer-events: auto;
+    min-width: 280px; max-width: 380px;
+    background: white; border: 1px solid var(--brand-border);
+    border-radius: 12px; padding: 0.85rem 1rem;
+    box-shadow: 0 12px 30px -8px rgba(41,53,86,0.20);
+    display: flex; gap: 0.7rem; align-items: flex-start;
+    animation: toastIn 220ms cubic-bezier(0.18, 0.89, 0.32, 1.15);
+  }
+  .toast.dismissing { animation: toastOut 180ms ease forwards; }
+  .toast-bar { width: 3px; align-self: stretch; border-radius: 999px; flex: 0 0 3px; }
+  .toast-success .toast-bar { background: var(--brand-teal); }
+  .toast-error   .toast-bar { background: var(--brand-coral); }
+  .toast-info    .toast-bar { background: var(--brand-navy); }
+
+  /* Skeleton shimmer */
+  .skel {
+    background: linear-gradient(90deg, #eef0f5 0%, #f7f8fb 50%, #eef0f5 100%);
+    background-size: 200% 100%;
+    animation: shimmer 1.4s ease-in-out infinite;
+    border-radius: 6px;
+  }
+
+  /* Empty state watermark */
+  .empty-watermark {
+    position: relative; overflow: hidden;
+  }
+  .empty-watermark::before {
+    content: "";
+    position: absolute;
+    right: -120px; bottom: -120px;
+    width: 480px; height: 480px;
+    background: url("/assets/usina-brand/logo-mono-dark.png") center/contain no-repeat;
+    opacity: 0.04;
+    pointer-events: none;
+    transform: rotate(-8deg);
+  }
+
+  /* Tabs */
+  .tab {
+    padding: 0.7rem 0; margin-right: 1.5rem;
+    font-size: 0.9rem; font-weight: 600; color: var(--brand-gray);
+    border-bottom: 2px solid transparent;
+    cursor: pointer; transition: color 120ms ease, border-color 120ms ease;
+  }
+  .tab:hover { color: var(--brand-navy); }
+  .tab.active { color: var(--brand-navy); border-bottom-color: var(--brand-navy); }
+
+  /* Animations */
+  @keyframes fadeIn   { from { opacity: 0; }                                     to { opacity: 1; } }
+  @keyframes modalIn  { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  @keyframes toastIn  { from { opacity: 0; transform: translateX(20px); }        to { opacity: 1; transform: translateX(0); } }
+  @keyframes toastOut { to   { opacity: 0; transform: translateX(20px); } }
+  @keyframes shimmer  { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* Stagger reveal (used on app load and section change) */
+  .stagger > * { opacity: 0; transform: translateY(6px); animation: staggerIn 360ms ease forwards; }
+  .stagger > *:nth-child(1) { animation-delay: 30ms; }
+  .stagger > *:nth-child(2) { animation-delay: 80ms; }
+  .stagger > *:nth-child(3) { animation-delay: 130ms; }
+  .stagger > *:nth-child(4) { animation-delay: 180ms; }
+  .stagger > *:nth-child(5) { animation-delay: 230ms; }
+  .stagger > *:nth-child(n+6) { animation-delay: 280ms; }
+  @keyframes staggerIn { to { opacity: 1; transform: translateY(0); } }
+
+  /* Auth screens hero illustration — uses brand gradient on a low-key cloud */
+  .auth-hero {
+    position: relative; overflow: hidden;
+  }
+  .auth-hero::before {
+    content: "";
+    position: absolute; inset: -40% -20% 0 -20%;
+    background:
+      radial-gradient(60% 50% at 30% 30%, rgba(220,74,48,0.18) 0%, transparent 60%),
+      radial-gradient(50% 50% at 70% 30%, rgba(245,168,42,0.16) 0%, transparent 60%),
+      radial-gradient(60% 60% at 50% 80%, rgba(127,199,184,0.18) 0%, transparent 60%);
+    filter: blur(40px);
+    pointer-events: none;
+    z-index: 0;
+  }
+  .auth-hero > * { position: relative; z-index: 1; }
+
+  /* Hide scrollbar look in sidebar */
+  .nav-scroll { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.18) transparent; }
+  .nav-scroll::-webkit-scrollbar { width: 6px; }
+  .nav-scroll::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.18); border-radius: 999px; }
+
+  /* Form inputs accent — colors checkboxes/radios with brand navy */
+  input[type="checkbox"], input[type="radio"] { accent-color: var(--brand-navy); width: 16px; height: 16px; cursor: pointer; }
+
+  /* Misc */
+  .copy-btn { color: var(--brand-gray); padding: 2px; border-radius: 4px; cursor: pointer; }
+  .copy-btn:hover { color: var(--brand-navy); background: rgba(41,53,86,0.06); }
+  .pill-tab {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.35rem 0.75rem; border-radius: 999px;
+    font-size: 0.8rem; font-weight: 600; color: var(--brand-gray);
+    background: white; border: 1px solid var(--brand-border);
+    cursor: pointer; transition: all 120ms;
+  }
+  .pill-tab:hover { color: var(--brand-navy); border-color: #d8dbe4; }
+  .pill-tab.active { background: var(--brand-navy); color: white; border-color: var(--brand-navy); }
+
+  /* Drawer for workspace detail */
+  .drawer {
+    position: fixed; top: 0; right: 0; bottom: 0;
+    width: 100%; max-width: 720px;
+    background: white; z-index: 50;
+    border-left: 1px solid var(--brand-border);
+    box-shadow: -24px 0 60px -12px rgba(23,34,65,0.18);
+    overflow-y: auto;
+    animation: drawerIn 280ms cubic-bezier(0.18, 0.89, 0.32, 1.15);
+  }
+  @keyframes drawerIn { from { transform: translateX(20px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* Mobile sidebar drawer */
+  @media (max-width: 1023px) {
+    #sidebar { transform: translateX(-100%); transition: transform 280ms ease; }
+    #sidebar.open { transform: translateX(0); }
+    #sidebar-backdrop { display: none; }
+    #sidebar.open ~ #sidebar-backdrop { display: block; }
+  }
+
+  /* Subtle cool gradient on auth page bg */
+  .auth-bg {
+    background:
+      radial-gradient(50% 40% at 20% 0%, rgba(127,199,184,0.10), transparent 70%),
+      radial-gradient(40% 35% at 100% 20%, rgba(245,168,42,0.07), transparent 70%),
+      radial-gradient(50% 40% at 0% 100%, rgba(220,74,48,0.07), transparent 70%),
+      var(--brand-bg);
+  }
+</style>
+</head>
+
+<body class="app-bg min-h-screen">
+
+<!-- ===================================================================
+     Toast container
+     =================================================================== -->
+<div id="toast-root" class="toast-stack" aria-live="polite" aria-atomic="true"></div>
+
+<!-- ===================================================================
+     Modal root
+     =================================================================== -->
+<div id="modal-root"></div>
+
+<!-- ===================================================================
+     Drawer root (workspace detail)
+     =================================================================== -->
+<div id="drawer-root"></div>
+
+<!-- ===================================================================
+     SCREEN: Loading splash (initial)
+     =================================================================== -->
+<div id="splash-screen" class="fixed inset-0 flex items-center justify-center auth-bg">
+  <div class="flex flex-col items-center gap-5">
+    <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-12">
+    <div class="flex items-center gap-2 text-brand-gray text-sm">
+      <span class="w-2 h-2 rounded-full bg-brand-coral animate-pulse"></span>
+      <span class="w-2 h-2 rounded-full bg-brand-amber animate-pulse" style="animation-delay: 120ms"></span>
+      <span class="w-2 h-2 rounded-full bg-brand-teal animate-pulse" style="animation-delay: 240ms"></span>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     SCREEN: First-admin setup
+     =================================================================== -->
+<div id="setup-screen" class="hidden fixed inset-0 auth-bg overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-md">
+      <div class="auth-hero">
+        <div class="text-center mb-8">
+          <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-11 mx-auto mb-6">
+          <h1 class="display-italic text-3xl text-brand-navy mb-2">Bem-vindo</h1>
+          <p class="text-brand-gray text-sm leading-relaxed max-w-sm mx-auto">
+            Esta é a primeira vez que você abre o Usina Tracking.
+            Crie a conta de administrador da Usina pra começar.
+          </p>
+        </div>
+
+        <form id="setup-form" class="card p-7 space-y-4 shadow-navy">
+          <div>
+            <label class="label" for="setup-name">Nome</label>
+            <input id="setup-name" name="name" type="text" class="input" placeholder="Seu nome" autocomplete="name">
+          </div>
+          <div>
+            <label class="label" for="setup-email">E-mail</label>
+            <input id="setup-email" name="email" type="email" class="input" placeholder="voce@usinadotempo.com.br" required autocomplete="email">
+          </div>
+          <div>
+            <label class="label" for="setup-password">Senha</label>
+            <div class="relative">
+              <input id="setup-password" name="password" type="password" class="input pr-10" minlength="12" required autocomplete="new-password">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 copy-btn" data-toggle-pw="setup-password" aria-label="Mostrar/ocultar senha">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <p class="help">Mínimo 12 caracteres. Use uma frase longa.</p>
+          </div>
+          <div>
+            <label class="label" for="setup-password-2">Confirme a senha</label>
+            <input id="setup-password-2" type="password" class="input" required minlength="12">
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center mt-2">Criar conta de administrador</button>
+        </form>
+
+        <p class="text-center text-xs text-brand-gray mt-6">
+          Após criada, este passo nunca mais aparece. Guarde sua senha com cuidado.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     SCREEN: Login
+     =================================================================== -->
+<div id="login-screen" class="hidden fixed inset-0 auth-bg overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-md">
+      <div class="auth-hero">
+        <div class="text-center mb-8">
+          <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-11 mx-auto mb-6">
+          <h1 class="display-italic text-3xl text-brand-navy mb-1">Acesso à plataforma</h1>
+          <p class="text-brand-gray text-sm">Entre com suas credenciais.</p>
+        </div>
+
+        <form id="login-form" class="card p-7 space-y-4 shadow-navy">
+          <div>
+            <label class="label" for="login-email">E-mail</label>
+            <input id="login-email" type="email" class="input" required autocomplete="email" placeholder="voce@usinadotempo.com.br">
+          </div>
+          <div>
+            <div class="flex items-baseline justify-between mb-1.5">
+              <label class="label mb-0" for="login-password">Senha</label>
+            </div>
+            <div class="relative">
+              <input id="login-password" type="password" class="input pr-10" required autocomplete="current-password">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 copy-btn" data-toggle-pw="login-password" aria-label="Mostrar/ocultar senha">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center mt-2">Entrar</button>
+        </form>
+
+        <p class="text-center text-xs text-brand-gray mt-6">
+          Esqueceu a senha? Peça ao admin da Usina pra redefinir.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     SCREEN: Restricted (logged in, but not usina_admin)
+     =================================================================== -->
+<div id="restricted-screen" class="hidden fixed inset-0 auth-bg overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-md text-center">
+      <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-11 mx-auto mb-7">
+      <div class="card p-8 shadow-navy">
+        <div class="w-14 h-14 mx-auto mb-4 rounded-full brand-gradient flex items-center justify-center text-white">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>
+        </div>
+        <h1 class="display-italic text-2xl text-brand-navy mb-2">Área restrita</h1>
+        <p class="text-brand-gray text-sm leading-relaxed mb-6">
+          Esta tela é exclusiva da equipe administrativa da Usina. Você está autenticado como
+          <span class="text-brand-navy font-medium" id="restricted-email">—</span>, mas com permissão de visualização.
+        </p>
+        <div class="flex flex-col gap-2">
+          <a id="restricted-go-dash" href="/dash/" class="btn btn-primary justify-center">Ir para o painel de dashboard</a>
+          <button id="restricted-logout" class="btn btn-secondary justify-center">Sair</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     APP: main admin layout
+     =================================================================== -->
+<div id="app-screen" class="hidden">
+  <!-- Mobile top bar -->
+  <div class="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-brand-border sticky top-0 z-30">
+    <button id="mobile-menu-btn" class="btn btn-ghost p-2" aria-label="Abrir menu">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-6">
+    <div class="w-9"></div>
+  </div>
+
+  <div id="sidebar-backdrop" class="fixed inset-0 bg-black/40 z-40 lg:hidden" onclick="toggleSidebar(false)"></div>
+
+  <!-- Sidebar -->
+  <aside id="sidebar" class="fixed lg:sticky top-0 left-0 h-screen w-72 bg-brand-navy-2 text-white flex flex-col z-50 lg:z-10">
+    <div class="sidebar-rail"></div>
+
+    <div class="px-6 pt-7 pb-5 flex items-center gap-3">
+      <img src="/assets/usina-brand/logo-color-text-white.png" alt="Usina do Tempo" class="h-9">
+    </div>
+
+    <div class="px-4 py-3 border-y border-white/5">
+      <div class="text-[11px] uppercase tracking-wider text-white/50 font-semibold mb-1">Plataforma</div>
+      <div class="text-[15px] font-display font-bold text-white">Usina Tracking</div>
+      <div class="text-[12px] text-white/60 mt-0.5 mono">v0.2 · multi-tenant</div>
+    </div>
+
+    <nav class="flex-1 overflow-y-auto nav-scroll px-3 py-4 space-y-1">
+      <div class="text-[10px] uppercase tracking-[0.18em] text-white/40 font-semibold px-3 py-2">Operação</div>
+      <a class="nav-item" data-route="tenants" href="#tenants">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 9h2v2H9zM13 9h2v2h-2zM9 13h2v2H9zM13 13h2v2h-2zM9 17h6"/></svg>
+        Tenants
+        <span class="nav-dot ml-auto"></span>
+      </a>
+      <a class="nav-item" data-route="workspaces" href="#workspaces">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        Workspaces
+        <span class="nav-dot ml-auto"></span>
+      </a>
+      <a class="nav-item" data-route="users" href="#users">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Usuários
+        <span class="nav-dot ml-auto"></span>
+      </a>
+
+      <div class="text-[10px] uppercase tracking-[0.18em] text-white/40 font-semibold px-3 py-2 mt-4">Atalhos</div>
+      <a class="nav-item" href="/dash/" target="_blank" rel="noopener">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+        Abrir dashboard
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="ml-auto opacity-60"><path d="M7 17 17 7M9 7h8v8"/></svg>
+      </a>
+    </nav>
+
+    <div class="px-4 pt-4 pb-5 border-t border-white/5">
+      <div class="flex items-center gap-3 px-2 py-2 rounded-lg hover:bg-white/5 transition cursor-default">
+        <div id="user-avatar" class="avatar w-9 h-9 text-[13px]">U</div>
+        <div class="min-w-0 flex-1">
+          <div id="user-name" class="text-[13.5px] text-white font-medium truncate">—</div>
+          <div id="user-email" class="text-[11.5px] text-white/55 truncate mono">—</div>
+        </div>
+      </div>
+      <button id="logout-btn" class="w-full mt-2 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-[13px] font-medium text-white/75 hover:text-white hover:bg-white/5 transition">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+        Sair
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main content area -->
+  <main id="content" class="flex-1 lg:ml-0 min-h-screen">
+    <!-- rendered by router -->
+  </main>
+</div>
+
+<!-- ===================================================================
+     SCRIPT
+     =================================================================== -->
+<script>
+//
+// ============================================================================
+// State + helpers
+// ============================================================================
+//
+const state = {
+  user: null,
+  workspaces: [],
+  tenants: [],     // cache
+  tenantsById: {}, // cache
+  route: null,
+};
+
+const $  = (sel, root = document) => root.querySelector(sel);
+const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+
+function escapeHtml(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtDate(unix) {
+  if (!unix) return '—';
+  const d = new Date(unix * 1000);
+  return d.toLocaleString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
+function initials(nameOrEmail) {
+  if (!nameOrEmail) return '?';
+  const parts = nameOrEmail.split(/[\s@.]+/).filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+function copyToClipboard(text) {
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast('Copiado.', 'success'));
+  else {
+    const el = document.createElement('textarea'); el.value = text; document.body.appendChild(el); el.select();
+    try { document.execCommand('copy'); toast('Copiado.', 'success'); } catch {}
+    el.remove();
+  }
+}
+function genStrongPassword(len = 18) {
+  const sets = ['abcdefghijkmnopqrstuvwxyz', 'ABCDEFGHJKLMNPQRSTUVWXYZ', '23456789', '!@#$%&*?-_=+'];
+  const all = sets.join('');
+  let pw = sets.map(s => s[Math.floor(Math.random() * s.length)]).join('');
+  while (pw.length < len) pw += all[Math.floor(Math.random() * all.length)];
+  return pw.split('').sort(() => Math.random() - 0.5).join('');
+}
+
+//
+// ============================================================================
+// API wrapper — sends cookie, handles 401 → login
+// ============================================================================
+//
+async function api(method, path, body = null) {
+  const opts = {
+    method,
+    credentials: 'include',
+    headers: { 'Accept': 'application/json' },
+  };
+  if (body !== null) {
+    opts.headers['Content-Type'] = 'application/json';
+    opts.body = JSON.stringify(body);
+  }
+  let r;
+  try { r = await fetch(path, opts); }
+  catch (e) { throw new Error('Falha de rede: ' + e.message); }
+
+  // Endpoints that explicitly accept anonymous (login, setup) won't trigger auto-redirect.
+  if (r.status === 401 && !['/auth/login', '/setup'].includes(path)) {
+    showLoginScreen();
+    throw new Error('Unauthorized');
+  }
+
+  let data = null;
+  if (r.headers.get('content-type')?.includes('application/json')) {
+    try { data = await r.json(); } catch {}
+  }
+  if (!r.ok) {
+    const msg = (data && data.error) || `Erro ${r.status}`;
+    const err = new Error(msg); err.status = r.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+//
+// ============================================================================
+// Toast queue
+// ============================================================================
+//
+function toast(message, kind = 'info', duration = 3500) {
+  const root = $('#toast-root');
+  const el = document.createElement('div');
+  el.className = `toast toast-${kind}`;
+  const icon = kind === 'success'
+    ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'
+    : kind === 'error'
+      ? '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'
+      : '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>';
+  el.innerHTML = `
+    <div class="toast-bar"></div>
+    <div class="${kind === 'error' ? 'text-brand-coral' : (kind === 'success' ? 'text-[#2e7c6c]' : 'text-brand-navy')}">${icon}</div>
+    <div class="flex-1 text-sm text-brand-navy leading-snug">${escapeHtml(message)}</div>
+    <button class="copy-btn" aria-label="Fechar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>`;
+  el.querySelector('.copy-btn').addEventListener('click', () => dismissToast(el));
+  root.appendChild(el);
+  setTimeout(() => dismissToast(el), duration);
+}
+function dismissToast(el) {
+  if (!el || el.classList.contains('dismissing')) return;
+  el.classList.add('dismissing');
+  setTimeout(() => el.remove(), 200);
+}
+
+//
+// ============================================================================
+// Modal
+// ============================================================================
+//
+function openModal({ title, subtitle, body, footer, large = false }) {
+  closeModal();
+  const root = $('#modal-root');
+  const wrap = document.createElement('div');
+  wrap.className = 'modal-backdrop';
+  wrap.innerHTML = `
+    <div class="modal-card ${large ? 'modal-lg' : ''}" role="dialog" aria-modal="true">
+      <div class="modal-header flex items-start justify-between gap-4">
+        <div>
+          <h2 class="display text-xl text-brand-navy">${escapeHtml(title)}</h2>
+          ${subtitle ? `<p class="text-sm text-brand-gray mt-1">${escapeHtml(subtitle)}</p>` : ''}
+        </div>
+        <button class="copy-btn p-1.5" data-modal-close aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="modal-body"></div>
+      ${footer ? `<div class="modal-footer"></div>` : ''}
+    </div>`;
+  root.appendChild(wrap);
+  const card = wrap.querySelector('.modal-card');
+  card.querySelector('.modal-body').appendChild(body);
+  if (footer) card.querySelector('.modal-footer').appendChild(footer);
+  card.querySelector('[data-modal-close]').addEventListener('click', closeModal);
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) closeModal(); });
+  document.addEventListener('keydown', escClose);
+  // Auto-focus first input
+  setTimeout(() => {
+    const first = card.querySelector('input, select, textarea, button');
+    if (first) first.focus();
+  }, 50);
+}
+function closeModal() {
+  $('#modal-root').innerHTML = '';
+  document.removeEventListener('keydown', escClose);
+}
+function escClose(e) { if (e.key === 'Escape') closeModal(); }
+
+//
+// ============================================================================
+// Drawer (workspace detail)
+// ============================================================================
+//
+function openDrawer(content) {
+  closeDrawer();
+  const root = $('#drawer-root');
+  const back = document.createElement('div');
+  back.className = 'modal-backdrop';
+  back.style.zIndex = '40';
+  back.addEventListener('click', (e) => { if (e.target === back) closeDrawer(); });
+  const drawer = document.createElement('div');
+  drawer.className = 'drawer';
+  drawer.appendChild(content);
+  back.appendChild(drawer);
+  root.appendChild(back);
+  document.addEventListener('keydown', drawerEsc);
+}
+function closeDrawer() {
+  $('#drawer-root').innerHTML = '';
+  document.removeEventListener('keydown', drawerEsc);
+}
+function drawerEsc(e) { if (e.key === 'Escape') closeDrawer(); }
+
+//
+// ============================================================================
+// Page header builder
+// ============================================================================
+//
+function pageHeader({ eyebrow, title, description, actions = '' }) {
+  return `
+    <div class="border-b border-brand-border bg-white">
+      <div class="max-w-7xl mx-auto px-6 lg:px-10 pt-8 lg:pt-10 pb-6 flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-8">
+        <div class="flex-1 min-w-0">
+          ${eyebrow ? `<div class="text-[11px] uppercase tracking-[0.2em] text-brand-gray font-semibold mb-2">${escapeHtml(eyebrow)}</div>` : ''}
+          <h1 class="display-italic text-[2.4rem] leading-[1.05] text-brand-navy">${escapeHtml(title)}</h1>
+          ${description ? `<p class="mt-2 text-sm text-brand-gray max-w-xl">${escapeHtml(description)}</p>` : ''}
+        </div>
+        <div class="flex items-center gap-2 lg:justify-end">${actions}</div>
+      </div>
+    </div>`;
+}
+
+//
+// ============================================================================
+// Boot
+// ============================================================================
+//
+async function boot() {
+  try {
+    const setupInfo = await api('GET', '/setup');
+    if (setupInfo?.setup_available) {
+      showSetupScreen();
+      return;
+    }
+  } catch {
+    // 500 or network — fall through to /auth/me, which will surface the right error.
+  }
+
+  try {
+    const me = await fetch('/auth/me', { credentials: 'include' });
+    if (me.status === 401) { showLoginScreen(); return; }
+    if (!me.ok) throw new Error('Falha em /auth/me');
+    const data = await me.json();
+    state.user = data.user;
+    state.workspaces = data.workspaces || [];
+
+    if (state.user.role !== 'usina_admin') {
+      showRestrictedScreen();
+      return;
+    }
+    showAppScreen();
+  } catch (e) {
+    console.error(e);
+    showLoginScreen();
+  }
+}
+
+function hideAllScreens() {
+  ['#splash-screen', '#setup-screen', '#login-screen', '#restricted-screen', '#app-screen'].forEach(s => $(s).classList.add('hidden'));
+}
+
+function showSetupScreen() {
+  hideAllScreens();
+  $('#setup-screen').classList.remove('hidden');
+}
+function showLoginScreen() {
+  hideAllScreens();
+  $('#login-screen').classList.remove('hidden');
+  setTimeout(() => $('#login-email')?.focus(), 80);
+}
+function showRestrictedScreen() {
+  hideAllScreens();
+  $('#restricted-email').textContent = state.user?.email || '—';
+  $('#restricted-screen').classList.remove('hidden');
+}
+function showAppScreen() {
+  hideAllScreens();
+  $('#app-screen').classList.remove('hidden');
+  // Populate user info
+  const display = state.user.name || state.user.email;
+  $('#user-name').textContent = display;
+  $('#user-email').textContent = state.user.email;
+  $('#user-avatar').textContent = initials(display);
+  // Initial route
+  if (!location.hash) location.hash = '#tenants';
+  router();
+}
+
+//
+// ============================================================================
+// Auth form handlers
+// ============================================================================
+//
+$('#setup-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const name  = $('#setup-name').value.trim();
+  const email = $('#setup-email').value.trim();
+  const pw    = $('#setup-password').value;
+  const pw2   = $('#setup-password-2').value;
+  if (pw.length < 12) { toast('A senha deve ter pelo menos 12 caracteres.', 'error'); return; }
+  if (pw !== pw2)     { toast('As senhas não coincidem.', 'error'); return; }
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Criando…';
+  try {
+    await api('POST', '/setup', { email, password: pw, name });
+    // Auto-login
+    await api('POST', '/auth/login', { email, password: pw });
+    toast('Conta criada. Bem-vindo!', 'success');
+    await boot();
+  } catch (err) {
+    toast(err.message || 'Falha ao criar conta.', 'error');
+    btn.disabled = false; btn.textContent = 'Criar conta de administrador';
+  }
+});
+
+$('#login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('#login-email').value.trim();
+  const pw    = $('#login-password').value;
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Entrando…';
+  try {
+    await api('POST', '/auth/login', { email, password: pw });
+    await boot();
+  } catch (err) {
+    toast(err.message === 'Invalid credentials' ? 'E-mail ou senha incorretos.' : (err.message || 'Falha no login.'), 'error');
+    btn.disabled = false; btn.textContent = 'Entrar';
+  }
+});
+
+document.addEventListener('click', (e) => {
+  const tgt = e.target.closest('[data-toggle-pw]');
+  if (tgt) {
+    const id = tgt.getAttribute('data-toggle-pw');
+    const inp = document.getElementById(id);
+    if (inp) inp.type = inp.type === 'password' ? 'text' : 'password';
+  }
+});
+
+$('#logout-btn').addEventListener('click', async () => {
+  try { await api('POST', '/auth/logout'); } catch {}
+  state.user = null; state.workspaces = []; state.tenants = []; state.tenantsById = {};
+  showLoginScreen();
+});
+$('#restricted-logout').addEventListener('click', async () => {
+  try { await api('POST', '/auth/logout'); } catch {}
+  state.user = null; showLoginScreen();
+});
+
+//
+// ============================================================================
+// Router (hash-based)
+// ============================================================================
+//
+function router() {
+  const fullHash = location.hash.replace(/^#/, '') || 'tenants';
+  // Strip query (e.g. "#workspaces?tenant=xxx") before splitting into section/id.
+  const [pathPart] = fullHash.split('?');
+  const [section, id] = pathPart.split('/');
+
+  // sidebar active state — match by top-level section
+  $$('.nav-item[data-route]').forEach(el => el.classList.toggle('active', section === el.dataset.route));
+
+  state.route = section;
+
+  if (window.innerWidth < 1024) toggleSidebar(false);
+
+  if (section === 'tenants')    return id ? loadTenantDetail(id) : loadTenants();
+  if (section === 'workspaces') return id ? loadWorkspaceDetail(id) : loadWorkspaces();
+  if (section === 'users')      return id ? loadUserDetail(id) : loadUsers();
+  // fallback
+  location.hash = '#tenants';
+}
+window.addEventListener('hashchange', router);
+
+function toggleSidebar(open) {
+  const sb = $('#sidebar');
+  if (!sb) return;
+  if (open === undefined) sb.classList.toggle('open');
+  else sb.classList.toggle('open', open);
+}
+$('#mobile-menu-btn')?.addEventListener('click', () => toggleSidebar());
+
+//
+// ============================================================================
+// SECTION: Tenants
+// ============================================================================
+//
+async function loadTenants() {
+  const content = $('#content');
+  content.innerHTML = `
+    ${pageHeader({
+      eyebrow: 'Operação',
+      title: 'Tenants',
+      description: 'Empresas-cliente atendidas pela Usina. Cada tenant agrupa um ou mais workspaces (negócios).',
+      actions: `
+        <input id="filter-tenants" placeholder="Buscar tenant…" class="input" style="width: 240px">
+        <button class="btn btn-primary" onclick="openTenantForm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo tenant
+        </button>`,
+    })}
+    <div class="max-w-7xl mx-auto px-6 lg:px-10 py-8">
+      <div id="tenants-table" class="card overflow-hidden empty-watermark stagger">
+        <div class="p-6"><div class="skel h-5 w-48"></div></div>
+        <div class="p-6 border-t border-brand-border"><div class="skel h-4 w-full"></div></div>
+        <div class="p-6 border-t border-brand-border"><div class="skel h-4 w-3/4"></div></div>
+      </div>
+    </div>`;
+
+  try {
+    const data = await api('GET', '/admin/tenants');
+    state.tenants = data.tenants || [];
+    state.tenantsById = Object.fromEntries(state.tenants.map(t => [t.id, t]));
+    renderTenantsTable(state.tenants);
+    $('#filter-tenants').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filtered = state.tenants.filter(t =>
+        t.name.toLowerCase().includes(q) || t.slug.toLowerCase().includes(q));
+      renderTenantsTable(filtered);
+    });
+  } catch (e) {
+    $('#tenants-table').innerHTML = `<div class="p-8 text-center text-brand-coral text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderTenantsTable(tenants) {
+  const tbl = $('#tenants-table');
+  if (!tenants.length) {
+    tbl.innerHTML = `
+      <div class="p-14 text-center">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full brand-gradient flex items-center justify-center text-white">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 21h18M5 21V7l7-4 7 4v14"/></svg>
+        </div>
+        <h3 class="display text-lg text-brand-navy">Nenhum tenant ainda</h3>
+        <p class="text-sm text-brand-gray mt-1 mb-5">Crie o primeiro tenant para começar a cadastrar workspaces.</p>
+        <button class="btn btn-primary" onclick="openTenantForm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Criar tenant
+        </button>
+      </div>`;
+    return;
+  }
+  tbl.innerHTML = `
+    <table class="table w-full">
+      <thead>
+        <tr>
+          <th>Nome</th><th>Slug</th><th>Workspaces</th><th>Usuários</th><th>Criado</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${tenants.map(t => `
+          <tr>
+            <td><div class="font-medium">${escapeHtml(t.name)}</div></td>
+            <td><span class="mono text-[13px] text-brand-gray">${escapeHtml(t.slug)}</span><span class="text-brand-gray/50 mono"> .tracking.usinadotempo.com.br</span></td>
+            <td><span class="badge badge-tenant mono">${t.workspace_count}</span></td>
+            <td><span class="badge badge-tenant mono">${t.user_count}</span></td>
+            <td class="text-brand-gray text-[13px]">${fmtDate(t.created_at)}</td>
+            <td class="text-right">
+              <button class="btn btn-ghost btn-sm" onclick="openTenantForm('${t.id}')">Editar</button>
+              <button class="btn btn-ghost btn-sm" onclick='location.hash="#workspaces?tenant=${t.id}"'>Workspaces →</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function openTenantForm(id = null) {
+  const editing = !!id;
+  const t = editing ? state.tenantsById[id] : { name: '', slug: '' };
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <form id="tenant-form" class="space-y-4">
+      <div>
+        <label class="label">Nome do tenant</label>
+        <input id="tn-name" class="input" required placeholder="Ex: Grupo Vidal" value="${escapeHtml(t.name)}">
+        <p class="help">Nome de exibição no painel.</p>
+      </div>
+      <div>
+        <label class="label">Slug</label>
+        <div class="flex items-stretch">
+          <input id="tn-slug" class="input rounded-r-none" required pattern="^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" placeholder="vidal" value="${escapeHtml(t.slug)}" ${editing ? '' : ''}>
+          <span class="px-3 py-2 bg-[#f3f4f8] border border-l-0 border-brand-border rounded-r-lg text-sm text-brand-gray mono">.tracking.usinadotempo.com.br</span>
+        </div>
+        <p class="help">Apenas letras minúsculas, números e hífen. Vira o subdomínio do dashboard do tenant.</p>
+      </div>
+      ${editing ? `
+        <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#fff7ec] border border-[#f7c87a] text-[13px] text-[#8a6019]">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span>Mudar o slug muda o subdomínio em que o cliente acessa o dashboard. Avise o cliente antes.</span>
+        </div>` : ''}
+    </form>`;
+
+  const footer = document.createElement('div');
+  footer.innerHTML = `
+    ${editing ? `<button class="btn btn-danger mr-auto" onclick="deleteTenant('${id}')">Excluir tenant</button>` : ''}
+    <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+    <button class="btn btn-primary" id="tn-save">${editing ? 'Salvar' : 'Criar tenant'}</button>`;
+
+  openModal({
+    title: editing ? 'Editar tenant' : 'Novo tenant',
+    subtitle: editing ? 'Atualize os dados do cliente.' : 'Cadastre um novo cliente da Usina.',
+    body, footer,
+  });
+
+  $('#tn-save').addEventListener('click', async () => {
+    const name = $('#tn-name').value.trim();
+    const slug = $('#tn-slug').value.trim().toLowerCase();
+    if (!name) { toast('Informe o nome.', 'error'); return; }
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) { toast('Slug inválido.', 'error'); return; }
+    const btn = $('#tn-save'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      if (editing) await api('PATCH', `/admin/tenants/${id}`, { name, slug });
+      else         await api('POST',  '/admin/tenants',         { name, slug });
+      toast(editing ? 'Tenant atualizado.' : 'Tenant criado.', 'success');
+      closeModal();
+      loadTenants();
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.textContent = editing ? 'Salvar' : 'Criar tenant';
+    }
+  });
+}
+
+async function deleteTenant(id) {
+  if (!confirm('Excluir este tenant? Ele precisa estar sem workspaces e sem usuários.')) return;
+  try {
+    await api('DELETE', `/admin/tenants/${id}`);
+    toast('Tenant excluído.', 'success');
+    closeModal();
+    loadTenants();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+//
+// ============================================================================
+// SECTION: Workspaces
+// ============================================================================
+//
+async function loadWorkspaces() {
+  const content = $('#content');
+  // Parse optional ?tenant=<id> from hash (we hide it as a query inside the hash)
+  const params = new URLSearchParams(location.hash.split('?')[1] || '');
+  const tenantFilter = params.get('tenant') || '';
+
+  // Ensure tenants cached
+  if (!state.tenants.length) {
+    try {
+      const t = await api('GET', '/admin/tenants');
+      state.tenants = t.tenants || [];
+      state.tenantsById = Object.fromEntries(state.tenants.map(x => [x.id, x]));
+    } catch {}
+  }
+
+  const tenantOptions = state.tenants.map(t => `<option value="${t.id}" ${t.id === tenantFilter ? 'selected' : ''}>${escapeHtml(t.name)}</option>`).join('');
+
+  content.innerHTML = `
+    ${pageHeader({
+      eyebrow: 'Operação',
+      title: 'Workspaces',
+      description: 'Negócios cadastrados sob cada tenant. Cada workspace tem seus próprios pixels, contas de anúncio e domínios.',
+      actions: `
+        <select id="filter-tenant" class="select" style="width: 220px">
+          <option value="">Todos os tenants</option>
+          ${tenantOptions}
+        </select>
+        <input id="filter-workspaces" placeholder="Buscar…" class="input" style="width: 200px">
+        <button class="btn btn-primary" onclick="openWorkspaceForm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo workspace
+        </button>`,
+    })}
+    <div class="max-w-7xl mx-auto px-6 lg:px-10 py-8">
+      <div id="workspaces-grid" class="grid gap-4 stagger" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr))">
+        <div class="card p-6"><div class="skel h-5 w-1/2 mb-3"></div><div class="skel h-3 w-3/4"></div></div>
+        <div class="card p-6"><div class="skel h-5 w-2/3 mb-3"></div><div class="skel h-3 w-1/2"></div></div>
+        <div class="card p-6"><div class="skel h-5 w-1/2 mb-3"></div><div class="skel h-3 w-3/4"></div></div>
+      </div>
+    </div>`;
+
+  try {
+    const path = tenantFilter ? `/admin/workspaces?tenant=${encodeURIComponent(tenantFilter)}` : '/admin/workspaces';
+    const data = await api('GET', path);
+    const all = data.workspaces || [];
+    renderWorkspacesGrid(all);
+
+    $('#filter-tenant').addEventListener('change', (e) => {
+      const v = e.target.value;
+      const newHash = v ? `#workspaces?tenant=${v}` : '#workspaces';
+      location.hash = newHash;
+    });
+    $('#filter-workspaces').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filt = all.filter(w =>
+        w.name.toLowerCase().includes(q) ||
+        w.slug.toLowerCase().includes(q) ||
+        (w.tenant_name || '').toLowerCase().includes(q));
+      renderWorkspacesGrid(filt);
+    });
+  } catch (e) {
+    $('#workspaces-grid').innerHTML = `<div class="card p-8 col-span-full text-center text-brand-coral text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderWorkspacesGrid(items) {
+  const grid = $('#workspaces-grid');
+  if (!items.length) {
+    grid.innerHTML = `
+      <div class="card p-14 text-center col-span-full empty-watermark">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full brand-gradient flex items-center justify-center text-white">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </div>
+        <h3 class="display text-lg text-brand-navy">Nenhum workspace</h3>
+        <p class="text-sm text-brand-gray mt-1 mb-5">Crie um workspace para começar a configurar tracking de um negócio.</p>
+        <button class="btn btn-primary" onclick="openWorkspaceForm()">Criar workspace</button>
+      </div>`;
+    return;
+  }
+  grid.innerHTML = items.map(w => `
+    <div class="card p-5 hover:shadow-navy hover:-translate-y-0.5 transition cursor-pointer" onclick="location.hash='#workspaces/${w.id}'">
+      <div class="flex items-start justify-between gap-3 mb-3">
+        <div class="min-w-0 flex-1">
+          <div class="text-[11px] uppercase tracking-wider text-brand-gray font-semibold mb-1">${escapeHtml(w.tenant_name || '—')}</div>
+          <div class="display text-[17px] text-brand-navy truncate">${escapeHtml(w.name)}</div>
+          <div class="mono text-[12px] text-brand-gray mt-1 truncate">${escapeHtml(w.slug)}</div>
+        </div>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="text-brand-gray flex-shrink-0"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div class="flex items-center gap-2 pt-3 border-t border-brand-border text-xs">
+        <span class="badge badge-tenant mono">${escapeHtml(w.tenant_slug)}/${escapeHtml(w.slug)}</span>
+      </div>
+    </div>`).join('');
+}
+
+function openWorkspaceForm() {
+  if (!state.tenants.length) {
+    toast('Crie ao menos um tenant antes.', 'error');
+    return;
+  }
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <form class="space-y-4">
+      <div>
+        <label class="label">Tenant</label>
+        <select id="ws-tenant" class="select" required>
+          <option value="">Selecione…</option>
+          ${state.tenants.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="label">Nome do workspace</label>
+        <input id="ws-name" class="input" required placeholder="Ex: Faculdade Vidal">
+      </div>
+      <div>
+        <label class="label">Slug</label>
+        <input id="ws-slug" class="input" required pattern="^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$" placeholder="faculdade-vidal">
+        <p class="help">Identificador interno único dentro do tenant. Só letras, números e hífen.</p>
+      </div>
+    </form>`;
+
+  const footer = document.createElement('div');
+  footer.innerHTML = `
+    <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+    <button class="btn btn-primary" id="ws-save">Criar workspace</button>`;
+
+  openModal({ title: 'Novo workspace', subtitle: 'Após criar, configure os pixels e contas de anúncio.', body, footer });
+
+  $('#ws-save').addEventListener('click', async () => {
+    const tenant_id = $('#ws-tenant').value;
+    const name = $('#ws-name').value.trim();
+    const slug = $('#ws-slug').value.trim().toLowerCase();
+    if (!tenant_id) { toast('Selecione um tenant.', 'error'); return; }
+    if (!name)      { toast('Informe o nome.', 'error'); return; }
+    if (!/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(slug)) { toast('Slug inválido.', 'error'); return; }
+    const btn = $('#ws-save'); btn.disabled = true; btn.textContent = 'Criando…';
+    try {
+      const res = await api('POST', '/admin/workspaces', { tenant_id, name, slug });
+      toast('Workspace criado.', 'success');
+      closeModal();
+      location.hash = `#workspaces/${res.workspace.id}`;
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Criar workspace';
+    }
+  });
+}
+
+//
+// ============================================================================
+// Workspace detail (drawer with tabs)
+// ============================================================================
+//
+async function loadWorkspaceDetail(id) {
+  // Make sure list is loaded behind the drawer
+  if (!$('#workspaces-grid')) loadWorkspaces();
+
+  const wrap = document.createElement('div');
+  wrap.innerHTML = `
+    <div class="px-7 pt-7 pb-5 border-b border-brand-border bg-white sticky top-0 z-10">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1" id="ws-detail-header">
+          <div class="skel h-3 w-32 mb-2"></div>
+          <div class="skel h-7 w-2/3"></div>
+        </div>
+        <button class="copy-btn p-2" onclick="closeDrawer(); history.replaceState(null, '', '#workspaces');" aria-label="Fechar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="mt-5 flex border-b border-brand-border -mx-7 px-7" role="tablist">
+        <button class="tab active" data-tab="config">Tracking</button>
+        <button class="tab" data-tab="domains">Domínios</button>
+        <button class="tab" data-tab="danger">Excluir</button>
+      </div>
+    </div>
+    <div id="ws-detail-body" class="px-7 py-7"></div>`;
+  openDrawer(wrap);
+
+  let data;
+  try {
+    data = await api('GET', `/admin/workspaces/${id}`);
+  } catch (e) {
+    $('#ws-detail-body').innerHTML = `<div class="text-brand-coral text-sm">${escapeHtml(e.message)}</div>`;
+    return;
+  }
+  const w = data.workspace;
+  const cfg = data.config || {};
+  $('#ws-detail-header').innerHTML = `
+    <div class="text-[11px] uppercase tracking-wider text-brand-gray font-semibold mb-1">${escapeHtml(w.tenant_name)}</div>
+    <h2 class="display-italic text-3xl text-brand-navy">${escapeHtml(w.name)}</h2>
+    <div class="mt-2 flex items-center gap-2 text-[12px] text-brand-gray">
+      <span class="mono">${escapeHtml(w.tenant_slug)}/${escapeHtml(w.slug)}</span>
+      <span class="text-brand-gray/40">•</span>
+      <span>Criado ${fmtDate(w.created_at)}</span>
+    </div>`;
+
+  $$('.tab', wrap).forEach(t => {
+    t.addEventListener('click', () => {
+      $$('.tab', wrap).forEach(x => x.classList.toggle('active', x === t));
+      renderWsTab(t.dataset.tab, w, cfg, data.domains || []);
+    });
+  });
+  renderWsTab('config', w, cfg, data.domains || []);
+}
+
+function renderWsTab(tab, w, cfg, domains) {
+  const body = $('#ws-detail-body');
+  if (tab === 'config') return renderWsConfigForm(body, w, cfg);
+  if (tab === 'domains') return renderWsDomains(body, w, domains);
+  if (tab === 'danger') return renderWsDanger(body, w);
+}
+
+function configCard(title, description, fields) {
+  return `
+    <div class="card p-6 mb-5">
+      <div class="mb-5">
+        <h3 class="display text-[15px] text-brand-navy">${escapeHtml(title)}</h3>
+        <p class="text-[13px] text-brand-gray mt-0.5">${escapeHtml(description)}</p>
+      </div>
+      <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
+        ${fields.map(f => `
+          <div class="${f.full ? 'col-span-full' : ''}">
+            <label class="label">${escapeHtml(f.label)}</label>
+            <input
+              data-cfg="${f.key}"
+              class="input ${f.mono ? 'mono' : ''}"
+              type="${f.secret ? 'password' : 'text'}"
+              value="${escapeHtml(f.value || '')}"
+              placeholder="${escapeHtml(f.placeholder || '')}"
+            >
+            ${f.help ? `<p class="help">${escapeHtml(f.help)}</p>` : ''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function renderWsConfigForm(body, w, cfg) {
+  body.innerHTML = `
+    <form id="ws-cfg-form" class="stagger">
+      ${configCard('Meta CAPI', 'Pixel e token de Conversions API. Eventos server-side são enviados para este pixel.', [
+        { label: 'Pixel ID',        key: 'meta_pixel_id',         value: cfg.meta_pixel_id,        mono: true, placeholder: '1234567890' },
+        { label: 'Access Token',    key: 'meta_access_token',     value: cfg.meta_access_token,    mono: true, secret: true, placeholder: 'EAA…', full: true },
+        { label: 'Test Event Code', key: 'meta_test_event_code',  value: cfg.meta_test_event_code, mono: true, placeholder: 'TEST12345', help: 'Opcional. Use para validar eventos no Test Events do Meta.' },
+      ])}
+
+      ${configCard('GA4 Measurement Protocol', 'Identificadores do stream do GA4. Obrigatórios juntos — se um faltar, GA4 é silenciosamente pulado.', [
+        { label: 'Measurement ID',  key: 'ga4_measurement_id',    value: cfg.ga4_measurement_id,   mono: true, placeholder: 'G-XXXXXXXXXX' },
+        { label: 'API Secret',      key: 'ga4_api_secret',        value: cfg.ga4_api_secret,       mono: true, secret: true },
+      ])}
+
+      ${configCard('Google Ads', 'OAuth + Customer ID para upload server-side de conversions. Os 6 campos são obrigatórios juntos.', [
+        { label: 'Client ID',          key: 'google_ads_client_id',          value: cfg.google_ads_client_id,          mono: true, full: true },
+        { label: 'Client Secret',      key: 'google_ads_client_secret',      value: cfg.google_ads_client_secret,      mono: true, secret: true },
+        { label: 'Refresh Token',      key: 'google_ads_refresh_token',      value: cfg.google_ads_refresh_token,      mono: true, secret: true },
+        { label: 'Developer Token',    key: 'google_ads_developer_token',    value: cfg.google_ads_developer_token,    mono: true, secret: true },
+        { label: 'Customer ID',        key: 'google_ads_customer_id',        value: cfg.google_ads_customer_id,        mono: true, placeholder: '1234567890', help: 'Sem hífens.' },
+        { label: 'Login Customer ID',  key: 'google_ads_login_customer_id',  value: cfg.google_ads_login_customer_id,  mono: true, placeholder: 'MCC ou mesmo do Customer ID' },
+      ])}
+
+      ${configCard('Defaults & integrações', 'Configurações regionais e chaves de automação opcionais.', [
+        { label: 'Default Country Code', key: 'default_country_code', value: cfg.default_country_code || '55', mono: true, placeholder: '55', help: 'Prepended em telefones de lead form para hash CAPI.' },
+        { label: 'Timezone Offset',      key: 'timezone_offset',      value: cfg.timezone_offset || '-03:00',  mono: true, placeholder: '-03:00', help: 'Deve casar com o fuso da conta Google Ads.' },
+        { label: 'Encharge API Key',     key: 'encharge_api_key',     value: cfg.encharge_api_key,             mono: true, secret: true },
+        { label: 'ManyChat Key',         key: 'manychat_key',         value: cfg.manychat_key,                 mono: true, secret: true },
+        { label: 'Meta Ads Token (sync de spend)', key: 'meta_ads_access_token', value: cfg.meta_ads_access_token, mono: true, secret: true, full: true },
+        { label: 'Meta Ads Account ID', key: 'meta_ads_account_id',  value: cfg.meta_ads_account_id, mono: true, placeholder: 'sem o prefixo act_' },
+      ])}
+
+      <div class="sticky bottom-0 bg-white py-4 border-t border-brand-border flex items-center justify-between gap-3 -mx-7 px-7">
+        <div class="text-[12px] text-brand-gray">Atualizações se aplicam imediatamente — sem redeploy necessário.</div>
+        <button type="submit" class="btn btn-primary">Salvar configurações</button>
+      </div>
+    </form>`;
+
+  $('#ws-cfg-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const config = {};
+    $$('[data-cfg]', body).forEach(inp => { config[inp.dataset.cfg] = inp.value.trim() || null; });
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      await api('PATCH', `/admin/workspaces/${w.id}`, { config });
+      toast('Configurações salvas.', 'success');
+      btn.disabled = false; btn.textContent = 'Salvar configurações';
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Salvar configurações';
+    }
+  });
+}
+
+function renderWsDomains(body, w, domains) {
+  body.innerHTML = `
+    <div class="card p-6 mb-5">
+      <div class="flex items-start justify-between gap-4 mb-5">
+        <div>
+          <h3 class="display text-[15px] text-brand-navy">Domínios deste workspace</h3>
+          <p class="text-[13px] text-brand-gray mt-0.5">Aponte domínios próprios do cliente (ex: <span class="mono">lp1.faculdadevidal.edu.br</span>) para este workspace. Toda visita por esse host é vinculada aqui.</p>
+        </div>
+      </div>
+
+      <form id="add-domain-form" class="flex gap-2 mb-5">
+        <input id="new-domain" class="input mono" placeholder="lp1.cliente.com.br" required>
+        <label class="flex items-center gap-2 px-3 text-[13px] text-brand-gray whitespace-nowrap">
+          <input type="checkbox" id="new-domain-default" class="rounded border-brand-border">
+          padrão
+        </label>
+        <button class="btn btn-primary">Adicionar</button>
+      </form>
+
+      <div class="border border-brand-border rounded-lg overflow-hidden">
+        ${domains.length ? `
+          <table class="table w-full">
+            <thead><tr><th>Domínio</th><th>Padrão</th><th>Cadastrado</th><th></th></tr></thead>
+            <tbody id="domains-tbody">
+              ${domains.map(d => `
+                <tr>
+                  <td class="mono text-[13px]">${escapeHtml(d.domain)}</td>
+                  <td>${d.is_default ? '<span class="badge badge-active">padrão</span>' : '<span class="badge badge-muted">—</span>'}</td>
+                  <td class="text-brand-gray text-[13px]">${fmtDate(d.created_at)}</td>
+                  <td class="text-right">
+                    <button class="btn btn-ghost btn-sm" onclick="deleteDomain('${w.id}', '${escapeHtml(d.domain)}')">Remover</button>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>` : `
+          <div class="p-10 text-center text-brand-gray text-sm">Nenhum domínio cadastrado ainda.</div>`}
+      </div>
+    </div>
+
+    <div class="card p-6 bg-[#fafbfd] border-dashed">
+      <h4 class="display text-[14px] text-brand-navy mb-1.5">Como apontar um domínio</h4>
+      <ol class="text-[13px] text-brand-gray leading-relaxed space-y-1 list-decimal list-inside">
+        <li>No DNS do cliente, crie um <span class="mono text-brand-navy">CNAME</span> apontando para <span class="mono text-brand-navy">usina-tracking.pages.dev</span>.</li>
+        <li>No Cloudflare Pages → projeto <span class="mono text-brand-navy">usina-tracking</span> → Custom domains → adicionar o domínio.</li>
+        <li>Cadastre o mesmo domínio aqui pra mapear ao workspace.</li>
+      </ol>
+    </div>`;
+
+  $('#add-domain-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const domain = $('#new-domain').value.trim().toLowerCase();
+    const isDefault = $('#new-domain-default').checked;
+    try {
+      await api('POST', `/admin/workspaces/${w.id}/domains`, { domain, is_default: isDefault });
+      toast('Domínio adicionado.', 'success');
+      const fresh = await api('GET', `/admin/workspaces/${w.id}`);
+      renderWsDomains(body, w, fresh.domains || []);
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+  });
+}
+
+async function deleteDomain(wsId, domain) {
+  if (!confirm(`Remover o mapeamento de ${domain}? O DNS continua existindo, mas as visitas ficam sem workspace.`)) return;
+  try {
+    await api('DELETE', `/admin/workspaces/${wsId}/domains?domain=${encodeURIComponent(domain)}`);
+    toast('Domínio removido.', 'success');
+    const fresh = await api('GET', `/admin/workspaces/${wsId}`);
+    renderWsDomains($('#ws-detail-body'), fresh.workspace, fresh.domains || []);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+}
+
+function renderWsDanger(body, w) {
+  body.innerHTML = `
+    <div class="card p-6 border-2 border-[rgba(220,74,48,0.25)]">
+      <h3 class="display text-[15px] text-brand-coral mb-1.5">Excluir workspace</h3>
+      <p class="text-[13px] text-brand-gray mb-5 leading-relaxed">
+        Esta ação remove o workspace, sua configuração e todos os mapeamentos de domínio.
+        Só funciona se <strong>nenhuma</strong> tabela operacional (sessions, event_log, purchase_log, ad_spend) ainda tiver dados deste workspace.
+      </p>
+      <button class="btn btn-danger" onclick="deleteWorkspace('${w.id}')">Excluir definitivamente</button>
+    </div>`;
+}
+
+async function deleteWorkspace(id) {
+  if (!confirm('Tem certeza? Esta operação é irreversível.')) return;
+  try {
+    await api('DELETE', `/admin/workspaces/${id}`);
+    toast('Workspace excluído.', 'success');
+    closeDrawer();
+    location.hash = '#workspaces';
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+//
+// ============================================================================
+// SECTION: Users
+// ============================================================================
+//
+async function loadUsers() {
+  const content = $('#content');
+
+  if (!state.tenants.length) {
+    try {
+      const t = await api('GET', '/admin/tenants');
+      state.tenants = t.tenants || [];
+      state.tenantsById = Object.fromEntries(state.tenants.map(x => [x.id, x]));
+    } catch {}
+  }
+
+  content.innerHTML = `
+    ${pageHeader({
+      eyebrow: 'Operação',
+      title: 'Usuários',
+      description: 'Administradores da Usina e visualizadores dos tenants. Cada visualizador é restrito aos workspaces atribuídos a ele.',
+      actions: `
+        <input id="filter-users" placeholder="Buscar…" class="input" style="width: 240px">
+        <button class="btn btn-primary" onclick="openUserForm()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Novo usuário
+        </button>`,
+    })}
+    <div class="max-w-7xl mx-auto px-6 lg:px-10 py-8">
+      <div id="users-table" class="card overflow-hidden empty-watermark stagger">
+        <div class="p-6"><div class="skel h-5 w-48"></div></div>
+        <div class="p-6 border-t border-brand-border"><div class="skel h-4 w-full"></div></div>
+      </div>
+    </div>`;
+
+  try {
+    const data = await api('GET', '/admin/users');
+    const users = data.users || [];
+    renderUsersTable(users);
+    $('#filter-users').addEventListener('input', (e) => {
+      const q = e.target.value.toLowerCase();
+      const filt = users.filter(u =>
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.name || '').toLowerCase().includes(q) ||
+        (u.tenant_name || '').toLowerCase().includes(q));
+      renderUsersTable(filt);
+    });
+  } catch (e) {
+    $('#users-table').innerHTML = `<div class="p-8 text-center text-brand-coral text-sm">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderUsersTable(users) {
+  const tbl = $('#users-table');
+  if (!users.length) {
+    tbl.innerHTML = `
+      <div class="p-14 text-center">
+        <div class="w-12 h-12 mx-auto mb-3 rounded-full brand-gradient flex items-center justify-center text-white">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        </div>
+        <h3 class="display text-lg text-brand-navy">Nenhum usuário cadastrado</h3>
+        <p class="text-sm text-brand-gray mt-1 mb-5">Crie usuários da Usina ou viewers dos tenants.</p>
+        <button class="btn btn-primary" onclick="openUserForm()">Criar usuário</button>
+      </div>`;
+    return;
+  }
+  tbl.innerHTML = `
+    <table class="table w-full">
+      <thead><tr><th>Usuário</th><th>Papel</th><th>Tenant</th><th>Workspaces</th><th>Último acesso</th><th></th></tr></thead>
+      <tbody>
+        ${users.map(u => `
+          <tr>
+            <td>
+              <div class="flex items-center gap-3">
+                <div class="avatar w-9 h-9 text-[12px]">${initials(u.name || u.email)}</div>
+                <div class="min-w-0">
+                  <div class="font-medium truncate">${escapeHtml(u.name || u.email)}</div>
+                  <div class="text-[12px] text-brand-gray mono truncate">${escapeHtml(u.email)}</div>
+                </div>
+              </div>
+            </td>
+            <td>${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : '<span class="badge badge-viewer">viewer</span>'}</td>
+            <td>${u.tenant_name ? `<span class="badge badge-tenant">${escapeHtml(u.tenant_name)}</span>` : '<span class="text-brand-gray">—</span>'}</td>
+            <td><span class="mono text-[13px]">${u.workspace_count}</span></td>
+            <td class="text-brand-gray text-[13px]">${u.last_login_at ? fmtDate(u.last_login_at) : '<span class="text-brand-gray/60">nunca</span>'}</td>
+            <td class="text-right">
+              <button class="btn btn-ghost btn-sm" onclick="openUserDetail('${u.id}')">Editar</button>
+            </td>
+          </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function openUserForm() {
+  if (!state.tenants.length) {
+    toast('Crie ao menos um tenant antes (necessário para viewers).', 'error');
+    return;
+  }
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <form id="user-form" class="space-y-4">
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="label">Papel</label>
+          <select id="us-role" class="select" required>
+            <option value="usina_admin">admin Usina</option>
+            <option value="tenant_viewer" selected>viewer (cliente)</option>
+          </select>
+        </div>
+        <div id="us-tenant-wrap">
+          <label class="label">Tenant</label>
+          <select id="us-tenant" class="select">
+            <option value="">Selecione…</option>
+            ${state.tenants.map(t => `<option value="${t.id}">${escapeHtml(t.name)}</option>`).join('')}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label class="label">Nome</label>
+        <input id="us-name" class="input" placeholder="Nome completo">
+      </div>
+      <div>
+        <label class="label">E-mail</label>
+        <input id="us-email" class="input" type="email" required placeholder="email@cliente.com">
+      </div>
+      <div>
+        <label class="label">Senha temporária</label>
+        <div class="flex gap-2">
+          <input id="us-password" class="input mono" required minlength="12">
+          <button type="button" class="btn btn-secondary" id="us-genpw">Gerar</button>
+          <button type="button" class="btn btn-secondary" id="us-copypw">Copiar</button>
+        </div>
+        <p class="help">12+ caracteres. Compartilhe pelo canal seguro com o usuário; ele pode trocar depois (versão futura).</p>
+      </div>
+      <div id="us-workspaces-wrap" class="hidden">
+        <label class="label">Workspaces que esse viewer pode ver</label>
+        <div id="us-ws-list" class="border border-brand-border rounded-lg p-3 max-h-44 overflow-y-auto space-y-1.5 text-sm">
+          <div class="text-brand-gray text-xs italic">Selecione um tenant para listar os workspaces.</div>
+        </div>
+      </div>
+    </form>`;
+
+  const footer = document.createElement('div');
+  footer.innerHTML = `
+    <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+    <button class="btn btn-primary" id="us-save">Criar usuário</button>`;
+
+  openModal({ title: 'Novo usuário', subtitle: 'Crie um administrador da Usina ou um viewer de cliente.', body, footer, large: true });
+
+  function refreshRoleUI() {
+    const isViewer = $('#us-role').value === 'tenant_viewer';
+    $('#us-tenant-wrap').classList.toggle('hidden', !isViewer);
+    $('#us-workspaces-wrap').classList.toggle('hidden', !isViewer);
+  }
+  $('#us-role').addEventListener('change', refreshRoleUI);
+  refreshRoleUI();
+
+  $('#us-tenant').addEventListener('change', async (e) => {
+    const tenantId = e.target.value;
+    const list = $('#us-ws-list');
+    if (!tenantId) { list.innerHTML = '<div class="text-brand-gray text-xs italic">Selecione um tenant.</div>'; return; }
+    list.innerHTML = '<div class="skel h-4 w-3/4"></div>';
+    try {
+      const data = await api('GET', `/admin/workspaces?tenant=${encodeURIComponent(tenantId)}`);
+      const ws = data.workspaces || [];
+      list.innerHTML = ws.length
+        ? ws.map(w => `
+          <label class="flex items-center gap-2 cursor-pointer hover:bg-[#fafbfd] px-2 py-1 rounded">
+            <input type="checkbox" name="us-ws" value="${w.id}" class="rounded border-brand-border">
+            <span class="font-medium">${escapeHtml(w.name)}</span>
+            <span class="mono text-[12px] text-brand-gray">${escapeHtml(w.slug)}</span>
+          </label>`).join('')
+        : '<div class="text-brand-gray text-xs italic">Esse tenant ainda não tem workspaces.</div>';
+    } catch (err) {
+      list.innerHTML = `<div class="text-brand-coral text-xs">${escapeHtml(err.message)}</div>`;
+    }
+  });
+
+  $('#us-genpw').addEventListener('click', () => {
+    const pw = genStrongPassword(18);
+    $('#us-password').value = pw;
+    $('#us-password').type = 'text';
+  });
+  $('#us-copypw').addEventListener('click', () => copyToClipboard($('#us-password').value));
+
+  $('#us-save').addEventListener('click', async () => {
+    const role = $('#us-role').value;
+    const name = $('#us-name').value.trim() || null;
+    const email = $('#us-email').value.trim().toLowerCase();
+    const password = $('#us-password').value;
+    if (password.length < 12) { toast('Senha precisa ter 12+ caracteres.', 'error'); return; }
+    const payload = { email, password, role, name };
+    if (role === 'tenant_viewer') {
+      const tenant_id = $('#us-tenant').value;
+      if (!tenant_id) { toast('Selecione um tenant.', 'error'); return; }
+      const workspace_ids = $$('input[name="us-ws"]:checked').map(i => i.value);
+      payload.tenant_id = tenant_id;
+      payload.workspace_ids = workspace_ids;
+    }
+    const btn = $('#us-save'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      await api('POST', '/admin/users', payload);
+      toast('Usuário criado.', 'success');
+      closeModal();
+      loadUsers();
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Criar usuário';
+    }
+  });
+}
+
+async function openUserDetail(id) {
+  let data;
+  try {
+    data = await api('GET', `/admin/users/${id}`);
+  } catch (e) { toast(e.message, 'error'); return; }
+  const u = data.user;
+
+  // For viewers: load workspace options of the user's tenant
+  let availableWorkspaces = [];
+  if (u.role === 'tenant_viewer' && u.tenant_id) {
+    try {
+      const ws = await api('GET', `/admin/workspaces?tenant=${encodeURIComponent(u.tenant_id)}`);
+      availableWorkspaces = ws.workspaces || [];
+    } catch {}
+  }
+  const checked = new Set((data.workspaces || []).map(w => w.id));
+
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div class="flex items-center gap-3 mb-5 pb-5 border-b border-brand-border">
+      <div class="avatar w-12 h-12 text-base">${initials(u.name || u.email)}</div>
+      <div>
+        <div class="font-display font-bold text-[16px] text-brand-navy">${escapeHtml(u.name || u.email)}</div>
+        <div class="text-[12.5px] text-brand-gray mono">${escapeHtml(u.email)}</div>
+      </div>
+      <div class="ml-auto">
+        ${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : `<span class="badge badge-viewer">viewer · ${escapeHtml(u.tenant_name || '')}</span>`}
+      </div>
+    </div>
+
+    <form id="user-edit-form" class="space-y-4">
+      <div>
+        <label class="label">Nome</label>
+        <input id="ue-name" class="input" value="${escapeHtml(u.name || '')}">
+      </div>
+      <div class="flex items-center gap-3 px-3 py-2.5 rounded-lg border border-brand-border">
+        <input id="ue-active" type="checkbox" ${u.is_active ? 'checked' : ''}>
+        <label for="ue-active" class="text-sm flex-1 cursor-pointer">Conta ativa</label>
+        <span class="text-[12px] text-brand-gray">${u.last_login_at ? `último acesso: ${fmtDate(u.last_login_at)}` : 'nunca acessou'}</span>
+      </div>
+      <div>
+        <label class="label">Trocar senha (deixe em branco para manter)</label>
+        <div class="flex gap-2">
+          <input id="ue-password" class="input mono" placeholder="min 12 chars">
+          <button type="button" class="btn btn-secondary" onclick="$('#ue-password').value=genStrongPassword(18); $('#ue-password').type='text';">Gerar</button>
+        </div>
+        <p class="help">Trocar a senha encerra todas as sessões ativas desse usuário.</p>
+      </div>
+      ${u.role === 'tenant_viewer' ? `
+        <div>
+          <label class="label">Workspaces visíveis</label>
+          <div class="border border-brand-border rounded-lg p-3 max-h-52 overflow-y-auto space-y-1.5 text-sm">
+            ${availableWorkspaces.length
+              ? availableWorkspaces.map(w => `
+                <label class="flex items-center gap-2 cursor-pointer hover:bg-[#fafbfd] px-2 py-1 rounded">
+                  <input type="checkbox" name="ue-ws" value="${w.id}" class="rounded border-brand-border" ${checked.has(w.id) ? 'checked' : ''}>
+                  <span class="font-medium">${escapeHtml(w.name)}</span>
+                  <span class="mono text-[12px] text-brand-gray">${escapeHtml(w.slug)}</span>
+                </label>`).join('')
+              : '<div class="text-brand-gray text-xs italic">Tenant não tem workspaces.</div>'}
+          </div>
+        </div>` : ''}
+    </form>`;
+
+  const footer = document.createElement('div');
+  footer.innerHTML = `
+    <button class="btn btn-danger mr-auto" onclick="deleteUser('${u.id}')">Excluir</button>
+    <button class="btn btn-secondary" data-modal-close>Cancelar</button>
+    <button class="btn btn-primary" id="ue-save">Salvar</button>`;
+
+  openModal({ title: 'Editar usuário', subtitle: u.email, body, footer, large: true });
+
+  $('#ue-save').addEventListener('click', async () => {
+    const payload = {
+      name: $('#ue-name').value.trim() || null,
+      is_active: $('#ue-active').checked,
+    };
+    const newPw = $('#ue-password').value;
+    if (newPw) {
+      if (newPw.length < 12) { toast('Senha precisa ter 12+ caracteres.', 'error'); return; }
+      payload.password = newPw;
+    }
+    if (u.role === 'tenant_viewer') {
+      payload.workspace_ids = $$('input[name="ue-ws"]:checked').map(i => i.value);
+    }
+    const btn = $('#ue-save'); btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      await api('PATCH', `/admin/users/${u.id}`, payload);
+      toast('Usuário atualizado.', 'success');
+      closeModal();
+      loadUsers();
+    } catch (e) {
+      toast(e.message, 'error');
+      btn.disabled = false; btn.textContent = 'Salvar';
+    }
+  });
+}
+
+async function deleteUser(id) {
+  if (!confirm('Excluir este usuário? Todas as sessões serão encerradas.')) return;
+  try {
+    await api('DELETE', `/admin/users/${id}`);
+    toast('Usuário excluído.', 'success');
+    closeModal();
+    loadUsers();
+  } catch (e) { toast(e.message, 'error'); }
+}
+
+// Convenience for inline handlers
+function loadTenantDetail(id) { location.hash = `#workspaces?tenant=${id}`; }
+function loadUserDetail(id) { openUserDetail(id); location.hash = '#users'; }
+window.openTenantForm = openTenantForm;
+window.openWorkspaceForm = openWorkspaceForm;
+window.openUserForm = openUserForm;
+window.openUserDetail = openUserDetail;
+window.deleteTenant = deleteTenant;
+window.deleteWorkspace = deleteWorkspace;
+window.deleteUser = deleteUser;
+window.deleteDomain = deleteDomain;
+window.closeDrawer = closeDrawer;
+window.toggleSidebar = toggleSidebar;
+window.genStrongPassword = genStrongPassword;
+window.$ = $;
+
+// Boot
+boot();
+</script>
+</body>
+</html>
