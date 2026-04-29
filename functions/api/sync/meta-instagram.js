@@ -205,48 +205,49 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 3. Account insights (last N days)
-  // Meta IG Insights API splits metrics into two shapes:
-  //   - time_series: reach, accounts_engaged — return values[] keyed by day.
-  //   - total_value: profile_views, website_clicks, email_contacts,
-  //                  phone_call_clicks, get_directions_clicks, follower_count —
-  //                  return a single aggregate for the whole range.
-  // We do 2 calls (one per shape). For total_value metrics we store the
-  // aggregate against `dateTo` so it's the most recent row in the table —
-  // the dashboard SUMs over the window so it'll naturally pick this up.
+  // Meta IG splits metrics into two shapes — and any one metric being
+  // unavailable for the account fails the whole combined call. We call
+  // each metric independently so unsupported ones (e.g. email_contacts on
+  // an account that doesn't have an email button configured) don't tank
+  // the rest. Subrequest budget is fine post-fan-out (~12 calls/workspace).
   try {
     const sinceUnix = Math.floor(new Date(dateFrom + 'T00:00:00Z').getTime() / 1000);
     const untilUnix = Math.floor(new Date(dateTo + 'T23:59:59Z').getTime() / 1000);
     const dataByDay = {};
 
-    // Pass 1: time_series metrics
-    try {
-      const r = await meta.get(
-        `/${igId}/insights?metric=reach,accounts_engaged&period=day&since=${sinceUnix}&until=${untilUnix}`
-      );
-      for (const series of r.data || []) {
-        const m = series.name;
-        for (const v of series.values || []) {
-          const date = (v.end_time || '').slice(0, 10);
-          if (!date) continue;
-          (dataByDay[date] ||= {})[m] = toInt(v.value);
+    // time_series: per-day values
+    const timeSeriesMetrics = ['reach'];
+    for (const m of timeSeriesMetrics) {
+      try {
+        const r = await meta.get(`/${igId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}`);
+        for (const series of r.data || []) {
+          for (const v of series.values || []) {
+            const date = (v.end_time || '').slice(0, 10);
+            if (!date) continue;
+            (dataByDay[date] ||= {})[m] = toInt(v.value);
+          }
         }
-      }
-    } catch (_) { /* skip — some metrics may not be available */ }
+      } catch (_) { /* skip — metric not available */ }
+    }
 
-    // Pass 2: total_value metrics (aggregate for the whole range, stored on dateTo)
-    try {
-      const r = await meta.get(
-        `/${igId}/insights?metric=profile_views,website_clicks,email_contacts,phone_call_clicks,get_directions_clicks,follower_count&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
-      );
-      const aggRow = (dataByDay[dateTo] ||= {});
-      for (const series of r.data || []) {
-        const m = series.name;
-        const total = series.total_value?.value;
+    // total_value: aggregate over the range, stored against dateTo
+    const totalValueMetrics = [
+      'profile_views', 'website_clicks', 'email_contacts',
+      'phone_call_clicks', 'get_directions_clicks', 'accounts_engaged',
+    ];
+    const aggRow = (dataByDay[dateTo] ||= {});
+    for (const m of totalValueMetrics) {
+      try {
+        const r = await meta.get(
+          `/${igId}/insights?metric=${m}&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
+        );
+        const series = r.data?.[0];
+        const total = series?.total_value?.value;
         if (total !== undefined && total !== null) {
           aggRow[m] = toInt(total);
         }
-      }
-    } catch (_) { /* skip — some metrics may not be available for this account */ }
+      } catch (_) { /* skip — metric not configured for this account */ }
+    }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
