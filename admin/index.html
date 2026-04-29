@@ -533,8 +533,13 @@
      APP: main admin layout
      - mobile (<1024px): block stack (top bar + main); sidebar = drawer
      - desktop (>=1024px): flex row (sidebar 288px + main flex-1)
+     IMPORTANT: do NOT put `lg:flex` directly here — Tailwind responsive
+     utilities are emitted after base utilities, so `lg:flex` would beat
+     `hidden` on desktop and the layout would leak through every other
+     screen. The lg:flex class is added/removed by JS via showAppScreen()
+     and hideAllScreens().
      =================================================================== -->
-<div id="app-screen" class="hidden lg:flex min-h-screen">
+<div id="app-screen" class="hidden min-h-screen">
   <!-- Mobile top bar -->
   <div class="lg:hidden flex items-center justify-between px-4 py-3 bg-white border-b border-brand-border sticky top-0 z-30">
     <button id="mobile-menu-btn" class="btn btn-ghost p-2" aria-label="Abrir menu">
@@ -850,6 +855,8 @@ async function boot() {
 
 function hideAllScreens() {
   ['#splash-screen', '#setup-screen', '#login-screen', '#restricted-screen', '#app-screen'].forEach(s => $(s).classList.add('hidden'));
+  // Strip the responsive flex modifier from app-screen — see HTML comment above.
+  $('#app-screen').classList.remove('lg:flex');
 }
 
 function showSetupScreen() {
@@ -869,6 +876,7 @@ function showRestrictedScreen() {
 function showAppScreen() {
   hideAllScreens();
   $('#app-screen').classList.remove('hidden');
+  $('#app-screen').classList.add('lg:flex');
   // Populate user info
   const display = state.user.name || state.user.email;
   $('#user-name').textContent = display;
