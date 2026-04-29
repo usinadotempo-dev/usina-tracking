@@ -176,15 +176,19 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     if (status === 'ok') status = 'partial';
   }
 
-  // 3. Recent posts (top 50)
+  // 3. Recent posts (top 25, no nested insights — that field path was
+  // deprecated in v3.3+ with the "aggregated_fields_for_attachement" error.
+  // We get post metadata + likes/comments/shares only. reach/impressions/
+  // engaged_users would require a per-post insights call (1 extra subrequest
+  // per post) which would blow the 50-subrequest budget — defer to a future
+  // optimization that runs only after Workers Paid upgrade.
   try {
     const tokenSuffix = pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '';
     const posts = await meta.fetchAll(
-      `/${pageId}/posts?fields=id,message,created_time,type,permalink_url,` +
-      `likes.summary(true).limit(0),comments.summary(true).limit(0),shares,` +
-      `insights.metric(post_impressions,post_impressions_unique,post_engaged_users)` +
-      `&limit=50${tokenSuffix}`,
-      { safety: 2 }
+      `/${pageId}/posts?fields=id,message,created_time,permalink_url,` +
+      `likes.summary(true).limit(0),comments.summary(true).limit(0),shares` +
+      `&limit=25${tokenSuffix}`,
+      { safety: 1 }
     );
     if (posts.length) {
       const stmt = env.DB.prepare(`
@@ -200,26 +204,18 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           likes_count = excluded.likes_count,
           comments_count = excluded.comments_count,
           shares_count = excluded.shares_count,
-          reach = excluded.reach,
-          impressions = excluded.impressions,
-          engaged_users = excluded.engaged_users,
           updated_at = excluded.updated_at
       `);
       const now = Math.floor(Date.now() / 1000);
       const batch = posts.map((p) => {
-        const insightsArr = p.insights?.data || [];
-        const ins = {};
-        for (const i of insightsArr) ins[i.name] = i.values?.[0]?.value;
         const ts = p.created_time ? Math.floor(new Date(p.created_time).getTime() / 1000) : null;
         return stmt.bind(
           wsId, p.id, pageId,
-          p.message || null, ts, p.type || null, p.permalink_url || null,
+          p.message || null, ts, null /* type field deprecated */, p.permalink_url || null,
           toInt(p.likes?.summary?.total_count),
           toInt(p.comments?.summary?.total_count),
           toInt(p.shares?.count),
-          toInt(ins.post_impressions_unique),
-          toInt(ins.post_impressions),
-          toInt(ins.post_engaged_users),
+          null, null, null,  // reach/impressions/engaged_users — requires per-post insights call
           now
         );
       });
