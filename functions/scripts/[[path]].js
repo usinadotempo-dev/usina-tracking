@@ -1,7 +1,10 @@
 export async function onRequestGet(context) {
-  const { request, env } = context;
+  const { request } = context;
   const url = new URL(request.url);
-  const measurementId = url.searchParams.get('id') || env.GA4_MEASUREMENT_ID;
+  // In multi-tenant mode the landing page passes its workspace's GA4 id
+  // via ?id=<G-XXXX>. There is no global env fallback — without an explicit
+  // id we serve a no-op script.
+  const measurementId = url.searchParams.get('id') || '';
 
   if (!measurementId) {
     return new Response('// no measurement id', {

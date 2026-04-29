@@ -1,4 +1,5 @@
 import { resolveHost } from './_lib/workspace.js';
+import { loadWorkspaceConfig } from './_lib/workspace-config.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -9,10 +10,12 @@ export async function onRequestPost(context) {
     'Access-Control-Allow-Headers': 'Content-Type',
   };
 
-  // Resolve workspace from Host (custom domain) or from Origin header (when
-  // tracker is called from a landing page; the request Host is the API host).
+  // Resolve workspace from Host (custom domain) and load its per-workspace
+  // config (Meta Pixel, GA4, Google Ads keys, defaults). Without a workspace,
+  // outbound integrations are silently skipped — D1 logging still happens.
   const hostInfo = await resolveHost(context);
   const workspaceId = hostInfo.workspace?.id || null;
+  const cfg = await loadWorkspaceConfig(context, workspaceId);
 
   try {
     const body = await request.json();
@@ -78,8 +81,7 @@ export async function onRequestPost(context) {
     // (ex: `16505554444` or `5511987654321`). Users typing their own
     // number into a lead form almost never include the country code, so
     // we prepend a default. `countryCode` defaults to 55 (Brazil);
-    // recipients elsewhere set `env.DEFAULT_COUNTRY_CODE` — see the
-    // "decisions the recipient must make" table in CLAUDE.md.
+    // each workspace can override via workspace_config.default_country_code.
     //
     // Detection is length-based and best-effort. A recipient whose
     // audience mixes country codes (rare for the target audience) gets
@@ -116,7 +118,7 @@ export async function onRequestPost(context) {
     const hashedEm = await sha256(userData.em);
     const hashedFn = await sha256(normalizeName(userData.fn));
     const hashedLn = await sha256(normalizeName(userData.ln));
-    const hashedPh = await sha256(normalizePhone(userData.ph, env.DEFAULT_COUNTRY_CODE));
+    const hashedPh = await sha256(normalizePhone(userData.ph, cfg.default_country_code));
     const hashedExternalId = await sha256(externalId);
 
     // --- Bot detection ---
@@ -129,8 +131,8 @@ export async function onRequestPost(context) {
     // crawl (WhatsApp preview, Slackbot, facebookexternalhit, etc.)
     // would burn a Meta CAPI event and pollute the Pixel.
     const results = isBot ? [] : await Promise.allSettled([
-      sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, env }),
-      sendToGA4({ body, gaClientId, gaSessionId, hashedEm, env }),
+      sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg }),
+      sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }),
     ]);
 
     // --- Parse Meta result ---
@@ -224,9 +226,9 @@ export async function onRequestPost(context) {
 // -------------------------------------------------------
 // META CAPI
 // -------------------------------------------------------
-async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, env }) {
-  if (!env.META_PIXEL_ID || !env.META_ACCESS_TOKEN) {
-    return { skipped: 'missing meta env', payload: null, response: null };
+async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg }) {
+  if (!cfg.meta_pixel_id || !cfg.meta_access_token) {
+    return { skipped: 'missing meta config for workspace', payload: null, response: null };
   }
 
   const metaUserData = {
@@ -253,12 +255,12 @@ async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashe
     }],
   };
 
-  if (env.META_TEST_EVENT_CODE) {
-    payload.test_event_code = env.META_TEST_EVENT_CODE;
+  if (cfg.meta_test_event_code) {
+    payload.test_event_code = cfg.meta_test_event_code;
   }
 
   const payloadJson = JSON.stringify(payload);
-  const response = await fetch(`https://graph.facebook.com/v25.0/${env.META_PIXEL_ID}/events?access_token=${env.META_ACCESS_TOKEN}`, {
+  const response = await fetch(`https://graph.facebook.com/v25.0/${cfg.meta_pixel_id}/events?access_token=${cfg.meta_access_token}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: payloadJson,
@@ -269,9 +271,9 @@ async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashe
 // -------------------------------------------------------
 // GA4 MEASUREMENT PROTOCOL — CONVERSIONS ONLY
 // -------------------------------------------------------
-async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, env }) {
-  if (!env.GA4_MEASUREMENT_ID || !env.GA4_API_SECRET) {
-    return { skipped: 'missing ga4 env', payload: null, response: null };
+async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }) {
+  if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) {
+    return { skipped: 'missing ga4 config for workspace', payload: null, response: null };
   }
 
   const eventName = (body.event_name || '').toLowerCase();
@@ -301,7 +303,7 @@ async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, env }) {
   }
 
   const payloadJson = JSON.stringify(payload);
-  const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${env.GA4_MEASUREMENT_ID}&api_secret=${env.GA4_API_SECRET}`, {
+  const response = await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${cfg.ga4_measurement_id}&api_secret=${cfg.ga4_api_secret}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: payloadJson,

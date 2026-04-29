@@ -36,10 +36,12 @@
 // -----------------------------------------------------------------------------
 
 import PRODUCTS_CONFIG from '../../config/products.js';
+import { loadWorkspaceConfig } from '../_lib/workspace-config.js';
 
 // Module-scope OAuth2 access token cache for Google Ads API.
-// Reused across warm worker invocations to skip the refresh round-trip.
-let googleAdsTokenCache = { token: null, expiresAt: 0 };
+// Per-workspace because each workspace has its own client/secret/refresh token.
+// Map<workspaceId, { token, expiresAt }>
+const googleAdsTokenCache = new Map();
 
 // -----------------------------------------------------------------------------
 // Main entry point — each platform adapter calls this with a normalized object.
@@ -48,7 +50,9 @@ export async function processPurchase({ parsed, env, context }) {
   // Per-product integration config (may be null if product isn't registered).
   const productConfig = PRODUCTS_CONFIG[parsed.platform]?.[parsed.productId] || null;
 
-  // Look up the originating checkout session (fbp, fbc, UTMs, ga_client_id, etc.)
+  // Look up the originating checkout session (fbp, fbc, UTMs, ga_client_id,
+  // workspace_id, etc.). The workspace_id was stamped at checkout-session
+  // time by the landing page's host resolution.
   let checkoutData = {};
   if (parsed.trk && env.DB) {
     try {
@@ -61,7 +65,13 @@ export async function processPurchase({ parsed, env, context }) {
     }
   }
 
-  const enriched = { ...parsed, productConfig, checkoutData };
+  // Resolve the workspace's outbound config (Meta, GA4, Google Ads, etc.).
+  // No workspace_id on the checkout row → cfg is empty → all integrations
+  // skip with "missing config" but the purchase still lands in purchase_log.
+  const workspaceId = checkoutData.workspace_id || null;
+  const cfg = await loadWorkspaceConfig(context, workspaceId);
+
+  const enriched = { ...parsed, productConfig, checkoutData, cfg, workspaceId };
   const eventId = crypto.randomUUID();
   const eventTime = Math.floor(Date.now() / 1000);
 
@@ -79,7 +89,7 @@ export async function processPurchase({ parsed, env, context }) {
 
   if (productConfig && parsed.email) {
     handlerPromises.push(
-      handleEncharge({ parsed: enriched, env })
+      handleEncharge({ parsed: enriched })
         .then(r => ({ handler: 'encharge', ...r }))
         .catch(e => ({ handler: 'encharge', error: e.message }))
     );
@@ -87,7 +97,7 @@ export async function processPurchase({ parsed, env, context }) {
 
   if (productConfig && parsed.phone) {
     handlerPromises.push(
-      handleManyChat({ parsed: enriched, env })
+      handleManyChat({ parsed: enriched })
         .then(r => ({ handler: 'manychat', ...r }))
         .catch(e => ({ handler: 'manychat', error: e.message }))
     );
@@ -112,13 +122,13 @@ export async function processPurchase({ parsed, env, context }) {
 // HANDLER: Tracking — Meta CAPI + GA4 + Google Ads (needs checkoutData)
 // -----------------------------------------------------------------------------
 async function handleTracking({ parsed, eventId, eventTime, env }) {
-  const { email, name, phone, value, currency, transactionId, productId, productName, items, checkoutData, productConfig } = parsed;
+  const { email, name, phone, value, currency, transactionId, productId, productName, items, checkoutData, productConfig, cfg, workspaceId } = parsed;
 
   const hashedEm = await sha256(email);
   const nameParts = splitName(name);
   const hashedFn = await sha256(normalizeName(nameParts.fn));
   const hashedLn = await sha256(normalizeName(nameParts.ln));
-  const hashedPh = await sha256(normalizePhone(phone, env.DEFAULT_COUNTRY_CODE));
+  const hashedPh = await sha256(normalizePhone(phone, cfg.default_country_code));
   const hashedExternalId = await sha256(checkoutData.external_id || '');
 
   // Build a single item list both Meta and GA4 consume. Adapters should
@@ -142,9 +152,9 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
   }));
 
   const [metaResult, ga4Result, googleAdsResult] = await Promise.allSettled([
-    sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, env }),
-    sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, env }),
-    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, env }),
+    sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }),
+    sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }),
+    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId }),
   ]);
 
   // Parse Meta response
@@ -214,12 +224,11 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
 // -----------------------------------------------------------------------------
 // HANDLER: Encharge — email marketing
 // -----------------------------------------------------------------------------
-async function handleEncharge({ parsed, env }) {
-  if (!env.ENCHARGE_API_KEY) {
-    return { statusCode: 0, responseOk: 0, responseBody: 'Missing ENCHARGE_API_KEY' };
+async function handleEncharge({ parsed }) {
+  const { email, name, productConfig, cfg } = parsed;
+  if (!cfg.encharge_api_key) {
+    return { statusCode: 0, responseOk: 0, responseBody: 'Missing encharge_api_key for workspace' };
   }
-
-  const { email, name, productConfig } = parsed;
   if (!productConfig?.enchargeTag) {
     return { statusCode: 0, responseOk: 0, responseBody: 'No enchargeTag for this product' };
   }
@@ -229,7 +238,7 @@ async function handleEncharge({ parsed, env }) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-Encharge-Token': env.ENCHARGE_API_KEY,
+      'X-Encharge-Token': cfg.encharge_api_key,
     },
     body: JSON.stringify({
       email: email,
@@ -251,24 +260,23 @@ async function handleEncharge({ parsed, env }) {
 // -----------------------------------------------------------------------------
 // HANDLER: ManyChat — create subscriber + add tag
 // -----------------------------------------------------------------------------
-async function handleManyChat({ parsed, env }) {
-  if (!env.MANYCHAT_KEY) {
-    return { statusCode: 0, responseOk: 0, responseBody: 'Missing MANYCHAT_KEY' };
+async function handleManyChat({ parsed }) {
+  const { name, phone, productConfig, cfg } = parsed;
+  if (!cfg.manychat_key) {
+    return { statusCode: 0, responseOk: 0, responseBody: 'Missing manychat_key for workspace' };
   }
-
-  const { name, phone, productConfig } = parsed;
   if (!productConfig?.manychatTagId) {
     return { statusCode: 0, responseOk: 0, responseBody: 'No manychatTagId for this product' };
   }
   const nameParts = splitName(name);
-  const manychatPhone = formatPhoneForManyChat(phone, env.DEFAULT_COUNTRY_CODE);
+  const manychatPhone = formatPhoneForManyChat(phone, cfg.default_country_code);
 
   if (!manychatPhone) {
     return { statusCode: 0, responseOk: 0, responseBody: 'No valid phone for ManyChat' };
   }
 
   const authHeaders = {
-    'Authorization': `Bearer ${env.MANYCHAT_KEY}`,
+    'Authorization': `Bearer ${cfg.manychat_key}`,
     'Content-Type': 'application/json',
   };
 
@@ -333,7 +341,7 @@ async function handleManyChat({ parsed, env }) {
 async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env }) {
   if (!env.DB) return;
 
-  const { trk, email, name, phone, value, currency, transactionId, productId, productName, checkoutData, platformUtm, items } = parsed;
+  const { trk, email, name, phone, value, currency, transactionId, productId, productName, checkoutData, platformUtm, items, workspaceId } = parsed;
   const tracking = resultMap.tracking || {};
   const encharge = resultMap.encharge || {};
   const manychat = resultMap.manychat || {};
@@ -344,7 +352,7 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
   try {
     const result = await env.DB.prepare(`
       INSERT INTO purchase_log (
-        trk, event_id, event_time,
+        trk, workspace_id, event_id, event_time,
         raw_email, raw_name, raw_phone,
         hashed_em, hashed_fn, hashed_ln, hashed_ph, hashed_external_id,
         client_ip_address, client_user_agent, fbp, fbc,
@@ -359,9 +367,9 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
         encharge_status_code, encharge_response_ok, encharge_response_body,
         manychat_status_code, manychat_response_ok, manychat_response_body,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).bind(
-      trk || '', eventId, eventTime,
+      trk || '', workspaceId || null, eventId, eventTime,
       email, name, phone,
       tracking.hashedEm || '', tracking.hashedFn || '', tracking.hashedLn || '',
       tracking.hashedPh || '', tracking.hashedExternalId || '',
@@ -408,14 +416,15 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
   try {
     const itemStmt = env.DB.prepare(`
       INSERT INTO purchase_items (
-        purchase_id, transaction_id, product_id, product_name,
+        purchase_id, workspace_id, transaction_id, product_id, product_name,
         value, currency, created_at,
         utm_source, utm_campaign, utm_medium, utm_content, utm_term
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     const batch = itemList.map(item => itemStmt.bind(
       purchaseId,
+      workspaceId || null,
       transactionId || null,
       String(item.productId || ''),
       item.name || null,
@@ -448,9 +457,9 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
 // -----------------------------------------------------------------------------
 // META CAPI — Purchase with full navigation data from D1
 // -----------------------------------------------------------------------------
-async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, env }) {
-  if (!env.META_PIXEL_ID || !env.META_ACCESS_TOKEN) {
-    return { skipped: 'missing meta env', payload: null, response: null };
+async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }) {
+  if (!cfg.meta_pixel_id || !cfg.meta_access_token) {
+    return { skipped: 'missing meta config for workspace', payload: null, response: null };
   }
 
   const metaUserData = {
@@ -495,13 +504,13 @@ async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh
     }],
   };
 
-  if (env.META_TEST_EVENT_CODE) {
-    metaPayload.test_event_code = env.META_TEST_EVENT_CODE;
+  if (cfg.meta_test_event_code) {
+    metaPayload.test_event_code = cfg.meta_test_event_code;
   }
 
   const payloadJson = JSON.stringify(metaPayload);
   const response = await fetch(
-    `https://graph.facebook.com/v25.0/${env.META_PIXEL_ID}/events?access_token=${env.META_ACCESS_TOKEN}`,
+    `https://graph.facebook.com/v25.0/${cfg.meta_pixel_id}/events?access_token=${cfg.meta_access_token}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -514,9 +523,9 @@ async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh
 // -----------------------------------------------------------------------------
 // GA4 Measurement Protocol — Purchase
 // -----------------------------------------------------------------------------
-async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, env }) {
-  if (!env.GA4_MEASUREMENT_ID || !env.GA4_API_SECRET) {
-    return { skipped: 'missing ga4 env', payload: null, response: null };
+async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }) {
+  if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) {
+    return { skipped: 'missing ga4 config for workspace', payload: null, response: null };
   }
 
   const gaClientId = checkoutData.ga_client_id || `${Date.now()}.${Math.floor(Math.random() * 1000000000)}`;
@@ -543,7 +552,7 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
 
   const payloadJson = JSON.stringify(ga4Payload);
   const response = await fetch(
-    `https://www.google-analytics.com/mp/collect?measurement_id=${env.GA4_MEASUREMENT_ID}&api_secret=${env.GA4_API_SECRET}`,
+    `https://www.google-analytics.com/mp/collect?measurement_id=${cfg.ga4_measurement_id}&api_secret=${cfg.ga4_api_secret}`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -558,10 +567,12 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
 // -----------------------------------------------------------------------------
 // Pinning v21 in the URL: Google Ads SDKs (google-ads-api, google-ads-node) lag
 // the REST API and break with "API version not found" — call REST directly.
-async function getGoogleAdsAccessToken(env) {
+async function getGoogleAdsAccessToken(cfg, workspaceId) {
   const now = Math.floor(Date.now() / 1000);
-  if (googleAdsTokenCache.token && googleAdsTokenCache.expiresAt > now + 30) {
-    return googleAdsTokenCache.token;
+  const cacheKey = workspaceId || '_';
+  const cached = googleAdsTokenCache.get(cacheKey);
+  if (cached && cached.token && cached.expiresAt > now + 30) {
+    return cached.token;
   }
 
   const resp = await fetch('https://oauth2.googleapis.com/token', {
@@ -569,9 +580,9 @@ async function getGoogleAdsAccessToken(env) {
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({
       grant_type: 'refresh_token',
-      client_id: env.GOOGLE_ADS_CLIENT_ID,
-      client_secret: env.GOOGLE_ADS_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_ADS_REFRESH_TOKEN,
+      client_id: cfg.google_ads_client_id,
+      client_secret: cfg.google_ads_client_secret,
+      refresh_token: cfg.google_ads_refresh_token,
     }),
   });
 
@@ -587,10 +598,10 @@ async function getGoogleAdsAccessToken(env) {
     return null;
   }
 
-  googleAdsTokenCache = {
+  googleAdsTokenCache.set(cacheKey, {
     token: data.access_token,
     expiresAt: now + (data.expires_in || 3600) - 60,
-  };
+  });
   return data.access_token;
 }
 
@@ -615,11 +626,11 @@ function formatConversionDateTime(unixSeconds, offsetString) {
     `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}${tz}`;
 }
 
-async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, env }) {
-  if (!env.GOOGLE_ADS_CUSTOMER_ID || !env.GOOGLE_ADS_LOGIN_CUSTOMER_ID ||
-      !env.GOOGLE_ADS_DEVELOPER_TOKEN || !env.GOOGLE_ADS_CLIENT_ID ||
-      !env.GOOGLE_ADS_CLIENT_SECRET || !env.GOOGLE_ADS_REFRESH_TOKEN) {
-    return { skipped: 'missing google ads env', payload: null, response: null };
+async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId }) {
+  if (!cfg.google_ads_customer_id || !cfg.google_ads_login_customer_id ||
+      !cfg.google_ads_developer_token || !cfg.google_ads_client_id ||
+      !cfg.google_ads_client_secret || !cfg.google_ads_refresh_token) {
+    return { skipped: 'missing google ads config for workspace', payload: null, response: null };
   }
 
   if (!productConfig?.googleAdsConversionActionId) {
@@ -635,17 +646,17 @@ async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transact
     return { skipped: 'no click id', payload: null, response: null };
   }
 
-  const accessToken = await getGoogleAdsAccessToken(env);
+  const accessToken = await getGoogleAdsAccessToken(cfg, workspaceId);
   if (!accessToken) {
     return { skipped: 'oauth token unavailable', payload: null, response: null };
   }
 
-  const customerId = String(env.GOOGLE_ADS_CUSTOMER_ID).replace(/-/g, '');
-  const loginCustomerId = String(env.GOOGLE_ADS_LOGIN_CUSTOMER_ID).replace(/-/g, '');
+  const customerId = String(cfg.google_ads_customer_id).replace(/-/g, '');
+  const loginCustomerId = String(cfg.google_ads_login_customer_id).replace(/-/g, '');
 
   const conversion = {
     conversionAction: `customers/${customerId}/conversionActions/${productConfig.googleAdsConversionActionId}`,
-    conversionDateTime: formatConversionDateTime(eventTime, env.TIMEZONE_OFFSET),
+    conversionDateTime: formatConversionDateTime(eventTime, cfg.timezone_offset),
     conversionValue: parseFloat(value) || 0,
     currencyCode: currency || 'BRL',
     orderId: String(transactionId || ''),
@@ -671,7 +682,7 @@ async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transact
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'developer-token': env.GOOGLE_ADS_DEVELOPER_TOKEN,
+        'developer-token': cfg.google_ads_developer_token,
         'login-customer-id': loginCustomerId,
         'Content-Type': 'application/json',
       },
@@ -698,8 +709,7 @@ async function sha256(value) {
 // (ex: `16505554444` or `5511987654321`). Purchase webhooks from sales
 // platforms sometimes ship the number already prefixed, sometimes not;
 // detect and prepend as needed. `countryCode` defaults to 55 (Brazil);
-// recipients elsewhere set `env.DEFAULT_COUNTRY_CODE` — see the
-// "decisions the recipient must make" table in CLAUDE.md.
+// each workspace can override via workspace_config.default_country_code.
 function normalizePhone(ph, countryCode) {
   if (!ph) return '';
   const cc = String(countryCode || '55');
