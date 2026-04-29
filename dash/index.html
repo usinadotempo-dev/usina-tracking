@@ -220,6 +220,84 @@
       </div>
     </section>
 
+    <!-- Meta Campaigns -->
+    <section class="card p-5 fade-in" id="campaigns-section">
+      <div class="flex items-center justify-between mb-4 gap-3">
+        <div>
+          <div class="font-semibold">Campanhas Meta</div>
+          <div class="text-xs text-[color:var(--muted)]">
+            Spend, alcance, CPM, CPC, CPL e leads/compras direto da Marketing API.
+            <span id="campaigns-sync-note" class="ml-1"></span>
+          </div>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="campaigns-refresh" class="text-xs text-[color:var(--dim)] hover:text-[color:var(--text)] px-2 py-1 rounded hover:bg-gray-50 transition" title="Atualizar dados (sem fazer sync na Meta — somente recarrega o que já está no D1)">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="display:inline-block;vertical-align:-2px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4 mono">
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Spend</div>
+          <div class="text-lg" id="camp-kpi-spend">—</div>
+        </div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Impressões</div>
+          <div class="text-lg" id="camp-kpi-impr">—</div>
+        </div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Cliques</div>
+          <div class="text-lg" id="camp-kpi-clicks">—</div>
+        </div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">CTR</div>
+          <div class="text-lg" id="camp-kpi-ctr">—</div>
+        </div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Leads</div>
+          <div class="text-lg" id="camp-kpi-leads">—</div>
+        </div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">CPL</div>
+          <div class="text-lg" id="camp-kpi-cpl">—</div>
+        </div>
+      </div>
+
+      <!-- Daily spend chart (aggregated across all campaigns) -->
+      <div class="border border-[color:var(--border)] rounded-lg p-3 mb-4">
+        <div class="text-xs text-[color:var(--muted)] mb-2">Spend diário · todas as campanhas</div>
+        <div class="h-40"><canvas id="chart-campaigns"></canvas></div>
+      </div>
+
+      <!-- Campaigns table -->
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]">
+            <tr>
+              <th class="text-left py-2 pr-4">Campanha</th>
+              <th class="text-left py-2 pr-3">Status</th>
+              <th class="text-right py-2 pr-3">Spend</th>
+              <th class="text-right py-2 pr-3">Impr.</th>
+              <th class="text-right py-2 pr-3">CTR</th>
+              <th class="text-right py-2 pr-3">CPM</th>
+              <th class="text-right py-2 pr-3">CPC</th>
+              <th class="text-right py-2 pr-3">Leads</th>
+              <th class="text-right py-2">CPL</th>
+            </tr>
+          </thead>
+          <tbody id="campaigns-tbody" class="mono">
+            <tr><td colspan="9" class="py-6 text-center text-[color:var(--muted)]">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div id="campaigns-empty" class="hidden text-center py-8 text-sm text-[color:var(--muted)]">
+        Nenhuma campanha encontrada na janela atual. Cadastre o
+        <code>Ad Account ID</code> deste workspace e dispare uma sync na Plataforma.
+      </div>
+    </section>
+
     <!-- UTM Breakdown -->
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-3">
@@ -840,17 +918,134 @@
   }
 
   // -------- Load orchestration --------
+  let campaignsChart = null;
+
   async function loadAll(days) {
     currentDays = days;
     await Promise.all([
       loadRevenue(days),
       loadProducts(days),
       loadAttribution(days),
+      loadCampaigns(days),
       loadUtm(),
       loadLeads(days),
       loadPurchases(),
       loadHealth(),
     ]);
+  }
+
+  async function loadCampaigns(days) {
+    const tbody = qs('#campaigns-tbody');
+    const emptyEl = qs('#campaigns-empty');
+    const note = qs('#campaigns-sync-note');
+    let data;
+    try {
+      data = await fetchJson(`/api/campaigns?days=${days}`);
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="9" class="py-6 text-center text-sm" style="color:var(--accent-red)">${escAttr(e.message || 'erro')}</td></tr>`;
+      return;
+    }
+
+    const totals = data.totals || {};
+    qs('#camp-kpi-spend').textContent  = money(totals.spend_cents / 100, 'BRL');
+    qs('#camp-kpi-impr').textContent   = compactNum(totals.impressions);
+    qs('#camp-kpi-clicks').textContent = compactNum(totals.clicks);
+    qs('#camp-kpi-ctr').textContent    = totals.ctr ? totals.ctr.toFixed(2) + '%' : '—';
+    qs('#camp-kpi-leads').textContent  = compactNum(totals.leads);
+    qs('#camp-kpi-cpl').textContent    = totals.cpl_cents != null ? money(totals.cpl_cents / 100, 'BRL') : '—';
+
+    // Sync stamp
+    if (data.last_synced_at) {
+      const ago = relTime(data.last_synced_at * 1000);
+      note.innerHTML = `· última sync ${ago}`;
+    } else {
+      note.innerHTML = `· <span style="color:var(--accent-amber)">nunca sincronizado</span>`;
+    }
+
+    const campaigns = Array.isArray(data.campaigns) ? data.campaigns : [];
+    if (!campaigns.length) {
+      tbody.innerHTML = '';
+      emptyEl.classList.remove('hidden');
+    } else {
+      emptyEl.classList.add('hidden');
+      tbody.innerHTML = campaigns.map(c => {
+        const t = c.totals || {};
+        const statusBadge = renderStatusBadge(c.effective_status);
+        return `
+          <tr class="border-b border-[color:var(--border)]">
+            <td class="py-2 pr-4 max-w-xs truncate" title="${escAttr(c.name || '')}">${escAttr(c.name || c.campaign_id)}</td>
+            <td class="py-2 pr-3">${statusBadge}</td>
+            <td class="py-2 pr-3 text-right">${money((t.spend_cents || 0) / 100, c.currency || 'BRL')}</td>
+            <td class="py-2 pr-3 text-right">${compactNum(t.impressions)}</td>
+            <td class="py-2 pr-3 text-right">${t.ctr ? t.ctr.toFixed(2) + '%' : '—'}</td>
+            <td class="py-2 pr-3 text-right">${t.cpm_cents ? money((t.cpm_cents || 0) / 100, c.currency || 'BRL') : '—'}</td>
+            <td class="py-2 pr-3 text-right">${t.cpc_cents ? money((t.cpc_cents || 0) / 100, c.currency || 'BRL') : '—'}</td>
+            <td class="py-2 pr-3 text-right">${compactNum(t.leads)}</td>
+            <td class="py-2 text-right">${t.cpl_cents != null ? money((t.cpl_cents || 0) / 100, c.currency || 'BRL') : '—'}</td>
+          </tr>`;
+      }).join('');
+    }
+
+    // Aggregated daily spend chart
+    drawCampaignsChart(campaigns);
+  }
+
+  function drawCampaignsChart(campaigns) {
+    const byDate = {};
+    for (const c of campaigns) {
+      for (const s of (c.time_series || [])) {
+        byDate[s.date] = (byDate[s.date] || 0) + (s.spend_cents || 0);
+      }
+    }
+    const dates = Object.keys(byDate).sort();
+    const values = dates.map(d => (byDate[d] || 0) / 100);
+
+    const ctx = qs('#chart-campaigns')?.getContext('2d');
+    if (!ctx) return;
+    if (campaignsChart) campaignsChart.destroy();
+    campaignsChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: dates,
+        datasets: [{
+          label: 'Spend',
+          data: values,
+          backgroundColor: 'rgba(220, 74, 48, 0.65)',
+          borderColor: 'rgba(220, 74, 48, 1)',
+          borderWidth: 1,
+          borderRadius: 4,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        scales: { y: { beginAtZero: true, ticks: { callback: v => money(v, 'BRL') } } },
+        plugins: { legend: { display: false } },
+      },
+    });
+  }
+
+  function renderStatusBadge(status) {
+    const s = (status || '').toUpperCase();
+    if (s === 'ACTIVE') return '<span class="text-[11px] font-semibold" style="color:#2e7c6c">● ATIVA</span>';
+    if (s === 'PAUSED') return '<span class="text-[11px] font-semibold" style="color:var(--accent-amber)">● PAUSADA</span>';
+    if (s.includes('ARCHIV') || s === 'DELETED') return '<span class="text-[11px] font-semibold text-[color:var(--muted)]">● ARQUIV.</span>';
+    return `<span class="text-[11px] font-semibold text-[color:var(--muted)]">${escAttr(s || '—')}</span>`;
+  }
+
+  function compactNum(n) {
+    if (n == null || n === undefined || isNaN(n)) return '—';
+    n = Number(n);
+    if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + 'k';
+    return new Intl.NumberFormat('pt-BR').format(n);
+  }
+
+  function relTime(ms) {
+    const diff = Math.floor((Date.now() - ms) / 1000);
+    if (diff < 60)    return `${diff}s atrás`;
+    if (diff < 3600)  return `${Math.floor(diff/60)}min atrás`;
+    if (diff < 86400) return `${Math.floor(diff/3600)}h atrás`;
+    return `${Math.floor(diff/86400)}d atrás`;
   }
 
   // -------- UI bindings --------
@@ -861,6 +1056,7 @@
       loadAll(parseInt(btn.getAttribute('data-days'), 10));
     });
   });
+  qs('#campaigns-refresh')?.addEventListener('click', () => loadCampaigns(currentDays));
   qsa('#utm-tabs .dash-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       qsa('#utm-tabs .dash-tab').forEach(t => t.classList.remove('active'));
