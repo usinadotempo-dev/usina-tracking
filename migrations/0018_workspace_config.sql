@@ -1,0 +1,22 @@
+CREATE TABLE IF NOT EXISTS workspace_config (
+    workspace_id TEXT PRIMARY KEY,
+    meta_pixel_id TEXT,
+    meta_access_token TEXT,
+    meta_test_event_code TEXT,
+    ga4_measurement_id TEXT,
+    ga4_api_secret TEXT,
+    google_ads_client_id TEXT,
+    google_ads_client_secret TEXT,
+    google_ads_refresh_token TEXT,
+    google_ads_developer_token TEXT,
+    google_ads_customer_id TEXT,
+    google_ads_login_customer_id TEXT,
+    encharge_api_key TEXT,
+    manychat_key TEXT,
+    default_country_code TEXT DEFAULT '55',
+    timezone_offset TEXT DEFAULT '-03:00',
+    meta_ads_access_token TEXT,
+    meta_ads_account_id TEXT,
+    updated_at INTEGER NOT NULL,
+    FOREIGN KEY (workspace_id) REFERENCES workspaces(id)
+);
