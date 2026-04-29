@@ -1,0 +1,351 @@
+// POST /api/sync/meta-marketing
+//
+// Pulls Meta Marketing API data for every workspace that has an ad account
+// configured (workspace_config.meta_ads_account_id), using the platform-level
+// long-lived token (platform_config.meta_long_lived_token) — one Usina-owned
+// System User token covers every client whose Business Manager shared assets
+// with the Usina's BM (cenário 3).
+//
+// What gets synced per workspace:
+//   - Campaigns (id, name, status, objective, budgets, schedule)
+//   - Ad sets (id, campaign_id, name, status, optimization, budget, targeting summary)
+//   - Ads (id, name, status, creative thumbnail/name)
+//   - Daily campaign insights (spend, impressions, reach, clicks, CTR, CPM,
+//     CPC, frequency, leads, purchases, purchase value)
+//   - Daily ad insights (same metrics minus conversions)
+//
+// Auth: header `x-sync-secret: <env.SYNC_SECRET>`. Cron-triggered.
+// Body: { date_from?: 'YYYY-MM-DD', date_to?: 'YYYY-MM-DD' }
+//       Defaults to last 7 days.
+
+import { loadPlatformConfigFromEnv } from '../../_lib/platform-config.js';
+import { createMetaClient, toCents, toInt, toFloat, pickAction, ymd, addDays } from '../../_lib/meta-graph.js';
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  if (!env.SYNC_SECRET || (request.headers.get('x-sync-secret') || '') !== env.SYNC_SECRET) {
+    return json({ error: 'Unauthorized' }, 401);
+  }
+
+  const platformCfg = await loadPlatformConfigFromEnv(env);
+  const token = platformCfg.meta_long_lived_token;
+  if (!token) {
+    return json({ ok: true, skipped: true, reason: 'platform_config.meta_long_lived_token not set' });
+  }
+
+  let body = {};
+  try { body = await request.json(); } catch { body = {}; }
+  const { dateFrom, dateTo } = resolveRange(body.date_from, body.date_to);
+
+  const { results: workspaces } = await env.DB.prepare(`
+    SELECT workspace_id, meta_ads_account_id
+      FROM workspace_config
+     WHERE meta_ads_account_id IS NOT NULL AND meta_ads_account_id != ''
+  `).all();
+
+  if (!workspaces?.length) {
+    return json({
+      ok: true,
+      skipped: true,
+      reason: 'No workspaces with meta_ads_account_id configured',
+      date_from: dateFrom, date_to: dateTo,
+    });
+  }
+
+  const meta = createMetaClient(token);
+  const results = [];
+  for (const ws of workspaces) {
+    const out = await syncWorkspace(env, meta, ws, dateFrom, dateTo);
+    results.push(out);
+  }
+
+  const totals = {
+    workspaces: results.length,
+    ok:     results.filter((r) => r.status === 'ok').length,
+    failed: results.filter((r) => r.status === 'error').length,
+    campaigns_upserted: results.reduce((a, r) => a + (r.campaigns || 0), 0),
+    ad_sets_upserted:   results.reduce((a, r) => a + (r.ad_sets || 0), 0),
+    ads_upserted:       results.reduce((a, r) => a + (r.ads || 0), 0),
+    campaign_insights:  results.reduce((a, r) => a + (r.campaign_insights || 0), 0),
+    ad_insights:        results.reduce((a, r) => a + (r.ad_insights || 0), 0),
+  };
+
+  return json({
+    ok: totals.failed === 0,
+    date_from: dateFrom, date_to: dateTo,
+    totals, results,
+  }, totals.failed > 0 ? 207 : 200);
+}
+
+async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
+  const startedAt = Date.now();
+  const wsId = ws.workspace_id;
+  const accountId = String(ws.meta_ads_account_id).replace(/^act_/, '');
+  let status = 'ok';
+  let errorMessage = null;
+  let campaigns = 0, adSets = 0, ads = 0, campaignInsights = 0, adInsights = 0;
+
+  try {
+    // --- 1. Campaigns ---
+    const campaignsRaw = await meta.fetchAll(
+      `/act_${accountId}/campaigns?fields=id,name,status,effective_status,objective,daily_budget,lifetime_budget,start_time,stop_time&limit=200`
+    );
+    campaigns = await upsertCampaigns(env.DB, wsId, campaignsRaw);
+
+    // --- 2. Ad Sets ---
+    const adSetsRaw = await meta.fetchAll(
+      `/act_${accountId}/adsets?fields=id,campaign_id,name,status,effective_status,optimization_goal,billing_event,daily_budget,lifetime_budget,start_time,end_time,targeting&limit=500`
+    );
+    adSets = await upsertAdSets(env.DB, wsId, adSetsRaw);
+
+    // --- 3. Ads (with creative) ---
+    const adsRaw = await meta.fetchAll(
+      `/act_${accountId}/ads?fields=id,adset_id,campaign_id,name,status,effective_status,creative{id,name,thumbnail_url}&limit=500`
+    );
+    ads = await upsertAds(env.DB, wsId, adsRaw);
+
+    // --- 4. Campaign-level daily insights ---
+    const campInsRaw = await meta.fetchAll(
+      `/act_${accountId}/insights?` +
+      `fields=campaign_id,spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,actions,action_values,account_currency` +
+      `&time_range=${encodeURIComponent(JSON.stringify({ since: dateFrom, until: dateTo }))}` +
+      `&time_increment=1&level=campaign&limit=500`
+    );
+    campaignInsights = await upsertCampaignInsights(env.DB, wsId, campInsRaw);
+
+    // --- 5. Ad-level daily insights ---
+    const adInsRaw = await meta.fetchAll(
+      `/act_${accountId}/insights?` +
+      `fields=ad_id,adset_id,campaign_id,spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,account_currency` +
+      `&time_range=${encodeURIComponent(JSON.stringify({ since: dateFrom, until: dateTo }))}` +
+      `&time_increment=1&level=ad&limit=500`
+    );
+    adInsights = await upsertAdInsights(env.DB, wsId, adInsRaw);
+  } catch (err) {
+    status = 'error';
+    errorMessage = err.message || String(err);
+  }
+
+  const durationMs = Date.now() - startedAt;
+  // sync_log entry
+  try {
+    await env.DB.prepare(`
+      INSERT INTO sync_log (workspace_id, platform, status, rows_upserted, date_from, date_to, error_message, duration_ms, run_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      wsId, 'meta_marketing', status,
+      campaigns + adSets + ads + campaignInsights + adInsights,
+      dateFrom, dateTo, errorMessage, durationMs, Math.floor(Date.now() / 1000)
+    ).run();
+  } catch (_) { /* best effort */ }
+
+  return { workspace_id: wsId, status, campaigns, ad_sets: adSets, ads, campaign_insights: campaignInsights, ad_insights: adInsights, duration_ms: durationMs, error: errorMessage };
+}
+
+// ---- Upserts -----------------------------------------------------------------
+
+async function upsertCampaigns(db, workspaceId, rows) {
+  if (!rows.length) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = db.prepare(`
+    INSERT INTO meta_campaigns
+      (workspace_id, campaign_id, name, status, effective_status, objective,
+       daily_budget_cents, lifetime_budget_cents, start_time, stop_time, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(workspace_id, campaign_id) DO UPDATE SET
+      name = excluded.name,
+      status = excluded.status,
+      effective_status = excluded.effective_status,
+      objective = excluded.objective,
+      daily_budget_cents = excluded.daily_budget_cents,
+      lifetime_budget_cents = excluded.lifetime_budget_cents,
+      start_time = excluded.start_time,
+      stop_time = excluded.stop_time,
+      updated_at = excluded.updated_at
+  `);
+  const batch = rows.map((c) => stmt.bind(
+    workspaceId, c.id,
+    c.name || null, c.status || null, c.effective_status || null, c.objective || null,
+    toInt(c.daily_budget),
+    toInt(c.lifetime_budget),
+    c.start_time ? Math.floor(new Date(c.start_time).getTime() / 1000) : null,
+    c.stop_time  ? Math.floor(new Date(c.stop_time ).getTime() / 1000) : null,
+    now,
+  ));
+  await db.batch(batch);
+  return rows.length;
+}
+
+async function upsertAdSets(db, workspaceId, rows) {
+  if (!rows.length) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = db.prepare(`
+    INSERT INTO meta_ad_sets
+      (workspace_id, ad_set_id, campaign_id, name, status, effective_status,
+       optimization_goal, billing_event, daily_budget_cents, lifetime_budget_cents,
+       start_time, end_time, targeting_summary, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(workspace_id, ad_set_id) DO UPDATE SET
+      campaign_id = excluded.campaign_id,
+      name = excluded.name,
+      status = excluded.status,
+      effective_status = excluded.effective_status,
+      optimization_goal = excluded.optimization_goal,
+      billing_event = excluded.billing_event,
+      daily_budget_cents = excluded.daily_budget_cents,
+      lifetime_budget_cents = excluded.lifetime_budget_cents,
+      start_time = excluded.start_time,
+      end_time = excluded.end_time,
+      targeting_summary = excluded.targeting_summary,
+      updated_at = excluded.updated_at
+  `);
+  const batch = rows.map((a) => stmt.bind(
+    workspaceId, a.id, a.campaign_id || '',
+    a.name || null, a.status || null, a.effective_status || null,
+    a.optimization_goal || null, a.billing_event || null,
+    toInt(a.daily_budget), toInt(a.lifetime_budget),
+    a.start_time ? Math.floor(new Date(a.start_time).getTime() / 1000) : null,
+    a.end_time   ? Math.floor(new Date(a.end_time  ).getTime() / 1000) : null,
+    summarizeTargeting(a.targeting),
+    now,
+  ));
+  await db.batch(batch);
+  return rows.length;
+}
+
+function summarizeTargeting(t) {
+  if (!t || typeof t !== 'object') return null;
+  const out = {};
+  if (Array.isArray(t.geo_locations?.countries)) out.countries = t.geo_locations.countries;
+  if (Array.isArray(t.geo_locations?.cities)) out.cities = t.geo_locations.cities.map((c) => c.name).slice(0, 10);
+  if (t.age_min) out.age_min = t.age_min;
+  if (t.age_max) out.age_max = t.age_max;
+  if (t.genders) out.genders = t.genders;
+  if (Array.isArray(t.flexible_spec)) {
+    const interests = [];
+    for (const f of t.flexible_spec) {
+      if (Array.isArray(f.interests)) interests.push(...f.interests.map((i) => i.name));
+    }
+    if (interests.length) out.interests = interests.slice(0, 10);
+  }
+  return JSON.stringify(out);
+}
+
+async function upsertAds(db, workspaceId, rows) {
+  if (!rows.length) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = db.prepare(`
+    INSERT INTO meta_ads
+      (workspace_id, ad_id, ad_set_id, campaign_id, name, status, effective_status,
+       creative_id, creative_thumbnail_url, creative_name, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(workspace_id, ad_id) DO UPDATE SET
+      ad_set_id = excluded.ad_set_id,
+      campaign_id = excluded.campaign_id,
+      name = excluded.name,
+      status = excluded.status,
+      effective_status = excluded.effective_status,
+      creative_id = excluded.creative_id,
+      creative_thumbnail_url = excluded.creative_thumbnail_url,
+      creative_name = excluded.creative_name,
+      updated_at = excluded.updated_at
+  `);
+  const batch = rows.map((a) => stmt.bind(
+    workspaceId, a.id, a.adset_id || '', a.campaign_id || '',
+    a.name || null, a.status || null, a.effective_status || null,
+    a.creative?.id || null, a.creative?.thumbnail_url || null, a.creative?.name || null,
+    now,
+  ));
+  await db.batch(batch);
+  return rows.length;
+}
+
+async function upsertCampaignInsights(db, workspaceId, rows) {
+  if (!rows.length) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = db.prepare(`
+    INSERT INTO meta_campaign_insights
+      (workspace_id, campaign_id, date,
+       spend_cents, impressions, reach, clicks, ctr, cpm_cents, cpc_cents, frequency,
+       leads, purchases, purchase_value_cents, currency, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(workspace_id, campaign_id, date) DO UPDATE SET
+      spend_cents = excluded.spend_cents,
+      impressions = excluded.impressions,
+      reach = excluded.reach,
+      clicks = excluded.clicks,
+      ctr = excluded.ctr,
+      cpm_cents = excluded.cpm_cents,
+      cpc_cents = excluded.cpc_cents,
+      frequency = excluded.frequency,
+      leads = excluded.leads,
+      purchases = excluded.purchases,
+      purchase_value_cents = excluded.purchase_value_cents,
+      currency = excluded.currency,
+      synced_at = excluded.synced_at
+  `);
+  const batch = rows.map((r) => {
+    const leads = pickAction(r.actions, ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead']);
+    const purchases = pickAction(r.actions, ['purchase', 'offsite_conversion.fb_pixel_purchase']);
+    const purchaseValue = pickAction(r.action_values, ['purchase', 'offsite_conversion.fb_pixel_purchase']);
+    return stmt.bind(
+      workspaceId, r.campaign_id || '', r.date_start,
+      toCents(r.spend), toInt(r.impressions), toInt(r.reach), toInt(r.clicks),
+      toFloat(r.ctr), toCents(r.cpm), toCents(r.cpc), toFloat(r.frequency),
+      leads != null ? Math.round(leads) : null,
+      purchases != null ? Math.round(purchases) : null,
+      purchaseValue != null ? Math.round(purchaseValue * 100) : null,
+      r.account_currency || null,
+      now,
+    );
+  });
+  await db.batch(batch);
+  return rows.length;
+}
+
+async function upsertAdInsights(db, workspaceId, rows) {
+  if (!rows.length) return 0;
+  const now = Math.floor(Date.now() / 1000);
+  const stmt = db.prepare(`
+    INSERT INTO meta_ad_insights
+      (workspace_id, ad_id, campaign_id, ad_set_id, date,
+       spend_cents, impressions, reach, clicks, ctr, cpm_cents, cpc_cents, frequency, currency, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(workspace_id, ad_id, date) DO UPDATE SET
+      campaign_id = excluded.campaign_id,
+      ad_set_id = excluded.ad_set_id,
+      spend_cents = excluded.spend_cents,
+      impressions = excluded.impressions,
+      reach = excluded.reach,
+      clicks = excluded.clicks,
+      ctr = excluded.ctr,
+      cpm_cents = excluded.cpm_cents,
+      cpc_cents = excluded.cpc_cents,
+      frequency = excluded.frequency,
+      currency = excluded.currency,
+      synced_at = excluded.synced_at
+  `);
+  const batch = rows.map((r) => stmt.bind(
+    workspaceId, r.ad_id || '', r.campaign_id || '', r.adset_id || '', r.date_start,
+    toCents(r.spend), toInt(r.impressions), toInt(r.reach), toInt(r.clicks),
+    toFloat(r.ctr), toCents(r.cpm), toCents(r.cpc), toFloat(r.frequency),
+    r.account_currency || null,
+    now,
+  ));
+  await db.batch(batch);
+  return rows.length;
+}
+
+// ---- Helpers ----
+
+function resolveRange(dateFrom, dateTo) {
+  const today = new Date();
+  const from = isYmd(dateFrom) ? dateFrom : ymd(addDays(today, -7));
+  const to   = isYmd(dateTo)   ? dateTo   : ymd(today);
+  return { dateFrom: from, dateTo: to };
+}
+function isYmd(s) { return typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s); }
+function json(body, status = 200) {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+}
