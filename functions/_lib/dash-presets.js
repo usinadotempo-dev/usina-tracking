@@ -54,7 +54,10 @@ export const BUSINESS_TYPES = {
       kpi_strip: true,
       revenue_chart: false,
       products: false,
-      attribution: true,
+      // Atribuição agrupa COMPRAS por canal (Meta/Google/Orgânico) — não faz
+      // sentido em lead_gen_local. O insight de leads por canal vem via
+      // UTM breakdown e via Campanhas Meta (CPL por campanha).
+      attribution: false,
       campaigns: true,
       instagram: true,
       facebook_page: true,
@@ -65,7 +68,6 @@ export const BUSINESS_TYPES = {
     },
     variants: {
       kpi_strip: 'lead_focus',
-      attribution: 'lead_only',
       utm_breakdown: 'leads',
     },
   },
@@ -146,7 +148,8 @@ export const BUSINESS_TYPES = {
       kpi_strip: true,
       revenue_chart: false,
       products: false,
-      attribution: true,
+      // Mesmo motivo do lead_gen_local: atribuição em compras não se aplica.
+      attribution: false,
       campaigns: true,
       instagram: true,
       facebook_page: true,
@@ -157,7 +160,6 @@ export const BUSINESS_TYPES = {
     },
     variants: {
       kpi_strip: 'lead_focus',
-      attribution: 'lead_only',
       utm_breakdown: 'leads',
     },
   },
