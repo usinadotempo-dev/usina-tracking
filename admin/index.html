@@ -2004,10 +2004,40 @@ function renderTokenStatus(s) {
   const dataExpiresLabel = !s.data_access_expires_at ? '—'
     : new Date(s.data_access_expires_at * 1000).toLocaleString('pt-BR', { day:'2-digit', month:'short', year:'numeric' });
   const validBadge = s.valid
-    ? '<span class="badge badge-active">vÃ¡lido</span>'.replace('vÃ¡lido', 'válido')
+    ? '<span class="badge badge-active">válido</span>'
     : '<span class="badge" style="background: rgba(220,74,48,0.15); color: var(--brand-coral);">inválido</span>';
   const scopes = (s.scopes || []).map((sc) => `<span class="badge badge-tenant mono">${escapeHtml(sc)}</span>`).join(' ');
+
+  // Expiration warning banner — shown when expires_at is set and the token
+  // expires in 30 days or less. SYSTEM_USER tokens have expires_at = 0 (never).
+  let warningBanner = '';
+  if (s.expires_at && s.valid) {
+    const now = Math.floor(Date.now() / 1000);
+    const daysLeft = Math.floor((s.expires_at - now) / 86400);
+    if (daysLeft <= 30) {
+      const tone = daysLeft <= 7 ? 'critical' : 'warning';
+      const bg = tone === 'critical'
+        ? 'background: rgba(220,74,48,0.10); border-color: rgba(220,74,48,0.45); color: var(--brand-coral);'
+        : 'background: rgba(245,168,42,0.12); border-color: rgba(245,168,42,0.55); color: #8a6019;';
+      warningBanner = `
+        <div class="card p-4 mb-4 border-2" style="${bg}">
+          <div class="flex items-start gap-3">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="flex-shrink-0 mt-0.5"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <div class="flex-1">
+              <div class="font-semibold text-[14px]">${daysLeft <= 0 ? 'Token expirado' : daysLeft <= 7 ? `Token expira em ${daysLeft} dia(s)` : `Token expira em ${daysLeft} dias`}</div>
+              <div class="text-[13px] mt-1 opacity-90">
+                Esse é um token tipo <span class="mono">${escapeHtml(s.type || '?')}</span>. Para evitar interrupções na sincronização,
+                migre para um <strong>System User Token</strong> (Business Settings → System Users → Generate Token), que não expira.
+                Detalhes em <span class="mono">docs/meta-sync.md</span>.
+              </div>
+            </div>
+          </div>
+        </div>`;
+    }
+  }
+
   root.innerHTML = `
+    ${warningBanner}
     <div class="card p-5">
       <div class="flex items-start justify-between gap-4 mb-3">
         <div>

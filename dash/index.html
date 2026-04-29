@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="en">
+<html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Tracking Dashboard</title>
+<title>Usina Tracking — Painel</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
 <style>
@@ -91,24 +91,24 @@
     <section class="fade-in">
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div class="card p-5">
-          <div class="kpi-label">Gross Revenue</div>
+          <div class="kpi-label">Receita bruta</div>
           <div class="kpi-value mono accent-amber mt-1" id="kpi-revenue">—</div>
           <div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-revenue-sub">&nbsp;</div>
         </div>
         <div class="card p-5">
-          <div class="kpi-label">Sales</div>
+          <div class="kpi-label">Vendas</div>
           <div class="kpi-value mono mt-1" id="kpi-sales">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Paid transactions</div>
+          <div class="text-xs text-[color:var(--muted)] mt-1">Transações pagas</div>
         </div>
         <div class="card p-5">
-          <div class="kpi-label">Average Order</div>
+          <div class="kpi-label">Ticket médio</div>
           <div class="kpi-value mono accent-blue mt-1" id="kpi-aov">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Gross / sales</div>
+          <div class="text-xs text-[color:var(--muted)] mt-1">Receita / vendas</div>
         </div>
         <div class="card p-5">
           <div class="kpi-label">Leads</div>
           <div class="kpi-value mono accent-green mt-1" id="kpi-leads">—</div>
-          <div class="text-xs text-[color:var(--muted)] mt-1">Non-bot, last window</div>
+          <div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div>
         </div>
       </div>
     </section>
@@ -117,8 +117,8 @@
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <div class="font-semibold">Revenue over time</div>
-          <div class="text-xs text-[color:var(--muted)]">Daily gross revenue and sales count</div>
+          <div class="font-semibold">Receita ao longo do tempo</div>
+          <div class="text-xs text-[color:var(--muted)]">Receita bruta diária e total de vendas</div>
         </div>
       </div>
       <div class="h-64"><canvas id="chart-revenue"></canvas></div>
@@ -127,13 +127,13 @@
     <!-- Product cards + time series -->
     <section class="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 fade-in">
       <div class="card p-5">
-        <div class="font-semibold mb-3">Products</div>
+        <div class="font-semibold mb-3">Produtos</div>
         <div id="product-cards" class="space-y-2">
-          <div class="text-sm text-[color:var(--muted)]">Loading…</div>
+          <div class="text-sm text-[color:var(--muted)]">Carregando…</div>
         </div>
       </div>
       <div class="card p-5">
-        <div class="font-semibold mb-3">Sales per product over time</div>
+        <div class="font-semibold mb-3">Vendas por produto ao longo do tempo</div>
         <div class="h-64"><canvas id="chart-products"></canvas></div>
       </div>
     </section>
@@ -142,10 +142,10 @@
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <div class="font-semibold">Paid traffic attribution</div>
+          <div class="font-semibold">Atribuição de tráfego pago</div>
           <div class="text-xs text-[color:var(--muted)]">
-            Sales grouped by the click identifier on the originating session.
-            Meta spend is synced from Meta Marketing API
+            Vendas agrupadas pelo identificador de clique na sessão de origem.
+            Investimento da Meta vem da Meta Marketing API
             <span id="attribution-sync-note" class="ml-1"></span>.
           </div>
         </div>
@@ -158,15 +158,15 @@
           </div>
           <div class="grid grid-cols-2 gap-3 mt-3 mono">
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Sales</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Vendas</div>
               <div class="text-xl" id="meta-sales">—</div>
             </div>
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Revenue</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Receita</div>
               <div class="text-xl" id="meta-revenue">—</div>
             </div>
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Spend</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Investido</div>
               <div class="text-xl" id="meta-spend">—</div>
             </div>
             <div>
@@ -186,35 +186,35 @@
           </div>
           <div class="grid grid-cols-2 gap-3 mt-3 mono">
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Sales</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Vendas</div>
               <div class="text-xl" id="google-sales">—</div>
             </div>
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Revenue</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Receita</div>
               <div class="text-xl" id="google-revenue">—</div>
             </div>
           </div>
           <div class="text-[11px] text-[color:var(--muted)] mt-3 leading-snug">
-            Spend sync for Google Ads arrives in v1.1. Revenue above is from purchases with gclid/gbraid/wbraid captured on the session.
+            Sync de investimento do Google Ads chega na v1.1. A receita acima é de compras com gclid/gbraid/wbraid capturados na sessão.
           </div>
         </div>
         <div class="border border-[color:var(--border)] rounded-lg p-4">
           <div class="flex items-center gap-2 mb-2">
             <div class="w-2 h-2 rounded-full" style="background:var(--accent-green)"></div>
-            <div class="text-sm font-semibold">Organic</div>
+            <div class="text-sm font-semibold">Orgânico</div>
           </div>
           <div class="grid grid-cols-2 gap-3 mt-3 mono">
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Sales</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Vendas</div>
               <div class="text-xl" id="organic-sales">—</div>
             </div>
             <div>
-              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Revenue</div>
+              <div class="text-[11px] text-[color:var(--muted)] uppercase tracking-wider">Receita</div>
               <div class="text-xl" id="organic-revenue">—</div>
             </div>
           </div>
           <div class="text-[11px] text-[color:var(--muted)] mt-3 leading-snug">
-            No fbclid / gclid / wbraid / gbraid on the originating session.
+            Sem fbclid / gclid / wbraid / gbraid na sessão de origem.
           </div>
         </div>
       </div>
@@ -240,7 +240,7 @@
       <!-- KPI strip -->
       <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mb-4 mono">
         <div class="border border-[color:var(--border)] rounded-lg p-3">
-          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Spend</div>
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Investido</div>
           <div class="text-lg" id="camp-kpi-spend">—</div>
         </div>
         <div class="border border-[color:var(--border)] rounded-lg p-3">
@@ -267,7 +267,7 @@
 
       <!-- Daily spend chart (aggregated across all campaigns) -->
       <div class="border border-[color:var(--border)] rounded-lg p-3 mb-4">
-        <div class="text-xs text-[color:var(--muted)] mb-2">Spend diário · todas as campanhas</div>
+        <div class="text-xs text-[color:var(--muted)] mb-2">Investimento diário · todas as campanhas</div>
         <div class="h-40"><canvas id="chart-campaigns"></canvas></div>
       </div>
 
@@ -278,7 +278,7 @@
             <tr>
               <th class="text-left py-2 pr-4">Campanha</th>
               <th class="text-left py-2 pr-3">Status</th>
-              <th class="text-right py-2 pr-3">Spend</th>
+              <th class="text-right py-2 pr-3">Investido</th>
               <th class="text-right py-2 pr-3">Impr.</th>
               <th class="text-right py-2 pr-3">CTR</th>
               <th class="text-right py-2 pr-3">CPM</th>
@@ -288,7 +288,7 @@
             </tr>
           </thead>
           <tbody id="campaigns-tbody" class="mono">
-            <tr><td colspan="9" class="py-6 text-center text-[color:var(--muted)]">Loading…</td></tr>
+            <tr><td colspan="9" class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -298,32 +298,152 @@
       </div>
     </section>
 
+    <!-- Instagram -->
+    <section class="card p-5 fade-in" id="ig-section">
+      <div class="flex items-center justify-between mb-4 gap-3">
+        <div>
+          <div class="font-semibold">Instagram</div>
+          <div class="text-xs text-[color:var(--muted)]">
+            Perfil, audiência, alcance e melhores posts.
+            <span id="ig-sync-note" class="ml-1"></span>
+          </div>
+        </div>
+        <div id="ig-account-pill" class="hidden flex items-center gap-2 text-xs">
+          <img id="ig-avatar" alt="" class="w-7 h-7 rounded-full object-cover border border-[color:var(--border)]">
+          <div>
+            <div id="ig-username" class="font-semibold text-[color:var(--text)]">—</div>
+            <div id="ig-name" class="text-[color:var(--muted)] truncate" style="max-width: 200px">—</div>
+          </div>
+        </div>
+      </div>
+
+      <div id="ig-not-configured" class="hidden text-center py-8 text-sm text-[color:var(--muted)]">
+        Instagram não configurado para este workspace.
+      </div>
+
+      <div id="ig-content" class="space-y-4">
+        <!-- KPI strip -->
+        <div class="grid grid-cols-2 md:grid-cols-6 gap-2 mono">
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Seguidores</div>
+            <div class="text-lg" id="ig-kpi-followers">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Posts</div>
+            <div class="text-lg" id="ig-kpi-media">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Alcance</div>
+            <div class="text-lg" id="ig-kpi-reach">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Visitas perfil</div>
+            <div class="text-lg" id="ig-kpi-pviews">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Cliques site</div>
+            <div class="text-lg" id="ig-kpi-clicks">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Engajados</div>
+            <div class="text-lg" id="ig-kpi-engaged">—</div>
+          </div>
+        </div>
+
+        <!-- Top posts grid -->
+        <div>
+          <div class="text-xs text-[color:var(--muted)] mb-2">Top posts (por curtidas + comentários + saves)</div>
+          <div id="ig-posts-grid" class="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2"></div>
+        </div>
+
+        <!-- Audience charts -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-xs text-[color:var(--muted)] mb-2">Audiência · faixa etária</div>
+            <div class="h-44"><canvas id="ig-chart-age"></canvas></div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-xs text-[color:var(--muted)] mb-2">Audiência · principais cidades</div>
+            <div class="h-44"><canvas id="ig-chart-city"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Facebook Page -->
+    <section class="card p-5 fade-in" id="page-section">
+      <div class="flex items-center justify-between mb-4 gap-3">
+        <div>
+          <div class="font-semibold">Página do Facebook</div>
+          <div class="text-xs text-[color:var(--muted)]">
+            Fãs, alcance e melhores posts da Page.
+            <span id="page-sync-note" class="ml-1"></span>
+          </div>
+        </div>
+        <div id="page-name" class="hidden text-xs text-[color:var(--text)] font-semibold"></div>
+      </div>
+
+      <div id="page-not-configured" class="hidden text-center py-8 text-sm text-[color:var(--muted)]">
+        Página do Facebook não configurada para este workspace.
+      </div>
+
+      <div id="page-content" class="space-y-4">
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mono">
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Fãs</div>
+            <div class="text-lg" id="page-kpi-fans">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Novos fãs</div>
+            <div class="text-lg" id="page-kpi-fan-adds">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Impressões</div>
+            <div class="text-lg" id="page-kpi-impr">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Engajados</div>
+            <div class="text-lg" id="page-kpi-engaged">—</div>
+          </div>
+          <div class="border border-[color:var(--border)] rounded-lg p-3">
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Visitas Page</div>
+            <div class="text-lg" id="page-kpi-views">—</div>
+          </div>
+        </div>
+
+        <div>
+          <div class="text-xs text-[color:var(--muted)] mb-2">Top posts</div>
+          <div id="page-posts-list" class="space-y-2"></div>
+        </div>
+      </div>
+    </section>
+
     <!-- UTM Breakdown -->
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-3">
-        <div class="font-semibold">UTM breakdown</div>
-        <div class="text-xs text-[color:var(--muted)]">Grouped from purchase_log</div>
+        <div class="font-semibold">Detalhamento por UTM</div>
+        <div class="text-xs text-[color:var(--muted)]">Agrupado a partir de purchase_log</div>
       </div>
-      <div class="flex gap-1 border-b border-[color:var(--border)] mb-4 -mx-5 px-5" id="utm-tabs">
-        <div class="dash-tab active" data-dim="utm_source">source</div>
-        <div class="dash-tab" data-dim="utm_medium">medium</div>
-        <div class="dash-tab" data-dim="utm_campaign">campaign</div>
-        <div class="dash-tab" data-dim="utm_content">content</div>
-        <div class="dash-tab" data-dim="utm_term">term</div>
+      <div class="flex gap-1 border-b border-[color:var(--border)] mb-4 -mx-5 px-5" id="utm-tabs" title="Os data-dim mantêm o nome original do parâmetro UTM (utm_source, utm_medium, ...) — só os rótulos visuais são traduzidos.">
+        <div class="dash-tab active" data-dim="utm_source">Origem</div>
+        <div class="dash-tab" data-dim="utm_medium">Mídia</div>
+        <div class="dash-tab" data-dim="utm_campaign">Campanha</div>
+        <div class="dash-tab" data-dim="utm_content">Conteúdo</div>
+        <div class="dash-tab" data-dim="utm_term">Termo</div>
       </div>
       <div id="utm-filters" class="flex flex-wrap gap-2 mb-3"></div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]">
             <tr>
-              <th class="text-left py-2 pr-4">Value</th>
-              <th class="text-right py-2 pr-4">Sales</th>
-              <th class="text-right py-2 pr-4">Revenue</th>
-              <th class="text-right py-2">AOV</th>
+              <th class="text-left py-2 pr-4">Valor</th>
+              <th class="text-right py-2 pr-4">Vendas</th>
+              <th class="text-right py-2 pr-4">Receita</th>
+              <th class="text-right py-2">Ticket médio</th>
             </tr>
           </thead>
           <tbody id="utm-tbody" class="mono">
-            <tr><td colspan="4" class="py-6 text-center text-[color:var(--muted)]">Loading…</td></tr>
+            <tr><td colspan="4" class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -333,25 +453,25 @@
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <div class="font-semibold">Recent leads</div>
-          <div class="text-xs text-[color:var(--muted)]">Click a row to inspect the exact payload sent to Meta / GA4 and the response</div>
+          <div class="font-semibold">Leads recentes</div>
+          <div class="text-xs text-[color:var(--muted)]">Clique numa linha para inspecionar o payload exato enviado ao Meta / GA4 e a resposta</div>
         </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]">
             <tr>
-              <th class="text-left py-2 pr-4">When</th>
-              <th class="text-left py-2 pr-4">Email</th>
-              <th class="text-left py-2 pr-4">Source</th>
-              <th class="text-left py-2 pr-4">Campaign</th>
-              <th class="text-left py-2 pr-4">Medium</th>
+              <th class="text-left py-2 pr-4">Quando</th>
+              <th class="text-left py-2 pr-4">E-mail</th>
+              <th class="text-left py-2 pr-4">Origem</th>
+              <th class="text-left py-2 pr-4">Campanha</th>
+              <th class="text-left py-2 pr-4">Mídia</th>
               <th class="text-center py-2 pr-4">Meta</th>
               <th class="text-center py-2">GA4</th>
             </tr>
           </thead>
           <tbody id="leads-tbody">
-            <tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Loading…</td></tr>
+            <tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -361,25 +481,25 @@
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-3">
         <div>
-          <div class="font-semibold">Recent purchases</div>
-          <div class="text-xs text-[color:var(--muted)]">Click a row to inspect the exact payload sent to Meta / GA4 / Google Ads and the response</div>
+          <div class="font-semibold">Compras recentes</div>
+          <div class="text-xs text-[color:var(--muted)]">Clique numa linha para inspecionar o payload exato enviado ao Meta / GA4 / Google Ads e a resposta</div>
         </div>
       </div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]">
             <tr>
-              <th class="text-left py-2 pr-4">When</th>
-              <th class="text-left py-2 pr-4">Email</th>
-              <th class="text-left py-2 pr-4">Product</th>
-              <th class="text-right py-2 pr-4">Value</th>
+              <th class="text-left py-2 pr-4">Quando</th>
+              <th class="text-left py-2 pr-4">E-mail</th>
+              <th class="text-left py-2 pr-4">Produto</th>
+              <th class="text-right py-2 pr-4">Valor</th>
               <th class="text-center py-2 pr-4">Meta</th>
               <th class="text-center py-2 pr-4">GA4</th>
               <th class="text-center py-2">Google Ads</th>
             </tr>
           </thead>
           <tbody id="purchases-tbody">
-            <tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Loading…</td></tr>
+            <tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -389,38 +509,38 @@
     <section class="card p-5 fade-in">
       <div class="flex items-center justify-between mb-4">
         <div>
-          <div class="font-semibold">Tracking health</div>
+          <div class="font-semibold">Saúde do tracking</div>
           <div class="text-xs text-[color:var(--muted)]">
-            First-party capture vs pixel. Shows how many events you would have lost without server-side tracking.
+            Captura first-party vs Pixel. Mostra quantos eventos teriam se perdido sem o tracking server-side.
           </div>
         </div>
       </div>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mono">
         <div>
-          <div class="kpi-label">Real events</div>
+          <div class="kpi-label">Eventos reais</div>
           <div class="text-2xl" id="health-real">—</div>
         </div>
         <div>
-          <div class="kpi-label">ITP recovered</div>
+          <div class="kpi-label">Recuperados ITP</div>
           <div class="text-2xl accent-blue" id="health-itp">—</div>
         </div>
         <div>
-          <div class="kpi-label">Adblock recovered</div>
+          <div class="kpi-label">Recuperados Adblock</div>
           <div class="text-2xl accent-green" id="health-adblock">—</div>
         </div>
         <div>
-          <div class="kpi-label">Bots filtered</div>
+          <div class="kpi-label">Bots filtrados</div>
           <div class="text-2xl accent-red" id="health-bots">—</div>
         </div>
       </div>
       <div class="mt-5">
-        <div class="text-xs uppercase tracking-wider text-[color:var(--dim)] mb-2">fbp source breakdown</div>
+        <div class="text-xs uppercase tracking-wider text-[color:var(--dim)] mb-2">Origem do fbp</div>
         <div class="flex flex-wrap gap-2 text-xs" id="health-fbp"></div>
       </div>
     </section>
 
     <footer class="pt-4 pb-10 text-xs text-[color:var(--muted)] text-center">
-      Tracking Stack &middot; self-hosted on Cloudflare Pages
+      Usina Tracking &middot; self-hosted no Cloudflare Pages
     </footer>
   </main>
 </div>
@@ -927,11 +1047,169 @@
       loadProducts(days),
       loadAttribution(days),
       loadCampaigns(days),
+      loadInstagram(days),
+      loadPage(days),
       loadUtm(),
       loadLeads(days),
       loadPurchases(),
       loadHealth(),
     ]);
+  }
+
+  // ---------- Instagram ----------
+  let igAgeChart = null, igCityChart = null;
+
+  async function loadInstagram(days) {
+    let data;
+    try { data = await fetchJson(`/api/instagram?days=${days}`); }
+    catch (e) {
+      qs('#ig-not-configured').classList.remove('hidden');
+      qs('#ig-content').classList.add('hidden');
+      return;
+    }
+    const note = qs('#ig-sync-note');
+    if (data.last_synced_at) {
+      note.innerHTML = `· última sync ${relTime(data.last_synced_at * 1000)}`;
+    } else {
+      note.innerHTML = `· <span style="color:var(--accent-amber)">nunca sincronizado</span>`;
+    }
+    if (!data.configured) {
+      qs('#ig-not-configured').classList.remove('hidden');
+      qs('#ig-content').classList.add('hidden');
+      qs('#ig-account-pill').classList.add('hidden');
+      return;
+    }
+    qs('#ig-not-configured').classList.add('hidden');
+    qs('#ig-content').classList.remove('hidden');
+
+    const acc = data.account || {};
+    qs('#ig-username').textContent = acc.username ? '@' + acc.username : '—';
+    qs('#ig-name').textContent = acc.name || '';
+    qs('#ig-avatar').src = acc.profile_picture_url || '/assets/usina-brand/logo-white.png';
+    qs('#ig-account-pill').classList.remove('hidden');
+    qs('#ig-account-pill').classList.add('flex');
+
+    const t = data.totals || {};
+    qs('#ig-kpi-followers').textContent = compactNum(acc.followers_count);
+    qs('#ig-kpi-media').textContent     = compactNum(acc.media_count);
+    qs('#ig-kpi-reach').textContent     = compactNum(t.reach);
+    qs('#ig-kpi-pviews').textContent    = compactNum(t.profile_views);
+    qs('#ig-kpi-clicks').textContent    = compactNum(t.website_clicks);
+    qs('#ig-kpi-engaged').textContent   = compactNum(t.accounts_engaged);
+
+    // Posts grid (12 thumbnails)
+    const grid = qs('#ig-posts-grid');
+    const posts = data.top_media || [];
+    if (!posts.length) {
+      grid.innerHTML = `<div class="col-span-full text-center py-6 text-sm text-[color:var(--muted)]">Sem posts sincronizados ainda.</div>`;
+    } else {
+      grid.innerHTML = posts.map(p => {
+        const img = p.thumbnail_url || p.media_url || '';
+        const caption = (p.caption || '').slice(0, 80);
+        return `
+          <a href="${escAttr(p.permalink || '#')}" target="_blank" rel="noopener" class="block aspect-square rounded-lg border border-[color:var(--border)] overflow-hidden relative group" title="${escAttr(caption)}">
+            ${img ? `<img src="${escAttr(img)}" alt="" class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">` : `<div class="w-full h-full bg-gray-100"></div>`}
+            <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-end p-1 text-white opacity-0 group-hover:opacity-100">
+              <div class="text-[10px] mono leading-tight">
+                ❤ ${compactNum(p.like_count)} · 💬 ${compactNum(p.comments_count)}
+              </div>
+            </div>
+          </a>`;
+      }).join('');
+    }
+
+    // Audience charts
+    drawIgAgeChart(data.audience?.age || []);
+    drawIgCityChart(data.audience?.city || []);
+  }
+
+  function drawIgAgeChart(rows) {
+    const ctx = qs('#ig-chart-age')?.getContext('2d');
+    if (!ctx) return;
+    if (igAgeChart) igAgeChart.destroy();
+    if (!rows.length) {
+      ctx.canvas.parentElement.innerHTML = '<div class="text-xs text-[color:var(--muted)] mb-2">Audiência · faixa etária</div><div class="text-xs text-[color:var(--muted)] py-4 text-center">Dados de audiência indisponíveis (necessário 100+ seguidores).</div>';
+      return;
+    }
+    igAgeChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: rows.map(r => r.value), datasets: [{ label: 'Seguidores', data: rows.map(r => r.count), backgroundColor: 'rgba(245,168,42,0.7)', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+    });
+  }
+
+  function drawIgCityChart(rows) {
+    const ctx = qs('#ig-chart-city')?.getContext('2d');
+    if (!ctx) return;
+    if (igCityChart) igCityChart.destroy();
+    const top = rows.slice(0, 8);
+    if (!top.length) {
+      ctx.canvas.parentElement.innerHTML = '<div class="text-xs text-[color:var(--muted)] mb-2">Audiência · principais cidades</div><div class="text-xs text-[color:var(--muted)] py-4 text-center">Dados de audiência indisponíveis (necessário 100+ seguidores).</div>';
+      return;
+    }
+    igCityChart = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: top.map(r => r.value), datasets: [{ label: 'Seguidores', data: top.map(r => r.count), backgroundColor: 'rgba(127,199,184,0.7)', borderRadius: 4 }] },
+      options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true } } }
+    });
+  }
+
+  // ---------- Facebook Page ----------
+  async function loadPage(days) {
+    let data;
+    try { data = await fetchJson(`/api/page?days=${days}`); }
+    catch (e) {
+      qs('#page-not-configured').classList.remove('hidden');
+      qs('#page-content').classList.add('hidden');
+      return;
+    }
+    const note = qs('#page-sync-note');
+    if (data.last_synced_at) {
+      note.innerHTML = `· última sync ${relTime(data.last_synced_at * 1000)}`;
+    } else {
+      note.innerHTML = `· <span style="color:var(--accent-amber)">nunca sincronizado</span>`;
+    }
+    if (!data.configured) {
+      qs('#page-not-configured').classList.remove('hidden');
+      qs('#page-content').classList.add('hidden');
+      qs('#page-name').classList.add('hidden');
+      return;
+    }
+    qs('#page-not-configured').classList.add('hidden');
+    qs('#page-content').classList.remove('hidden');
+    qs('#page-name').classList.remove('hidden');
+    qs('#page-name').textContent = data.page?.name || '';
+
+    const t = data.totals || {};
+    qs('#page-kpi-fans').textContent     = compactNum(data.page?.fan_count);
+    qs('#page-kpi-fan-adds').textContent = compactNum(t.fan_adds);
+    qs('#page-kpi-impr').textContent     = compactNum(t.impressions);
+    qs('#page-kpi-engaged').textContent  = compactNum(t.engaged_users);
+    qs('#page-kpi-views').textContent    = compactNum(t.views);
+
+    const list = qs('#page-posts-list');
+    const posts = data.top_posts || [];
+    if (!posts.length) {
+      list.innerHTML = `<div class="text-sm text-[color:var(--muted)] text-center py-4">Sem posts sincronizados ainda.</div>`;
+    } else {
+      list.innerHTML = posts.map(p => {
+        const date = p.created_time ? new Date(p.created_time * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : '—';
+        const message = (p.message || '').slice(0, 200);
+        return `
+          <a href="${escAttr(p.permalink_url || '#')}" target="_blank" rel="noopener" class="block border border-[color:var(--border)] rounded-lg p-3 hover:bg-gray-50 transition">
+            <div class="flex items-start justify-between gap-3">
+              <div class="text-sm flex-1 min-w-0">
+                <div class="text-[color:var(--text)] line-clamp-2">${escAttr(message) || '<em class="text-[color:var(--muted)]">sem texto</em>'}</div>
+                <div class="text-[11px] text-[color:var(--muted)] mt-1">${date}</div>
+              </div>
+              <div class="text-[11px] text-[color:var(--muted)] mono whitespace-nowrap">
+                ❤ ${compactNum(p.likes_count)} · 💬 ${compactNum(p.comments_count)} · 🔁 ${compactNum(p.shares_count)}<br>
+                <span style="color:var(--text)">alcance: ${compactNum(p.reach)}</span>
+              </div>
+            </div>
+          </a>`;
+      }).join('');
+    }
   }
 
   async function loadCampaigns(days) {
