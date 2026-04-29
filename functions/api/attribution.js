@@ -17,14 +17,17 @@
 //   last_synced_at,     // last successful Meta sync timestamp, or null
 // }
 
+import { requireAuth, resolveScope } from '../_lib/auth.js';
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const scopeRes = resolveScope(auth, url);
+  if (!scopeRes.ok) return scopeRes.response;
+  const { scope } = scopeRes;
 
   const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
   const since = Math.floor(Date.now() / 1000) - days * 86400;
@@ -43,8 +46,9 @@ export async function onRequestGet(context) {
         COALESCE(SUM(value), 0) as revenue
       FROM purchase_log
       WHERE created_at >= ?
+        ${scope.clause('')}
       GROUP BY source_type
-    `).bind(since).all();
+    `).bind(since, ...scope.binds()).all();
 
     const groups = { meta: empty(), google: empty(), organic: empty() };
     for (const row of rows.results || []) {
@@ -62,7 +66,8 @@ export async function onRequestGet(context) {
       SELECT COALESCE(SUM(spend_cents), 0) as spend_cents
       FROM ad_spend
       WHERE platform = 'meta' AND date >= ?
-    `).bind(sinceDate).first();
+        ${scope.clause('')}
+    `).bind(sinceDate, ...scope.binds()).first();
 
     const metaSpend = Number(spendRow?.spend_cents || 0) / 100;
 
@@ -71,10 +76,12 @@ export async function onRequestGet(context) {
       SELECT MAX(run_at) as last_synced_at
       FROM sync_log
       WHERE platform = 'meta' AND status = 'ok'
-    `).first();
+        ${scope.clause('')}
+    `).bind(...scope.binds()).first();
 
     return json({
       days,
+      workspace: scope.workspace,
       groups,
       meta_spend: metaSpend,
       meta_cpa: groups.meta.sales > 0 ? metaSpend / groups.meta.sales : null,

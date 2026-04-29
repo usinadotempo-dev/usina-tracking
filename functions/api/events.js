@@ -1,20 +1,18 @@
+import { requireAuth, resolveScope } from '../_lib/auth.js';
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json',
   };
 
-  // Simple auth via query param
   const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: corsHeaders,
-    });
-  }
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const scopeRes = resolveScope(auth, url);
+  if (!scopeRes.ok) return scopeRes.response;
+  const { scope } = scopeRes;
 
   const eventFilter = url.searchParams.get('event') || '';
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
@@ -31,11 +29,12 @@ export async function onRequestGet(context) {
         has_email, raw_email,
         meta_response_body
       FROM event_log
+      WHERE 1=1 ${scope.clause('')}
     `;
-    const bindings = [];
+    const bindings = [...scope.binds()];
 
     if (eventFilter) {
-      query += ` WHERE event_name = ?`;
+      query += ` AND event_name = ?`;
       bindings.push(eventFilter);
     }
 
@@ -54,8 +53,9 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) as bots
       FROM event_log
       WHERE event_name = 'Lead'
+        ${scope.clause('')}
       GROUP BY event_name
-    `).all();
+    `).bind(...scope.binds()).all();
 
     // Recovery stats — what WOULD have been lost without server-side
     const recovery = await env.DB.prepare(`
@@ -72,7 +72,8 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN fbclid_source = 'server_middleware' AND is_bot = 0 THEN 1 ELSE 0 END) as fbclid_from_server
       FROM event_log
       WHERE event_name = 'Lead'
-    `).first();
+        ${scope.clause('')}
+    `).bind(...scope.binds()).first();
 
     // Per-browser breakdown for ITP insight
     const browserBreakdown = await env.DB.prepare(`
@@ -83,11 +84,13 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN fbp_source = 'middleware_http' THEN 1 ELSE 0 END) as itp_recovered
       FROM event_log
       WHERE event_name = 'Lead' AND is_bot = 0
+        ${scope.clause('')}
       GROUP BY browser
       ORDER BY total DESC
-    `).all();
+    `).bind(...scope.binds()).all();
 
     return new Response(JSON.stringify({
+      workspace: scope.workspace,
       events: results,
       summary: summary.results,
       recovery: recovery || {},

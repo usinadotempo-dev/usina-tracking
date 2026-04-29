@@ -1,28 +1,29 @@
+import { requireAuth, resolveScope } from '../_lib/auth.js';
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
     'Content-Type': 'application/json',
   };
 
-  // Simple auth via query param — same pattern as /api/events
   const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return new Response(JSON.stringify({ error: 'Unauthorized' }), {
-      status: 401,
-      headers: corsHeaders,
-    });
-  }
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const scopeRes = resolveScope(auth, url);
+  if (!scopeRes.ok) return scopeRes.response;
+  const { scope } = scopeRes;
 
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '50', 10), 200);
   const offset = parseInt(url.searchParams.get('offset') || '0', 10);
   const txn = url.searchParams.get('transaction_id') || '';
 
   try {
-    const where = txn ? 'WHERE transaction_id = ?' : '';
-    const binds = txn ? [txn, limit, offset] : [limit, offset];
+    const wsClause = scope.clause('');
+    const wsBinds = scope.binds();
+
+    const txnClause = txn ? 'AND transaction_id = ?' : '';
+    const txnBinds = txn ? [txn] : [];
 
     const { results: rows } = await env.DB.prepare(`
       SELECT
@@ -36,10 +37,10 @@ export async function onRequestGet(context) {
         ga4_status_code, ga4_response_ok, ga4_response_body, ga4_payload_sent,
         google_ads_status_code, google_ads_response_ok, google_ads_response_body, google_ads_payload_sent
       FROM purchase_log
-      ${where}
+      WHERE 1=1 ${wsClause} ${txnClause}
       ORDER BY created_at DESC
       LIMIT ? OFFSET ?
-    `).bind(...binds).all();
+    `).bind(...wsBinds, ...txnBinds, limit, offset).all();
 
     // Summary cards: counts over the last 24h
     const summary = await env.DB.prepare(`
@@ -51,10 +52,12 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN google_ads_response_body LIKE 'skipped:%' THEN 1 ELSE 0 END) AS gads_skipped
       FROM purchase_log
       WHERE created_at > strftime('%s','now','-1 day')
-    `).first();
+        ${scope.clause('')}
+    `).bind(...scope.binds()).first();
 
     return new Response(JSON.stringify({
       rows,
+      workspace: scope.workspace,
       summary: summary || {},
     }), {
       status: 200,

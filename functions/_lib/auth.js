@@ -201,6 +201,59 @@ export function pickWorkspace(workspaces, requestedId) {
   return workspaces.find((w) => w.id === requestedId) || null;
 }
 
+// Build the SQL scope filter for a request, respecting user permissions.
+//   ?workspace=<id>  → filters that one workspace (must be in user's list)
+//   ?workspace=ALL   → admin only: no filter (cross-workspace aggregation)
+//   absent           → defaults to the first workspace the user can see
+//
+// Returns:
+//   { ok: true, scope: { kind, workspaceIds, workspace, clause(alias), binds() } }
+//   or
+//   { ok: false, response: <Response> }    // 403/400 to return immediately
+//
+// Usage:
+//   const auth = await requireAuth(context);
+//   if (auth instanceof Response) return auth;
+//   const scope = resolveScope(auth, new URL(request.url));
+//   if (!scope.ok) return scope.response;
+//   const sql = `SELECT ... WHERE timestamp >= ? ${scope.scope.clause('e')}`;
+//   const row = await env.DB.prepare(sql).bind(since, ...scope.scope.binds()).all();
+export function resolveScope(auth, url) {
+  const requested = url.searchParams.get('workspace');
+  const { user, workspaces } = auth;
+
+  if (requested === 'ALL') {
+    if (user.role !== 'usina_admin') {
+      return { ok: false, response: jsonError('Forbidden: workspace=ALL requires admin', 403) };
+    }
+    return {
+      ok: true,
+      scope: {
+        kind: 'all',
+        workspaceIds: workspaces.map((w) => w.id),
+        workspace: null,
+        clause: () => '',
+        binds: () => [],
+      },
+    };
+  }
+
+  const ws = pickWorkspace(workspaces, requested);
+  if (!ws) {
+    return { ok: false, response: jsonError('No accessible workspace', 403) };
+  }
+  return {
+    ok: true,
+    scope: {
+      kind: 'one',
+      workspaceIds: [ws.id],
+      workspace: ws,
+      clause: (alias) => `AND ${alias ? alias + '.' : ''}workspace_id = ?`,
+      binds: () => [ws.id],
+    },
+  };
+}
+
 // ---- Helpers ----------------------------------------------------------------
 
 export function jsonError(message, status) {

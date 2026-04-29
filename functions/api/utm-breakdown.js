@@ -15,14 +15,17 @@ const ALLOWED_DIMENSIONS = new Set([
   'utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term',
 ]);
 
+import { requireAuth, resolveScope } from '../_lib/auth.js';
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const scopeRes = resolveScope(auth, url);
+  if (!scopeRes.ok) return scopeRes.response;
+  const { scope } = scopeRes;
 
   const dimension = url.searchParams.get('dimension') || 'utm_source';
   if (!ALLOWED_DIMENSIONS.has(dimension)) {
@@ -59,15 +62,17 @@ export async function onRequestGet(context) {
       COALESCE(AVG(value), 0) as aov
     FROM purchase_log
     WHERE ${whereClause}
+      ${scope.clause('')}
     GROUP BY value
     ORDER BY revenue DESC
   `;
 
   try {
-    const rows = await env.DB.prepare(query).bind(since, ...filterBindings).all();
+    const rows = await env.DB.prepare(query).bind(since, ...filterBindings, ...scope.binds()).all();
     return json({
       dimension,
       days,
+      workspace: scope.workspace,
       filters: activeFilters,
       rows: rows.results || [],
     });

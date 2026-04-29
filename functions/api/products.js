@@ -5,14 +5,17 @@
 // }
 // Source: purchase_items (one row per line item in a purchase).
 
+import { requireAuth, resolveScope } from '../_lib/auth.js';
+
 export async function onRequestGet(context) {
   const { request, env } = context;
 
   const url = new URL(request.url);
-  const key = url.searchParams.get('key');
-  if (!env.DASH_KEY || key !== env.DASH_KEY) {
-    return json({ error: 'Unauthorized' }, 401);
-  }
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  const scopeRes = resolveScope(auth, url);
+  if (!scopeRes.ok) return scopeRes.response;
+  const { scope } = scopeRes;
 
   const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
   const since = Math.floor(Date.now() / 1000) - days * 86400;
@@ -28,9 +31,10 @@ export async function onRequestGet(context) {
         COALESCE(MAX(currency), 'BRL') as currency
       FROM purchase_items
       WHERE created_at >= ?
+        ${scope.clause('')}
       GROUP BY product_id
       ORDER BY revenue DESC
-    `).bind(since).all();
+    `).bind(since, ...scope.binds()).all();
 
     const series = await env.DB.prepare(`
       SELECT
@@ -41,12 +45,14 @@ export async function onRequestGet(context) {
         COALESCE(SUM(value), 0) as revenue
       FROM purchase_items
       WHERE created_at >= ?
+        ${scope.clause('')}
       GROUP BY date(created_at, 'unixepoch'), product_id
       ORDER BY date ASC
-    `).bind(since).all();
+    `).bind(since, ...scope.binds()).all();
 
     return json({
       days,
+      workspace: scope.workspace,
       products: products.results || [],
       time_series: series.results || [],
     });
