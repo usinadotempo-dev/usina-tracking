@@ -205,6 +205,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 3. Account insights (last N days)
+  let _debugDataByDay = null;
   // Meta IG splits metrics into two shapes — and any one metric being
   // unavailable for the account fails the whole combined call. We call
   // each metric independently so unsupported ones (e.g. email_contacts on
@@ -248,6 +249,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
         }
       } catch (_) { /* skip — metric not configured for this account */ }
     }
+    _debugDataByDay = JSON.parse(JSON.stringify(dataByDay));
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
@@ -349,6 +351,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     audience: audienceCount,
     duration_ms: durationMs,
     errors: errors.length ? errors : undefined,
+    _debug_account_insights: _debugDataByDay,
   };
 }
 
