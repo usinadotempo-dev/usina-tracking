@@ -118,3 +118,68 @@ O `cronjob.org` deve marcar 207 como sucesso (configura "Allowed status codes": 
 Se você está usando um **User Token long-lived** (gerado via Graph API Explorer + `oauth/access_token`), ele expira em **60 dias**. O painel `/admin/platform` mostra um aviso amarelo quando faltam ≤30 dias.
 
 Migrar para **System User Token** (Business Manager → System Users → Generate Token) elimina a expiração — recomendado pra produção.
+
+---
+
+## Migrar para System User Token (recomendado)
+
+**Por que migrar:**
+- Não expira (User Token expira em 60d, requer rotação manual)
+- Habilita Page Access Token corretamente, desbloqueando `meta_page_insights` (atual: vazio com User Token)
+- Permite `pages_show_list` + admin assignment, dando acesso a Page-level metrics nativamente
+
+**Passo a passo:**
+
+1. **https://business.facebook.com/settings** → **Usuários do sistema** (System Users)
+2. Clica **Adicionar** → role **Administrador** → nome `usina-tracking-api`
+3. No System User criado → **Adicionar ativos**:
+   - **App** da Usina (com permissão "Gerenciar app")
+   - **Ad Accounts** (Faculdade Vidal + Escola Normal + futuros) — permissão "Gerenciar conta de anúncios"
+   - **Pages** (Faculdade Vidal + Escola Normal Rural) — permissão **"Criar conteúdo, gerenciar Página, criar anúncios e ver insights"** (importante: marca "ver insights")
+4. **Gerar novo token** → seleciona o app → marca **todos os 17 scopes** que você usa hoje (mesmo set do User Token atual: `ads_read`, `ads_management`, `read_insights`, `business_management`, `pages_*`, `instagram_basic`, `instagram_manage_insights`, etc.)
+5. **Generate Token** → copia o valor (começa com `EAA...`, ~200+ chars)
+6. **Cadastra no painel:** `admin.tracking.usinadotempo.com.br/admin/#platform` → cola o novo token → Salvar → "Verificar token"
+   - Resposta esperada: `type: SYSTEM_USER`, `expires_at: 0` (nunca), `scopes: [17+]`
+7. **Disparar nova sync de Pages** pra repreencher `meta_page_insights` que estavam vazios:
+   ```bash
+   curl -X POST https://admin.tracking.usinadotempo.com.br/api/sync/meta-pages \
+     -H "x-sync-secret: $SYNC_SECRET" -H "Content-Type: application/json" -d '{}'
+   ```
+
+---
+
+## Configurar cron real em cronjob.org (3 jobs)
+
+1. Crie conta gratuita em **https://cronjob.org** (50 jobs incluídos, mais que suficiente).
+
+2. **Settings → API** → criar uma API key (anota, não vamos usar agora mas é útil).
+
+3. **Cronjobs → Create cronjob**, repete 3 vezes:
+
+   ### Job 1 — Marketing API (campanhas)
+   - **Title**: `Usina · Meta Marketing sync`
+   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-marketing`
+   - **Schedule**: cada hora — escolha "Every hour" ou cron expression `5 * * * *`
+   - **Request method**: POST
+   - **Request body**: `{}` (Content-Type: `application/json`)
+   - **Custom headers**: adicionar 2 linhas:
+     - `x-sync-secret: <SYNC_SECRET>` ← cola o valor de `~/.cf-tracking-token`
+     - `Content-Type: application/json`
+   - **Notification settings** (opcional): notify em `failure` only
+   - **Allowed status codes**: `200, 207`
+   - Save
+
+   ### Job 2 — Instagram Graph
+   Mesmo padrão, com:
+   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-instagram`
+   - **Schedule**: a cada 4 horas — cron `15 */4 * * *`
+
+   ### Job 3 — Facebook Pages
+   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-pages`
+   - **Schedule**: a cada 6 horas — cron `25 */6 * * *`
+
+4. **Verificar funcionamento**: depois de salvar cada job, clica **"Test run"**. Resposta esperada: HTTP 200 com `{"ok": true, "totals": {...}}`. Falhas ficam em **Execution history**.
+
+5. **Validar no painel da Usina**: `tracking.usinadotempo.com.br/dash/` → cada seção (Campanhas / Instagram / Página Facebook) tem o stamp `· última sync X min atrás`. Se atualizar a cada hora/4h/6h, o cron está funcionando.
+
+**Pronto.** A partir desse momento, o pipeline completo é autônomo — cron dispara, fan-out por workspace, dados descem pro D1, dashboard lê em tempo real.
