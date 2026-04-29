@@ -176,20 +176,38 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     if (status === 'ok') status = 'partial';
   }
 
-  // 3. Recent posts (top 25, no nested insights — that field path was
-  // deprecated in v3.3+ with the "aggregated_fields_for_attachement" error.
-  // We get post metadata + likes/comments/shares only. reach/impressions/
-  // engaged_users would require a per-post insights call (1 extra subrequest
-  // per post) which would blow the 50-subrequest budget — defer to a future
-  // optimization that runs only after Workers Paid upgrade.
+  // 3. Recent posts (50) + per-post insights via separate calls.
+  // Workers Paid (1000 subrequests/invocation) lets us call /{post_id}/insights
+  // for every post without busting the budget. Nested insights.metric() in
+  // /posts?fields=...,insights.metric(...) was deprecated in v3.3+ with
+  // error #12 "aggregated_fields_for_attachement", so we have to do the call
+  // per-post.
   try {
     const tokenSuffix = pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '';
     const posts = await meta.fetchAll(
       `/${pageId}/posts?fields=id,message,created_time,permalink_url,` +
       `likes.summary(true).limit(0),comments.summary(true).limit(0),shares` +
-      `&limit=25${tokenSuffix}`,
-      { safety: 1 }
+      `&limit=50${tokenSuffix}`,
+      { safety: 2 }
     );
+
+    // Per-post insights, parallel batches of 10.
+    const insightsByPost = {};
+    for (let i = 0; i < posts.length; i += 10) {
+      const batch = posts.slice(i, i + 10);
+      const promises = batch.map(async (p) => {
+        try {
+          const path = `/${p.id}/insights?metric=post_impressions,post_impressions_unique,post_engaged_users` +
+            (pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '');
+          const r = await meta.get(path);
+          const map = {};
+          for (const x of r.data || []) map[x.name] = x.values?.[0]?.value;
+          insightsByPost[p.id] = map;
+        } catch (_) { insightsByPost[p.id] = {}; }
+      });
+      await Promise.all(promises);
+    }
+
     if (posts.length) {
       const stmt = env.DB.prepare(`
         INSERT INTO meta_page_posts
@@ -204,18 +222,24 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           likes_count = excluded.likes_count,
           comments_count = excluded.comments_count,
           shares_count = excluded.shares_count,
+          reach = excluded.reach,
+          impressions = excluded.impressions,
+          engaged_users = excluded.engaged_users,
           updated_at = excluded.updated_at
       `);
       const now = Math.floor(Date.now() / 1000);
       const batch = posts.map((p) => {
         const ts = p.created_time ? Math.floor(new Date(p.created_time).getTime() / 1000) : null;
+        const ins = insightsByPost[p.id] || {};
         return stmt.bind(
           wsId, p.id, pageId,
           p.message || null, ts, null /* type field deprecated */, p.permalink_url || null,
           toInt(p.likes?.summary?.total_count),
           toInt(p.comments?.summary?.total_count),
           toInt(p.shares?.count),
-          null, null, null,  // reach/impressions/engaged_users — requires per-post insights call
+          toInt(ins.post_impressions_unique),
+          toInt(ins.post_impressions),
+          toInt(ins.post_engaged_users),
           now
         );
       });

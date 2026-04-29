@@ -105,21 +105,17 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     status = 'error';
   }
 
-  // 2. Latest media (+ per-media insights for top 15 most recent)
-  // IMPORTANT: Cloudflare Pages free tier caps at 50 subrequests per request.
-  // We list up to 30 media (single page) and only fetch insights for the 15
-  // most recent — older posts already have their counters denormalized via
-  // like_count/comments_count, and reach/impressions decay quickly anyway.
+  // 2. Latest media (+ per-media insights for all 50)
+  // Workers Paid plan: 1000 subrequests/invocation, so we can afford full coverage.
   try {
     const media = await meta.fetchAll(
-      `/${igId}/media?fields=id,media_type,caption,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=30`,
-      { safety: 1 }
+      `/${igId}/media?fields=id,media_type,caption,permalink,timestamp,like_count,comments_count,thumbnail_url,media_url&limit=50`,
+      { safety: 2 }
     );
     const insightsByMedia = {};
-    const topRecent = media.slice(0, 15);
-    // Parallel batches of 8.
-    for (let i = 0; i < topRecent.length; i += 8) {
-      const batch = topRecent.slice(i, i + 8);
+    // Parallel batches of 10.
+    for (let i = 0; i < media.length; i += 10) {
+      const batch = media.slice(i, i + 10);
       const promises = batch.map(async (m) => {
         const metricList = m.media_type === 'VIDEO' || m.media_type === 'REELS'
           ? 'reach,saved,video_views,plays'
@@ -254,14 +250,13 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     if (status === 'ok') status = 'partial';
   }
 
-  // 4. Audience demographics (lifetime).
-  // OPTIMIZATION: only 2 dimensions instead of 4 to keep subrequest count low.
-  // age + city are the most actionable for paid traffic decisions; gender and
-  // country can be added back once we move to Workers Paid (1000 subrequests).
+  // 4. Audience demographics (lifetime). All 4 dimensions on Workers Paid.
   try {
     const dims = [
-      { metric: 'follower_demographics', breakdown: 'age',  dim: 'age' },
-      { metric: 'follower_demographics', breakdown: 'city', dim: 'city' },
+      { metric: 'follower_demographics', breakdown: 'age',     dim: 'age' },
+      { metric: 'follower_demographics', breakdown: 'gender',  dim: 'gender' },
+      { metric: 'follower_demographics', breakdown: 'country', dim: 'country' },
+      { metric: 'follower_demographics', breakdown: 'city',    dim: 'city' },
     ];
     const rows = [];
     for (const d of dims) {
