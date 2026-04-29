@@ -37,32 +37,63 @@ export async function onRequestPost(context) {
   try { body = await request.json(); } catch { body = {}; }
   const { dateFrom, dateTo } = resolveRange(body.date_from, body.date_to, 30);
 
-  const { results: workspaces } = await env.DB.prepare(`
+  // Fan-out mode: if no workspace_id is specified, dispatch one HTTP call
+  // per configured workspace. Each child call runs in its own Worker
+  // invocation with its own subrequest budget — avoids the "Too many
+  // subrequests" cliff when syncing multiple workspaces in one request.
+  if (!body.workspace_id) {
+    const { results: allWs } = await env.DB.prepare(`
+      SELECT workspace_id, meta_ig_account_id
+        FROM workspace_config
+       WHERE meta_ig_account_id IS NOT NULL AND meta_ig_account_id != ''
+    `).all();
+    if (!allWs?.length) {
+      return json({ ok: true, skipped: true, reason: 'No workspaces with meta_ig_account_id configured', date_from: dateFrom, date_to: dateTo });
+    }
+    const url = new URL(request.url);
+    const childBody = (wsId) => JSON.stringify({ workspace_id: wsId, date_from: dateFrom, date_to: dateTo });
+    const childCalls = await Promise.all(allWs.map((w) =>
+      fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'x-sync-secret': env.SYNC_SECRET, 'Content-Type': 'application/json' },
+        body: childBody(w.workspace_id),
+      }).then(async (r) => {
+        try { return await r.json(); }
+        catch { return { ok: false, status: r.status, error: 'invalid JSON' }; }
+      }).catch((e) => ({ ok: false, error: String(e) }))
+    ));
+    const results = childCalls.map((c) => c?.results?.[0] || c);
+    const totals = {
+      workspaces: results.length,
+      ok:     results.filter((r) => r.status === 'ok').length,
+      failed: results.filter((r) => r.status === 'error').length,
+      partial: results.filter((r) => r.status === 'partial').length,
+      media:               results.reduce((a, r) => a + (r.media || 0), 0),
+      account_insights:    results.reduce((a, r) => a + (r.account_insights || 0), 0),
+      audience_buckets:    results.reduce((a, r) => a + (r.audience || 0), 0),
+    };
+    return json({ ok: totals.failed === 0, date_from: dateFrom, date_to: dateTo, totals, results }, totals.failed > 0 ? 207 : 200);
+  }
+
+  // Single-workspace mode (called by ourselves above OR by an external caller
+  // who already knows which workspace to sync).
+  const ws = await env.DB.prepare(`
     SELECT workspace_id, meta_ig_account_id
       FROM workspace_config
-     WHERE meta_ig_account_id IS NOT NULL AND meta_ig_account_id != ''
-  `).all();
-
-  if (!workspaces?.length) {
-    return json({ ok: true, skipped: true, reason: 'No workspaces with meta_ig_account_id configured', date_from: dateFrom, date_to: dateTo });
+     WHERE workspace_id = ? AND meta_ig_account_id IS NOT NULL AND meta_ig_account_id != ''
+  `).bind(body.workspace_id).first();
+  if (!ws) {
+    return json({ ok: true, skipped: true, reason: 'workspace not found or has no meta_ig_account_id' });
   }
 
   const meta = createMetaClient(token);
-  const results = [];
-  for (const ws of workspaces) {
-    results.push(await syncWorkspace(env, meta, ws, dateFrom, dateTo));
-  }
-
-  const totals = {
-    workspaces: results.length,
-    ok:     results.filter((r) => r.status === 'ok').length,
-    failed: results.filter((r) => r.status === 'error').length,
-    media:               results.reduce((a, r) => a + (r.media || 0), 0),
-    account_insights:    results.reduce((a, r) => a + (r.account_insights || 0), 0),
-    audience_buckets:    results.reduce((a, r) => a + (r.audience || 0), 0),
-  };
-
-  return json({ ok: totals.failed === 0, date_from: dateFrom, date_to: dateTo, totals, results }, totals.failed > 0 ? 207 : 200);
+  const result = await syncWorkspace(env, meta, ws, dateFrom, dateTo);
+  return json({
+    ok: result.status !== 'error',
+    date_from: dateFrom, date_to: dateTo,
+    totals: { workspaces: 1, ok: result.status === 'ok' ? 1 : 0, failed: result.status === 'error' ? 1 : 0, partial: result.status === 'partial' ? 1 : 0 },
+    results: [result],
+  });
 }
 
 async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {

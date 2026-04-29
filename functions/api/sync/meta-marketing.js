@@ -38,44 +38,57 @@ export async function onRequestPost(context) {
   try { body = await request.json(); } catch { body = {}; }
   const { dateFrom, dateTo } = resolveRange(body.date_from, body.date_to);
 
-  const { results: workspaces } = await env.DB.prepare(`
+  // Fan-out: dispatch one HTTP call per workspace so each gets its own
+  // subrequest budget. Important for big historical pulls (1+ year of insights).
+  if (!body.workspace_id) {
+    const { results: allWs } = await env.DB.prepare(`
+      SELECT workspace_id, meta_ads_account_id
+        FROM workspace_config
+       WHERE meta_ads_account_id IS NOT NULL AND meta_ads_account_id != ''
+    `).all();
+    if (!allWs?.length) {
+      return json({ ok: true, skipped: true, reason: 'No workspaces with meta_ads_account_id configured', date_from: dateFrom, date_to: dateTo });
+    }
+    const url = new URL(request.url);
+    const childCalls = await Promise.all(allWs.map((w) =>
+      fetch(url.toString(), {
+        method: 'POST',
+        headers: { 'x-sync-secret': env.SYNC_SECRET, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ workspace_id: w.workspace_id, date_from: dateFrom, date_to: dateTo }),
+      }).then(async (r) => {
+        try { return await r.json(); } catch { return { ok: false, status: r.status, error: 'invalid JSON' }; }
+      }).catch((e) => ({ ok: false, error: String(e) }))
+    ));
+    const results = childCalls.map((c) => c?.results?.[0] || c);
+    const totals = {
+      workspaces: results.length,
+      ok:     results.filter((r) => r.status === 'ok').length,
+      failed: results.filter((r) => r.status === 'error').length,
+      campaigns_upserted: results.reduce((a, r) => a + (r.campaigns || 0), 0),
+      ad_sets_upserted:   results.reduce((a, r) => a + (r.ad_sets || 0), 0),
+      ads_upserted:       results.reduce((a, r) => a + (r.ads || 0), 0),
+      campaign_insights:  results.reduce((a, r) => a + (r.campaign_insights || 0), 0),
+      ad_insights:        results.reduce((a, r) => a + (r.ad_insights || 0), 0),
+    };
+    return json({ ok: totals.failed === 0, date_from: dateFrom, date_to: dateTo, totals, results }, totals.failed > 0 ? 207 : 200);
+  }
+
+  // Single-workspace mode
+  const ws = await env.DB.prepare(`
     SELECT workspace_id, meta_ads_account_id
       FROM workspace_config
-     WHERE meta_ads_account_id IS NOT NULL AND meta_ads_account_id != ''
-  `).all();
-
-  if (!workspaces?.length) {
-    return json({
-      ok: true,
-      skipped: true,
-      reason: 'No workspaces with meta_ads_account_id configured',
-      date_from: dateFrom, date_to: dateTo,
-    });
-  }
+     WHERE workspace_id = ? AND meta_ads_account_id IS NOT NULL AND meta_ads_account_id != ''
+  `).bind(body.workspace_id).first();
+  if (!ws) return json({ ok: true, skipped: true, reason: 'workspace not found or has no meta_ads_account_id' });
 
   const meta = createMetaClient(token);
-  const results = [];
-  for (const ws of workspaces) {
-    const out = await syncWorkspace(env, meta, ws, dateFrom, dateTo);
-    results.push(out);
-  }
-
-  const totals = {
-    workspaces: results.length,
-    ok:     results.filter((r) => r.status === 'ok').length,
-    failed: results.filter((r) => r.status === 'error').length,
-    campaigns_upserted: results.reduce((a, r) => a + (r.campaigns || 0), 0),
-    ad_sets_upserted:   results.reduce((a, r) => a + (r.ad_sets || 0), 0),
-    ads_upserted:       results.reduce((a, r) => a + (r.ads || 0), 0),
-    campaign_insights:  results.reduce((a, r) => a + (r.campaign_insights || 0), 0),
-    ad_insights:        results.reduce((a, r) => a + (r.ad_insights || 0), 0),
-  };
-
+  const result = await syncWorkspace(env, meta, ws, dateFrom, dateTo);
   return json({
-    ok: totals.failed === 0,
+    ok: result.status !== 'error',
     date_from: dateFrom, date_to: dateTo,
-    totals, results,
-  }, totals.failed > 0 ? 207 : 200);
+    totals: { workspaces: 1, ok: result.status === 'ok' ? 1 : 0, failed: result.status === 'error' ? 1 : 0 },
+    results: [result],
+  });
 }
 
 async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
