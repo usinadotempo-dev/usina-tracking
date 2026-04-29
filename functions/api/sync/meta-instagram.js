@@ -233,15 +233,17 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       } catch (_) { /* skip — metric not available */ }
     }
 
-    // total_value: combined call (1 subrequest) — Meta returns data[] with
-    // entries only for metrics that succeeded; metrics not configured for
-    // the account are silently dropped from the response (no error).
+    // total_value: combined call (1 subrequest). The valid IG metrics in
+    // Graph v22 are: reach, follower_count, website_clicks, profile_views,
+    // online_followers, accounts_engaged, total_interactions, likes, comments,
+    // saves, shares, replies, views. The legacy email_contacts/phone_call_clicks/
+    // get_directions_clicks were removed — including any of them poisons the
+    // entire combined call with a #100 error.
     const aggRow = (dataByDay[dateTo] ||= {});
     try {
       const r = await meta.get(
-        `/${igId}/insights?metric=profile_views,website_clicks,email_contacts,phone_call_clicks,get_directions_clicks,accounts_engaged&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
+        `/${igId}/insights?metric=profile_views,website_clicks,accounts_engaged,total_interactions&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
       );
-      errors.push(`tv-debug: data=${(r.data || []).length} keys=${(r.data || []).map(s => s.name).join(',')}`);
       for (const series of r.data || []) {
         const m = series.name;
         const total = series.total_value?.value;
@@ -249,9 +251,7 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           aggRow[m] = toInt(total);
         }
       }
-    } catch (e) {
-      errors.push(`tv-exception: ${e.message.slice(0, 200)}`);
-    }
+    } catch (_) { /* skip */ }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`
