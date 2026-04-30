@@ -1458,13 +1458,55 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
         { label: 'Token de longa duração', key: 'kommo_long_lived_token', value: cfg.kommo_long_lived_token, mono: true, secret: true, full: true, help: 'O token usado em runtime — gerado em Configurações → Integrações → Sua integração → Chaves e escopos.' },
       ])}
 
-      ${configCard('Kommo CRM — mapeamento', 'Em qual pipeline + etapa o lead deve cair, quem é responsável e quais tags marcar. Os IDs aparecem na URL da Kommo quando você abre o pipeline (números após /leads/pipeline/).', [
-        { label: 'Pipeline ID',          key: 'kommo_pipeline_id',          value: cfg.kommo_pipeline_id,          mono: true, placeholder: '1234567', help: 'ID numérico do pipeline.' },
-        { label: 'Stage ID (etapa inicial)', key: 'kommo_stage_id',         value: cfg.kommo_stage_id,             mono: true, placeholder: '12345678', help: 'ID da etapa onde leads novos entram.' },
-        { label: 'Responsável (User ID, opcional)', key: 'kommo_responsible_user_id', value: cfg.kommo_responsible_user_id, mono: true, placeholder: '1234567', help: 'Em branco = distribuído pela regra do pipeline.' },
-        { label: 'Tags (separadas por vírgula)', key: 'kommo_tags',          value: cfg.kommo_tags,                 mono: false, placeholder: 'colonia-ferias,lp-tracker', full: true, help: 'Marcadas em todo lead vindo das LPs. UTMs viram tags adicionais (utm_source:facebook, etc).' },
-        { label: 'Stage de "Lead Ganho" (Fase 2)', key: 'kommo_won_stage_id', value: cfg.kommo_won_stage_id,         mono: true, placeholder: '142', help: 'Quando lead chega nesta etapa, dispara Purchase no Meta CAPI. Padrão Kommo é 142.' },
-      ])}
+      <div class="card p-6 mb-5" id="kommo-mapping-card">
+        <div class="flex items-start justify-between gap-4 mb-3">
+          <div>
+            <h3 class="display text-[15px] text-brand-navy">Kommo CRM — mapeamento</h3>
+            <p class="text-[13px] text-brand-gray mt-0.5">Pipeline, etapa e responsável onde os leads vão cair. Carregado direto da Kommo usando o token salvo acima.</p>
+          </div>
+          <button type="button" id="kommo-reload-btn" class="btn btn-secondary" style="white-space: nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:-2px;margin-right:4px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Recarregar lista
+          </button>
+        </div>
+        <div id="kommo-mapping-status" class="text-[13px] text-brand-gray py-3">Carregando pipelines da Kommo…</div>
+        <div id="kommo-mapping-fields" class="grid gap-4 hidden" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
+          <div>
+            <label class="label">Pipeline</label>
+            <select data-cfg="kommo_pipeline_id" id="kommo-pipeline-select" class="input"></select>
+            <p class="help">Onde os leads novos entram.</p>
+          </div>
+          <div>
+            <label class="label">Etapa inicial</label>
+            <select data-cfg="kommo_stage_id" id="kommo-stage-select" class="input"></select>
+            <p class="help">Etapa em que cada lead da LP é colocado ao chegar.</p>
+          </div>
+          <div>
+            <label class="label">Responsável</label>
+            <select data-cfg="kommo_responsible_user_id" id="kommo-responsible-select" class="input">
+              <option value="">— Distribuição automática —</option>
+            </select>
+            <p class="help">Em branco usa a regra do pipeline.</p>
+          </div>
+          <div>
+            <label class="label">Etapa de "Lead Ganho" (Fase 2)</label>
+            <select data-cfg="kommo_won_stage_id" id="kommo-won-stage-select" class="input"></select>
+            <p class="help">Quando o lead chega nesta etapa, dispara Purchase pro Meta.</p>
+          </div>
+          <div class="col-span-full">
+            <label class="label">Tags (separadas por vírgula)</label>
+            <input data-cfg="kommo_tags" class="input" type="text" value="${escapeHtml(cfg.kommo_tags || '')}" placeholder="colonia-ferias,lp-tracker">
+            <p class="help">Marcadas em todo lead vindo das LPs. UTMs viram tags adicionais (utm_source:facebook, utm_campaign:..., etc).</p>
+          </div>
+        </div>
+      </div>
+      <!-- Estado salvo nos dropdowns via JS na carga inicial -->
+      <input type="hidden" id="kommo-saved-pipeline" value="${escapeHtml(cfg.kommo_pipeline_id || '')}">
+      <input type="hidden" id="kommo-saved-stage" value="${escapeHtml(cfg.kommo_stage_id || '')}">
+      <input type="hidden" id="kommo-saved-responsible" value="${escapeHtml(cfg.kommo_responsible_user_id || '')}">
+      <input type="hidden" id="kommo-saved-won-stage" value="${escapeHtml(cfg.kommo_won_stage_id || '')}">
+      <input type="hidden" id="kommo-has-token" value="${cfg.kommo_long_lived_token ? '1' : '0'}">
+      <input type="hidden" id="kommo-workspace-id" value="${escapeHtml(w.id)}">
 
       ${cfg.kommo_webhook_slug ? `
       <div class="card p-6 mb-5 bg-[#fbfcfe]">
@@ -1535,6 +1577,83 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
     });
     toast('Preset reaplicado. Lembre de salvar.', 'info');
   });
+
+  // ---- Kommo: dropdowns dinâmicos lendo /admin/workspaces/:id/kommo-meta ----
+  // Se o token está salvo, carrega pipelines+stages+users e popula 4 selects.
+  // Se token vazio (ainda não preenchido nem salvo), mostra mensagem amigável.
+  async function loadKommoMeta() {
+    const status = $('#kommo-mapping-status');
+    const fields = $('#kommo-mapping-fields');
+    const hasToken = $('#kommo-has-token').value === '1';
+    if (!hasToken) {
+      status.textContent = 'Salve o token de longa duração da Kommo acima para carregar os pipelines.';
+      fields.classList.add('hidden');
+      return;
+    }
+    status.textContent = 'Carregando pipelines da Kommo…';
+    fields.classList.add('hidden');
+    try {
+      const res = await api('GET', `/admin/workspaces/${w.id}/kommo-meta`);
+      populateKommoSelects(res.pipelines || [], res.users || []);
+      status.textContent = '';
+      status.classList.add('hidden');
+      fields.classList.remove('hidden');
+    } catch (err) {
+      status.classList.remove('hidden');
+      status.innerHTML = `<span style="color: var(--brand-coral)">Erro: ${escapeHtml(err.message)}</span>`;
+    }
+  }
+
+  function populateKommoSelects(pipelines, users) {
+    const pipelineSel    = $('#kommo-pipeline-select');
+    const stageSel       = $('#kommo-stage-select');
+    const wonStageSel    = $('#kommo-won-stage-select');
+    const responsibleSel = $('#kommo-responsible-select');
+
+    const savedPipeline    = $('#kommo-saved-pipeline').value;
+    const savedStage       = $('#kommo-saved-stage').value;
+    const savedWonStage    = $('#kommo-saved-won-stage').value;
+    const savedResponsible = $('#kommo-saved-responsible').value;
+
+    // Pipeline (lista)
+    pipelineSel.innerHTML = ['<option value="">— Selecione —</option>']
+      .concat(pipelines.map(p => `<option value="${p.id}">${escapeHtml(p.name)}${p.is_main ? ' (principal)' : ''}</option>`))
+      .join('');
+    if (savedPipeline) pipelineSel.value = savedPipeline;
+    else if (pipelines.length === 1) pipelineSel.value = pipelines[0].id;
+
+    // Etapas: dependem do pipeline escolhido
+    function refreshStages() {
+      const pid = pipelineSel.value;
+      const pipe = pipelines.find(p => String(p.id) === String(pid));
+      const statuses = pipe?.statuses || [];
+      const opts = ['<option value="">— Selecione —</option>']
+        .concat(statuses.map(s => {
+          const tag = s.type === 1 ? ' (ganho)' : s.type === 2 ? ' (perdido)' : '';
+          return `<option value="${s.id}">${escapeHtml(s.name)}${tag}</option>`;
+        })).join('');
+      stageSel.innerHTML = opts;
+      wonStageSel.innerHTML = opts;
+      if (savedStage)    stageSel.value    = savedStage;
+      if (savedWonStage) wonStageSel.value = savedWonStage;
+      // Auto-pick: etapa "ganho" do pipeline (type=1) é o won_stage natural
+      // se ainda não estava setado.
+      if (!savedWonStage) {
+        const won = statuses.find(s => s.type === 1);
+        if (won) wonStageSel.value = won.id;
+      }
+    }
+    pipelineSel.addEventListener('change', refreshStages);
+    refreshStages();
+
+    // Responsável
+    responsibleSel.innerHTML = '<option value="">— Distribuição automática —</option>'
+      + users.map(u => `<option value="${u.id}">${escapeHtml(u.name || u.email)}</option>`).join('');
+    if (savedResponsible) responsibleSel.value = savedResponsible;
+  }
+
+  $('#kommo-reload-btn')?.addEventListener('click', loadKommoMeta);
+  loadKommoMeta();
 
   $('#ws-cfg-form').addEventListener('submit', async (e) => {
     e.preventDefault();
