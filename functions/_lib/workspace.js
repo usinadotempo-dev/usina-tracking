@@ -3,6 +3,9 @@
 // Three host shapes:
 //   1) admin.tracking.usinadotempo.com.br   → kind="admin"      (no tenant, no workspace)
 //   2) <slug>.tracking.usinadotempo.com.br  → kind="tenant"     (tenant resolved by slug; workspace null until user picks one)
+//      OR kind="workspace" if <slug> doesn't match a tenant but matches a
+//      workspace_domains entry — this lets multiple workspaces of the same
+//      tenant get their own subdomain (e.g. escola.tracking... vs faculdade.tracking...).
 //   3) <any other host>                     → kind="workspace"  (custom landing-page domain → workspace_domains lookup)
 //   *) usina-tracking.pages.dev / localhost → kind="dev"        (treat as admin host for bootstrap/dev)
 //
@@ -30,13 +33,20 @@ async function resolveHostInner(host, env) {
   }
 
   // 2. Tenant subdomain pattern <slug>.tracking.usinadotempo.com.br.
+  // If the slug matches a tenant, return early as kind='tenant'. If NOT,
+  // fall through to the workspace_domains lookup below — that allows
+  // workspace-level subdomains (escola.tracking..., faculdade.tracking...)
+  // to coexist with tenant-level ones.
   if (host.endsWith(`.${PLATFORM_ROOT}`)) {
     const tenantSlug = host.slice(0, -1 - PLATFORM_ROOT.length);
     if (tenantSlug && tenantSlug !== 'admin') {
       const tenant = await env.DB.prepare(
         'SELECT id, slug, name FROM tenants WHERE slug = ?'
       ).bind(tenantSlug).first();
-      return { kind: 'tenant', host, tenant: tenant || null, workspace: null };
+      if (tenant) {
+        return { kind: 'tenant', host, tenant, workspace: null };
+      }
+      // No tenant match → continue to workspace_domains lookup with the full host.
     }
   }
 

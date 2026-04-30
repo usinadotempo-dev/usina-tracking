@@ -1551,11 +1551,24 @@ function escAttr(s) { return escapeHtml(s); }
 
 function renderWsDomains(body, w, domains) {
   body.innerHTML = `
+    <div class="card p-6 mb-5 bg-[#fbfcfe]">
+      <h3 class="display text-[15px] text-brand-navy mb-1.5">Subdomínio rápido na Usina</h3>
+      <p class="text-[13px] text-brand-gray mb-4">
+        Provisiona automaticamente um subdomínio do tipo <span class="mono">&lt;slug&gt;.tracking.usinadotempo.com.br</span> apontando para este workspace — DNS, custom domain no Pages e mapeamento aqui no D1, tudo numa só ação.
+        <br>Use quando o cliente ainda não tem um domínio próprio configurado.
+      </p>
+      <form id="provision-subdomain-form" class="flex gap-2">
+        <input id="provision-slug" class="input mono" placeholder="escola" pattern="[a-z0-9](?:[a-z0-9-]{0,30}[a-z0-9])?" required style="max-width: 220px">
+        <span class="text-[13px] text-brand-gray self-center mono">.tracking.usinadotempo.com.br</span>
+        <button class="btn btn-primary ml-auto" type="submit">Provisionar</button>
+      </form>
+    </div>
+
     <div class="card p-6 mb-5">
       <div class="flex items-start justify-between gap-4 mb-5">
         <div>
           <h3 class="display text-[15px] text-brand-navy">Domínios deste workspace</h3>
-          <p class="text-[13px] text-brand-gray mt-0.5">Aponte domínios próprios do cliente (ex: <span class="mono">lp1.faculdadevidal.edu.br</span>) para este workspace. Toda visita por esse host é vinculada aqui.</p>
+          <p class="text-[13px] text-brand-gray mt-0.5">Mapeie domínios do cliente (ex: <span class="mono">lp1.faculdadevidal.edu.br</span>) ou veja os subdomínios já provisionados.</p>
         </div>
       </div>
 
@@ -1608,6 +1621,35 @@ function renderWsDomains(body, w, domains) {
       renderWsDomains(body, w, fresh.domains || []);
     } catch (err) {
       toast(err.message, 'error');
+    }
+  });
+
+  $('#provision-subdomain-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const slug = $('#provision-slug').value.trim().toLowerCase();
+    if (!slug) return;
+    const fqdn = `${slug}.tracking.usinadotempo.com.br`;
+    if (!confirm(`Provisionar o subdomínio ${fqdn} para este workspace?\n\nIsso vai criar DNS + custom domain no Cloudflare Pages e mapear no D1.`)) return;
+    const btn = e.target.querySelector('button[type="submit"]');
+    const orig = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = 'Provisionando…';
+    try {
+      const res = await api('POST', `/admin/workspaces/${w.id}/provision-subdomain`, { slug });
+      if (res.provisioning?.skipped) {
+        toast(`Mapeamento criado, mas DNS/Pages foi pulado: ${res.provisioning.reason}`, 'warning');
+      } else if (res.provisioning?.errors?.length) {
+        toast(`Provisionamento parcial: ${JSON.stringify(res.provisioning.errors).slice(0, 200)}`, 'warning');
+      } else {
+        toast(`Subdomínio ${res.fqdn} provisionado. Pode levar até 1 min para propagar.`, 'success');
+      }
+      const fresh = await api('GET', `/admin/workspaces/${w.id}`);
+      renderWsDomains(body, w, fresh.domains || []);
+    } catch (err) {
+      toast(err.message, 'error');
+    } finally {
+      btn.disabled = false;
+      btn.textContent = orig;
     }
   });
 }

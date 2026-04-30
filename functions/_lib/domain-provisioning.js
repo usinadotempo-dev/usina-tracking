@@ -12,6 +12,15 @@
 // it never fails the tenant creation, just logs that DNS wasn't auto-provisioned.
 
 export async function provisionTenantSubdomain(env, tenantSlug) {
+  return provisionSubdomain(env, tenantSlug, `auto-provisioned for tenant ${tenantSlug}`);
+}
+
+// Provision an arbitrary subdomain under PLATFORM_ROOT (tracking.usinadotempo.com.br).
+// Used by tenant auto-provisioning AND by per-workspace subdomain provisioning
+// (e.g. escola.tracking.... when there are multiple workspaces under one tenant).
+// Returns { ok, fqdn, pages_domain, dns_record, errors[] } — or { ok:false, skipped:true }
+// when CF env vars aren't set (lets tests pass without real Cloudflare creds).
+export async function provisionSubdomain(env, slug, comment) {
   const required = ['CF_API_TOKEN', 'CF_ACCOUNT_ID', 'CF_ZONE_ID'];
   const missing = required.filter((k) => !env[k]);
   if (missing.length) {
@@ -20,7 +29,7 @@ export async function provisionTenantSubdomain(env, tenantSlug) {
 
   const project = env.CF_PAGES_PROJECT || 'usina-tracking';
   const root    = env.PLATFORM_ROOT    || 'tracking.usinadotempo.com.br';
-  const fqdn    = `${tenantSlug}.${root}`;
+  const fqdn    = `${slug}.${root}`;
   const cnameTarget = `${project}.pages.dev`;
 
   const headers = {
@@ -76,7 +85,7 @@ export async function provisionTenantSubdomain(env, tenantSlug) {
             name: fqdn,
             content: cnameTarget,
             proxied: true,
-            comment: `Usina Tracking — auto-provisioned for tenant ${tenantSlug}`,
+            comment: `Usina Tracking — ${comment || `subdomain ${slug}`}`,
           }),
         }
       );
