@@ -34,6 +34,9 @@
   .dash-tab.active { color: var(--text); border-color: var(--accent-blue); }
   .range-btn { padding: 0.375rem 0.75rem; font-size: 0.8125rem; border: 1px solid var(--border); background: var(--card); border-radius: 8px; cursor: pointer; color: var(--dim); }
   .range-btn.active { background: var(--text); color: #fff; border-color: var(--text); }
+  .utm-source-btn { background: var(--card); color: var(--dim); cursor: pointer; transition: background 0.12s, color 0.12s; }
+  .utm-source-btn:hover { background: #fafafa; color: var(--text); }
+  .utm-source-btn.active { background: var(--text); color: #fff; }
   .row-hover:hover { background: #fafafa; }
   .fade-in { animation: fadeIn 0.35s ease-out; }
   @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
@@ -443,8 +446,9 @@
             <div class="text-lg" id="ig-kpi-media">—</div>
           </div>
           <div class="border border-[color:var(--border)] rounded-lg p-3">
-            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Alcance <span class="info-tip" tabindex="0" data-tip="Quantas pessoas distintas viram suas publicações no período."></span></div>
+            <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Alcance acumulado <span class="info-tip" tabindex="0" data-tip="Soma do alcance diário no período. A mesma pessoa que viu seu conteúdo em dias diferentes é contada mais de uma vez. A Meta limita os dados do Instagram aos últimos 30 dias — em janelas maiores, mostramos só o que está disponível."></span></div>
             <div class="text-lg" id="ig-kpi-reach">—</div>
+            <div class="text-[9px] text-[color:var(--muted)]" id="ig-kpi-reach-foot">&nbsp;</div>
           </div>
           <div class="border border-[color:var(--border)] rounded-lg p-3">
             <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Visitas ao perfil</div>
@@ -530,10 +534,15 @@
 
     <!-- UTM Breakdown -->
     <section class="card p-5 fade-in" data-module="utm_breakdown">
-      <div class="flex items-center justify-between mb-3">
+      <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
         <div>
-          <div class="font-semibold flex items-center">Origem das vendas em detalhe <span class="info-tip" tabindex="0" data-tip="Quebra suas vendas conforme as etiquetas (UTMs) presentes no link que o cliente clicou — origem (de onde veio), mídia (formato), campanha, conteúdo e termo. Útil para descobrir qual link/anúncio gera mais retorno."></span></div>
-          <div class="text-xs text-[color:var(--muted)]">Quebra das vendas pelas etiquetas (UTMs) do link clicado.</div>
+          <div class="font-semibold flex items-center" id="utm-section-title">Origem das vendas em detalhe <span class="info-tip" tabindex="0" data-tip="Quebra suas vendas (ou captações) conforme as etiquetas (UTMs) presentes no link que a pessoa clicou — origem (de onde veio), mídia (formato), campanha, conteúdo e termo. Útil para descobrir qual link/anúncio gera mais retorno."></span></div>
+          <div class="text-xs text-[color:var(--muted)]" id="utm-section-subtitle">Quebra das vendas pelas etiquetas (UTMs) do link clicado.</div>
+        </div>
+        <!-- Seletor Vendas | Captações: só aparece quando variant === 'both'. -->
+        <div id="utm-source-toggle" class="hidden inline-flex border border-[color:var(--border)] rounded-lg overflow-hidden text-xs" role="group" aria-label="Origem dos dados">
+          <button type="button" class="utm-source-btn active px-3 py-1.5 font-medium" data-source="purchases">Vendas</button>
+          <button type="button" class="utm-source-btn px-3 py-1.5 font-medium border-l border-[color:var(--border)]" data-source="leads">Captações</button>
         </div>
       </div>
       <div class="flex gap-1 border-b border-[color:var(--border)] mb-4 -mx-5 px-5" id="utm-tabs">
@@ -546,16 +555,11 @@
       <div id="utm-filters" class="flex flex-wrap gap-2 mb-3"></div>
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
-          <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]">
-            <tr>
-              <th class="text-left py-2 pr-4">Valor</th>
-              <th class="text-right py-2 pr-4">Vendas</th>
-              <th class="text-right py-2 pr-4">Receita</th>
-              <th class="text-right py-2">Ticket médio</th>
-            </tr>
+          <thead class="text-xs uppercase tracking-wider text-[color:var(--dim)] border-b border-[color:var(--border)]" id="utm-thead">
+            <!-- preenchido pelo JS conforme o source ativo -->
           </thead>
           <tbody id="utm-tbody" class="mono">
-            <tr><td colspan="4" class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
+            <tr><td class="py-6 text-center text-[color:var(--muted)]">Carregando…</td></tr>
           </tbody>
         </table>
       </div>
@@ -652,7 +656,7 @@
     </section>
 
     <footer class="pt-4 pb-10 text-xs text-[color:var(--muted)] text-center">
-      Usina Tracking &middot; rastreamento próprio na Cloudflare
+      por <a href="https://usinadotempo.com.br" target="_blank" rel="noopener" class="hover:text-[color:var(--text)] transition">Usina do Tempo</a>
     </footer>
   </main>
 </div>
@@ -714,6 +718,9 @@
   let currentRange = { kind: 'preset', days: 30 };
   let utmDimension = 'utm_source';
   let utmFilters = {};
+  // utmSource: 'purchases' | 'leads' — controlado pelo preset do workspace ou
+  // pelo seletor (quando variant === 'both'). Default = 'purchases'.
+  let utmSource = 'purchases';
   let revenueChart = null;
   let productsChart = null;
   let currentUser = null;
@@ -843,6 +850,22 @@
       card.classList.toggle('hidden', !matches);
     });
 
+    // UTM source variant: 'leads' | 'purchases' | 'both'.
+    // - 'leads'/'purchases': fonte fixa, esconde o seletor.
+    // - 'both': mostra seletor; default = 'purchases' (mais relevante em híbridos).
+    const utmVariant = variants.utm_breakdown || 'purchases';
+    const toggleEl = qs('#utm-source-toggle');
+    if (utmVariant === 'both') {
+      utmSource = 'purchases';
+      toggleEl?.classList.remove('hidden');
+      toggleEl?.classList.add('inline-flex');
+    } else {
+      utmSource = utmVariant === 'leads' ? 'leads' : 'purchases';
+      toggleEl?.classList.add('hidden');
+      toggleEl?.classList.remove('inline-flex');
+    }
+    applyUtmHeader();
+
     // Attribution variant — `lead_only` hides spend/CPA/ROAS.
     const attrVariant = variants.attribution || 'full';
     if (attrVariant === 'lead_only') {
@@ -938,7 +961,11 @@
   }
 
   async function loadUtm() {
-    const params = new URLSearchParams({ dimension: utmDimension });
+    // Aplica título/subtítulo/cabeçalho conforme a fonte ativa, ANTES da chamada
+    // — assim o estado de "Carregando…" já bate com o que vai vir.
+    applyUtmHeader();
+
+    const params = new URLSearchParams({ dimension: utmDimension, source: utmSource });
     if (currentRange.kind === 'custom') {
       params.set('since', currentRange.since);
       params.set('until', currentRange.until);
@@ -949,18 +976,31 @@
     const data = await fetchJson(`/api/utm-breakdown?${params.toString()}`);
     renderUtmFilters();
     const tbody = qs('#utm-tbody');
+    const cols = utmSource === 'leads' ? 2 : 4;
     if (!data.rows || data.rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="py-6 text-center text-[color:var(--muted)]">Sem vendas no período selecionado.</td></tr>';
+      const empty = utmSource === 'leads'
+        ? 'Sem captações no período selecionado.'
+        : 'Sem vendas no período selecionado.';
+      tbody.innerHTML = `<tr><td colspan="${cols}" class="py-6 text-center text-[color:var(--muted)]">${empty}</td></tr>`;
       return;
     }
-    tbody.innerHTML = data.rows.map(r => `
-      <tr class="row-hover cursor-pointer border-b border-[color:var(--border)]" data-value="${escapeHtml(r.value)}">
-        <td class="py-2 pr-4 font-sans">${escapeHtml(r.value)}</td>
-        <td class="py-2 pr-4 text-right">${fmtInt(r.sales)}</td>
-        <td class="py-2 pr-4 text-right accent-amber">${money(r.revenue)}</td>
-        <td class="py-2 text-right text-[color:var(--dim)]">${money(r.aov)}</td>
-      </tr>
-    `).join('');
+    if (utmSource === 'leads') {
+      tbody.innerHTML = data.rows.map(r => `
+        <tr class="row-hover cursor-pointer border-b border-[color:var(--border)]" data-value="${escapeHtml(r.value)}">
+          <td class="py-2 pr-4 font-sans">${escapeHtml(r.value)}</td>
+          <td class="py-2 text-right accent-green">${fmtInt(r.leads)}</td>
+        </tr>
+      `).join('');
+    } else {
+      tbody.innerHTML = data.rows.map(r => `
+        <tr class="row-hover cursor-pointer border-b border-[color:var(--border)]" data-value="${escapeHtml(r.value)}">
+          <td class="py-2 pr-4 font-sans">${escapeHtml(r.value)}</td>
+          <td class="py-2 pr-4 text-right">${fmtInt(r.sales)}</td>
+          <td class="py-2 pr-4 text-right accent-amber">${money(r.revenue)}</td>
+          <td class="py-2 text-right text-[color:var(--dim)]">${money(r.aov)}</td>
+        </tr>
+      `).join('');
+    }
     qsa('#utm-tbody tr[data-value]').forEach(row => {
       row.addEventListener('click', () => {
         const v = row.getAttribute('data-value');
@@ -969,6 +1009,42 @@
           loadUtm();
         }
       });
+    });
+  }
+
+  // Atualiza título, subtítulo, cabeçalho da tabela e estado dos botões do
+  // seletor conforme `utmSource` ('purchases' | 'leads') e a variant do preset.
+  // Também controla se o seletor [Vendas | Captações] aparece (só em 'both').
+  function applyUtmHeader() {
+    const title = qs('#utm-section-title');
+    const subtitle = qs('#utm-section-subtitle');
+    const thead = qs('#utm-thead');
+    const toggle = qs('#utm-source-toggle');
+
+    if (utmSource === 'leads') {
+      // childNodes[0] preserva o ícone "i" no final.
+      title.firstChild.textContent = 'Origem das captações em detalhe ';
+      subtitle.textContent = 'Quebra das captações pelas etiquetas (UTMs) do link clicado.';
+      thead.innerHTML = `
+        <tr>
+          <th class="text-left py-2 pr-4">Valor</th>
+          <th class="text-right py-2">Captações</th>
+        </tr>`;
+    } else {
+      title.firstChild.textContent = 'Origem das vendas em detalhe ';
+      subtitle.textContent = 'Quebra das vendas pelas etiquetas (UTMs) do link clicado.';
+      thead.innerHTML = `
+        <tr>
+          <th class="text-left py-2 pr-4">Valor</th>
+          <th class="text-right py-2 pr-4">Vendas</th>
+          <th class="text-right py-2 pr-4">Receita</th>
+          <th class="text-right py-2">Ticket médio</th>
+        </tr>`;
+    }
+    // Sincroniza estado visual dos botões do seletor (sem importar se está
+    // visível ou não — quando aparece, já mostra a opção correta).
+    qsa('#utm-source-toggle .utm-source-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.getAttribute('data-source') === utmSource);
     });
   }
 
@@ -1395,6 +1471,21 @@
     qs('#ig-kpi-clicks').textContent    = compactNum(t.website_clicks);
     qs('#ig-kpi-engaged').textContent   = compactNum(t.accounts_engaged);
 
+    // Mostra "X de Y dias" quando o período pedido excede o sync disponível.
+    // Ex: usuário escolhe 90d mas só temos 28 dias → mostra "28 de 90 dias".
+    const reachFoot = qs('#ig-kpi-reach-foot');
+    if (reachFoot) {
+      const expected = currentRange.kind === 'preset' ? currentRange.days : null;
+      const got = data.days_with_data || 0;
+      if (expected && got < expected) {
+        reachFoot.textContent = `${got} de ${expected} dias com dados`;
+      } else if (got > 0) {
+        reachFoot.textContent = `${got} ${got === 1 ? 'dia' : 'dias'} no período`;
+      } else {
+        reachFoot.textContent = 'sem dados no período';
+      }
+    }
+
     // Posts grid (12 thumbnails)
     const grid = qs('#ig-posts-grid');
     const posts = data.top_media || [];
@@ -1740,6 +1831,16 @@
       tab.classList.add('active');
       utmDimension = tab.getAttribute('data-dim');
       utmFilters = {};
+      loadUtm();
+    });
+  });
+  // Seletor [Vendas | Captações] — só visível quando preset é 'both'.
+  qsa('#utm-source-toggle .utm-source-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const next = btn.getAttribute('data-source');
+      if (next === utmSource) return;
+      utmSource = next;
+      utmFilters = {};               // filtros UTM cascade não fazem sentido cruzando fontes
       loadUtm();
     });
   });

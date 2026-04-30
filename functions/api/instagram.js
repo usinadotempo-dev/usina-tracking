@@ -43,9 +43,14 @@ export async function onRequestGet(context) {
        ORDER BY date ASC
     `).bind(wsId, win.since, win.until).all();
 
+    // Todos os totals são SUM dos dias da janela. O `reach` aqui também — é
+    // "alcance acumulado" (mesma pessoa pode ser contada em vários dias).
+    // A IG API só permite reach único deduplicado em janelas até 30 dias com
+    // chamada extra; pra simplicidade, mostramos SUM com label explícito no
+    // dash. Antes era MAX, o que congelava o número entre 7d/30d/90d.
     const totals = (insights || []).reduce((acc, r) => {
       acc.profile_views        += r.profile_views || 0;
-      acc.reach                 = Math.max(acc.reach, r.reach || 0);
+      acc.reach                += r.reach || 0;
       acc.website_clicks       += r.website_clicks || 0;
       acc.email_contacts       += r.email_contacts || 0;
       acc.phone_call_clicks    += r.phone_call_clicks || 0;
@@ -53,6 +58,10 @@ export async function onRequestGet(context) {
       acc.accounts_engaged     += r.accounts_engaged || 0;
       return acc;
     }, { profile_views: 0, reach: 0, website_clicks: 0, email_contacts: 0, phone_call_clicks: 0, get_directions_clicks: 0, accounts_engaged: 0 });
+
+    // Quantos dias da janela realmente têm dados sincronizados — útil pra UI
+    // mostrar "30 de 90 dias disponíveis" quando o sync ainda não cobriu tudo.
+    const daysWithData = (insights || []).length;
 
     // Top media by engagement (likes + comments + saves) — limit 12 for grid.
     const { results: topMedia } = await env.DB.prepare(`
@@ -102,6 +111,7 @@ export async function onRequestGet(context) {
         media_count: account.media_count,
       },
       totals,
+      days_with_data: daysWithData,
       time_series: insights || [],
       top_media: topMedia || [],
       audience,

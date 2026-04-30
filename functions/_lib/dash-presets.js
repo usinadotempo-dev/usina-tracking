@@ -45,7 +45,9 @@ export const MODULE_LABELS = {
 // Variantes:
 //   kpi_strip: full | lead_focus | roas_focus | ecommerce
 //   attribution: full | lead_only
-//   utm_breakdown: leads | purchases
+//   utm_breakdown: leads | purchases | both
+//     - 'leads' / 'purchases': dash mostra só uma fonte, sem seletor.
+//     - 'both': dash mostra um seletor [Vendas | Captações]. Default = vendas.
 export const BUSINESS_TYPES = {
   lead_gen_local: {
     label: 'Captação local — sem venda online',
@@ -91,7 +93,8 @@ export const BUSINESS_TYPES = {
     variants: {
       kpi_strip: 'full',
       attribution: 'full',
-      utm_breakdown: 'purchases',
+      // 'both' → dash mostra seletor Vendas | Captações neste card.
+      utm_breakdown: 'both',
     },
   },
 
