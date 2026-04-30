@@ -1,4 +1,5 @@
 // GET /api/leads?key=...&days=30&limit=100
+//   ou /api/leads?since=YYYY-MM-DD&until=YYYY-MM-DD&limit=100
 //
 // Returns Lead events joined to their originating session so each row carries
 // its UTMs / fbclid / gclid. This is the "where did my leads come from" view
@@ -8,6 +9,7 @@
 // Bots are excluded by default; pass include_bots=1 to see them.
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -19,10 +21,9 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
+  const win = resolveWindow(url);
   const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
   const includeBots = url.searchParams.get('include_bots') === '1';
-  const since = Math.floor(Date.now() / 1000) - days * 86400;
 
   const botClause = includeBots ? '' : 'AND e.is_bot = 0';
 
@@ -61,30 +62,31 @@ export async function onRequestGet(context) {
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
       WHERE e.event_name = 'Lead'
-        AND e.timestamp >= ?
+        AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         ${botClause}
       ORDER BY e.timestamp DESC
       LIMIT ?
-    `).bind(since, ...scope.binds(), limit).all();
+    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds(), limit).all();
 
     // Summary counts grouped by utm_source for the summary card above the table.
     const summary = await env.DB.prepare(`
       SELECT
-        COALESCE(NULLIF(s.utm_source, ''), '(direct)') as utm_source,
+        COALESCE(NULLIF(s.utm_source, ''), '(direto)') as utm_source,
         COUNT(*) as count
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
       WHERE e.event_name = 'Lead'
-        AND e.timestamp >= ?
+        AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         AND e.is_bot = 0
       GROUP BY utm_source
       ORDER BY count DESC
-    `).bind(since, ...scope.binds()).all();
+    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds()).all();
 
     return json({
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       workspace: scope.workspace,
       leads: rows.results || [],
       summary: summary.results || [],

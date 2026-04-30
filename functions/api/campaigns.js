@@ -1,12 +1,17 @@
 // GET /api/campaigns?days=30&workspace=<id>
+//   ou /api/campaigns?since=YYYY-MM-DD&until=YYYY-MM-DD&workspace=<id>
 //
 // Returns campaigns + their daily insights aggregated to the requested window,
 // scoped to the user's accessible workspaces.
+//
+// Filtra campanhas que não tiveram NENHUMA atividade na janela (sem spend,
+// impressões, cliques nem leads). A lista volta ordenada por spend desc.
 //
 // Response:
 //   {
 //     workspace: { ... },
 //     days,
+//     window: { since, until, kind },
 //     totals: { spend_cents, impressions, reach, clicks, leads, purchases,
 //               purchase_value_cents, ctr, cpm_cents, cpc_cents },
 //     campaigns: [{
@@ -19,6 +24,7 @@
 //   }
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -30,16 +36,18 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = ymdNDaysAgo(days);
+  const win = resolveWindow(url);
 
   try {
-    // Per-campaign aggregates over the window.
-    // `reach` is summed across days. Meta returns a per-day deduplicated
-    // value, so summing days inflates by inter-day overlap (same person
-    // counted in multiple days). True period-deduplicated reach would
-    // require a separate Meta API call per request — too expensive. The
-    // dashboard label calls this out as "alcance acumulado".
+    // Per-campaign aggregates over the window. HAVING filtra campanhas que
+    // ficaram zeradas no período (PAUSADAS sem nenhum dado, por exemplo).
+    //
+    // `reach` é somado pelos dias. A Meta retorna um valor já deduplicado por
+    // dia, então somar dias infla por overlap inter-dias (mesma pessoa contada
+    // em vários dias). O reach realmente deduplicado do período exigiria uma
+    // chamada extra ao Marketing API por request — caro demais. O dashboard
+    // chama esse rótulo de "alcance acumulado" e prefere o cache de
+    // meta_workspace_reach quando a janela é uma das 3 cacheadas (7/30/90d).
     const { results: rows } = await env.DB.prepare(`
       SELECT
         c.campaign_id,
@@ -58,11 +66,17 @@ export async function onRequestGet(context) {
         ON i.workspace_id = c.workspace_id
        AND i.campaign_id  = c.campaign_id
        AND i.date >= ?
+       AND i.date <= ?
       WHERE c.workspace_id = ?
       GROUP BY c.campaign_id, c.name, c.status, c.effective_status, c.objective,
                c.daily_budget_cents, c.lifetime_budget_cents
+      HAVING (COALESCE(SUM(i.spend_cents), 0) > 0
+           OR COALESCE(SUM(i.impressions), 0) > 0
+           OR COALESCE(SUM(i.clicks), 0) > 0
+           OR COALESCE(SUM(i.leads), 0) > 0
+           OR COALESCE(SUM(i.purchases), 0) > 0)
       ORDER BY spend_cents DESC, c.name ASC
-    `).bind(since, scope.workspace?.id || '').all();
+    `).bind(win.since, win.until, scope.workspace?.id || '').all();
 
     // Daily series for each campaign (small rows; sequential is fine for ~50 campaigns).
     // We do a single query and group in JS to avoid N+1.
@@ -71,8 +85,9 @@ export async function onRequestGet(context) {
         FROM meta_campaign_insights
        WHERE workspace_id = ?
          AND date >= ?
+         AND date <= ?
        ORDER BY date ASC
-    `).bind(scope.workspace?.id || '', since).all();
+    `).bind(scope.workspace?.id || '', win.since, win.until).all();
 
     const seriesByCampaign = {};
     for (const s of seriesRows || []) {
@@ -119,13 +134,14 @@ export async function onRequestGet(context) {
       return acc;
     }, { spend_cents: 0, impressions: 0, reach: 0, clicks: 0, leads: 0, purchases: 0, purchase_value_cents: 0 });
 
-    // Prefer the deduplicated reach if the window is one of the cached ones.
+    // Reach deduplicado: usa o cache só quando a janela é PRESET 7/30/90.
+    // Janela personalizada nunca usa cache → fica sempre 'accumulated'.
     let reachKind = 'accumulated';
     let reachSyncedAt = null;
-    if ([7, 30, 90].includes(days)) {
+    if (win.kind === 'preset' && [7, 30, 90].includes(win.days)) {
       const cached = await env.DB.prepare(
         'SELECT unique_reach, synced_at FROM meta_workspace_reach WHERE workspace_id = ? AND period_days = ?'
-      ).bind(scope.workspace?.id || '', days).first();
+      ).bind(scope.workspace?.id || '', win.days).first();
       if (cached && cached.unique_reach != null) {
         totals.reach = cached.unique_reach;
         reachKind = 'unique';
@@ -148,7 +164,8 @@ export async function onRequestGet(context) {
 
     return json({
       workspace: scope.workspace,
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       totals,
       campaigns,
       last_synced_at: sync?.last_synced_at || null,
@@ -158,16 +175,6 @@ export async function onRequestGet(context) {
   }
 }
 
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
-function ymdNDaysAgo(n) {
-  const d = new Date(); d.setUTCDate(d.getUTCDate() - n);
-  const pad = (x) => String(x).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }

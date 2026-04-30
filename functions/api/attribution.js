@@ -1,4 +1,5 @@
 // GET /api/attribution?key=...&days=30
+//   ou /api/attribution?since=YYYY-MM-DD&until=YYYY-MM-DD
 //
 // Splits purchases into three groups by click identifier presence:
 //   - 'meta'    → purchase had an fbc cookie (fbclid captured by middleware)
@@ -18,6 +19,7 @@
 // }
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -29,8 +31,7 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  const win = resolveWindow(url);
 
   try {
     const rows = await env.DB.prepare(`
@@ -45,10 +46,10 @@ export async function onRequestGet(context) {
         COUNT(*) as sales,
         COALESCE(SUM(value), 0) as revenue
       FROM purchase_log
-      WHERE created_at >= ?
+      WHERE created_at >= ? AND created_at <= ?
         ${scope.clause('')}
       GROUP BY source_type
-    `).bind(since, ...scope.binds()).all();
+    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds()).all();
 
     const groups = { meta: empty(), google: empty(), organic: empty() };
     for (const row of rows.results || []) {
@@ -61,13 +62,12 @@ export async function onRequestGet(context) {
     }
 
     // Meta spend from ad_spend table over the same window.
-    const sinceDate = ymd(new Date(since * 1000));
     const spendRow = await env.DB.prepare(`
       SELECT COALESCE(SUM(spend_cents), 0) as spend_cents
       FROM ad_spend
-      WHERE platform = 'meta' AND date >= ?
+      WHERE platform = 'meta' AND date >= ? AND date <= ?
         ${scope.clause('')}
-    `).bind(sinceDate, ...scope.binds()).first();
+    `).bind(win.since, win.until, ...scope.binds()).first();
 
     const metaSpend = Number(spendRow?.spend_cents || 0) / 100;
 
@@ -80,7 +80,8 @@ export async function onRequestGet(context) {
     `).bind(...scope.binds()).first();
 
     return json({
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       workspace: scope.workspace,
       groups,
       meta_spend: metaSpend,
@@ -95,11 +96,6 @@ export async function onRequestGet(context) {
 
 function empty() { return { sales: 0, revenue: 0 }; }
 
-function ymd(d) {
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
-
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -108,10 +104,4 @@ function json(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
     },
   });
-}
-
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
 }

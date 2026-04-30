@@ -1,4 +1,5 @@
 // GET /api/utm-breakdown?key=...&days=30&dimension=utm_source&utm_source=...&utm_medium=...
+//   ou /api/utm-breakdown?since=YYYY-MM-DD&until=YYYY-MM-DD&dimension=utm_source...
 //
 // Returns per-value breakdown of purchases grouped by the chosen dimension,
 // optionally filtered by other utm_* values (cascading filters).
@@ -16,6 +17,7 @@ const ALLOWED_DIMENSIONS = new Set([
 ]);
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -32,8 +34,7 @@ export async function onRequestGet(context) {
     return json({ error: `dimension must be one of ${[...ALLOWED_DIMENSIONS].join(', ')}` }, 400);
   }
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  const win = resolveWindow(url);
 
   // Build cascading filters from any other utm_* query params.
   const filterClauses = [];
@@ -50,13 +51,13 @@ export async function onRequestGet(context) {
   }
 
   const whereClause = [
-    'created_at >= ?',
+    'created_at >= ? AND created_at <= ?',
     ...filterClauses,
   ].join(' AND ');
 
   const query = `
     SELECT
-      COALESCE(NULLIF(${dimension}, ''), '(not set)') as value,
+      COALESCE(NULLIF(${dimension}, ''), '(direto)') as value,
       COUNT(*) as sales,
       COALESCE(SUM(value), 0) as revenue,
       COALESCE(AVG(value), 0) as aov
@@ -68,10 +69,11 @@ export async function onRequestGet(context) {
   `;
 
   try {
-    const rows = await env.DB.prepare(query).bind(since, ...filterBindings, ...scope.binds()).all();
+    const rows = await env.DB.prepare(query).bind(win.sinceUnix, win.untilUnix, ...filterBindings, ...scope.binds()).all();
     return json({
       dimension,
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       workspace: scope.workspace,
       filters: activeFilters,
       rows: rows.results || [],
@@ -89,10 +91,4 @@ function json(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
     },
   });
-}
-
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
 }

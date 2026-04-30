@@ -1,7 +1,9 @@
 // GET /api/page?days=30&workspace=<id>
+//   ou /api/page?since=YYYY-MM-DD&until=YYYY-MM-DD&workspace=<id>
 // Returns Facebook Page profile + daily insights aggregated + recent posts.
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -13,8 +15,7 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = ymdNDaysAgo(days);
+  const win = resolveWindow(url);
   const wsId = scope.workspace?.id || '';
 
   try {
@@ -25,7 +26,8 @@ export async function onRequestGet(context) {
     if (!page) {
       return json({
         workspace: scope.workspace,
-        days,
+        days: win.days,
+        window: { since: win.since, until: win.until, kind: win.kind },
         configured: false,
         message: 'Página do Facebook não configurada para este workspace.',
       });
@@ -35,9 +37,9 @@ export async function onRequestGet(context) {
       SELECT date, page_fans, page_fan_adds, page_fan_removes, page_impressions,
              page_impressions_unique, page_engaged_users, page_post_engagements, page_views_total
         FROM meta_page_insights
-       WHERE workspace_id = ? AND date >= ?
+       WHERE workspace_id = ? AND date >= ? AND date <= ?
        ORDER BY date ASC
-    `).bind(wsId, since).all();
+    `).bind(wsId, win.since, win.until).all();
 
     const totals = (insights || []).reduce((acc, r) => {
       acc.fan_adds            += r.page_fan_adds || 0;
@@ -50,6 +52,7 @@ export async function onRequestGet(context) {
       return acc;
     }, { fan_adds: 0, fan_removes: 0, impressions: 0, impressions_unique: 0, engaged_users: 0, post_engagements: 0, views: 0 });
 
+    // Top posts: 10 max (UI mostra 5 e abre scroll para os outros 5).
     const { results: topPosts } = await env.DB.prepare(`
       SELECT post_id, message, created_time, type, permalink_url,
              likes_count, comments_count, shares_count, reach, impressions, engaged_users
@@ -57,7 +60,7 @@ export async function onRequestGet(context) {
        WHERE workspace_id = ?
        ORDER BY (COALESCE(likes_count,0) + COALESCE(comments_count,0) + COALESCE(shares_count,0)) DESC,
                 created_time DESC
-       LIMIT 12
+       LIMIT 10
     `).bind(wsId).all();
 
     const sync = await env.DB.prepare(`
@@ -68,7 +71,8 @@ export async function onRequestGet(context) {
 
     return json({
       workspace: scope.workspace,
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       configured: true,
       page: {
         page_id: page.page_id,
@@ -88,16 +92,6 @@ export async function onRequestGet(context) {
   }
 }
 
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
-function ymdNDaysAgo(n) {
-  const d = new Date(); d.setUTCDate(d.getUTCDate() - n);
-  const pad = (x) => String(x).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }

@@ -1,9 +1,11 @@
 // GET /api/instagram?days=30&workspace=<id>
+//   ou /api/instagram?since=YYYY-MM-DD&until=YYYY-MM-DD&workspace=<id>
 //
 // Returns the workspace's Instagram account profile + recent media + daily
 // account insights aggregated to the requested window + audience breakdown.
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -15,8 +17,7 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = ymdNDaysAgo(days);
+  const win = resolveWindow(url);
   const wsId = scope.workspace?.id || '';
 
   try {
@@ -27,7 +28,8 @@ export async function onRequestGet(context) {
     if (!account) {
       return json({
         workspace: scope.workspace,
-        days,
+        days: win.days,
+        window: { since: win.since, until: win.until, kind: win.kind },
         configured: false,
         message: 'Instagram não configurado para este workspace.',
       });
@@ -37,9 +39,9 @@ export async function onRequestGet(context) {
       SELECT date, profile_views, reach, follower_count, website_clicks,
              email_contacts, phone_call_clicks, get_directions_clicks, accounts_engaged
         FROM meta_ig_account_insights
-       WHERE workspace_id = ? AND date >= ?
+       WHERE workspace_id = ? AND date >= ? AND date <= ?
        ORDER BY date ASC
-    `).bind(wsId, since).all();
+    `).bind(wsId, win.since, win.until).all();
 
     const totals = (insights || []).reduce((acc, r) => {
       acc.profile_views        += r.profile_views || 0;
@@ -85,7 +87,8 @@ export async function onRequestGet(context) {
 
     return json({
       workspace: scope.workspace,
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       configured: true,
       account: {
         ig_id: account.ig_id,
@@ -109,16 +112,6 @@ export async function onRequestGet(context) {
   }
 }
 
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
-}
-function ymdNDaysAgo(n) {
-  const d = new Date(); d.setUTCDate(d.getUTCDate() - n);
-  const pad = (x) => String(x).padStart(2, '0');
-  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
-}
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }

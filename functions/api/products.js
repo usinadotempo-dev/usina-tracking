@@ -1,4 +1,5 @@
 // GET /api/products?key=...&days=30
+//   ou /api/products?since=YYYY-MM-DD&until=YYYY-MM-DD
 // Returns: {
 //   products: [{product_id, product_name, revenue, sales, aov}],
 //   time_series: [{date, product_id, product_name, sales, revenue}],
@@ -6,6 +7,7 @@
 // Source: purchase_items (one row per line item in a purchase).
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { resolveWindow } from '../_lib/window.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -17,8 +19,7 @@ export async function onRequestGet(context) {
   if (!scopeRes.ok) return scopeRes.response;
   const { scope } = scopeRes;
 
-  const days = clampInt(url.searchParams.get('days'), 30, 1, 365);
-  const since = Math.floor(Date.now() / 1000) - days * 86400;
+  const win = resolveWindow(url);
 
   try {
     const products = await env.DB.prepare(`
@@ -30,11 +31,11 @@ export async function onRequestGet(context) {
         COALESCE(AVG(value), 0) as aov,
         COALESCE(MAX(currency), 'BRL') as currency
       FROM purchase_items
-      WHERE created_at >= ?
+      WHERE created_at >= ? AND created_at <= ?
         ${scope.clause('')}
       GROUP BY product_id
       ORDER BY revenue DESC
-    `).bind(since, ...scope.binds()).all();
+    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds()).all();
 
     const series = await env.DB.prepare(`
       SELECT
@@ -44,14 +45,15 @@ export async function onRequestGet(context) {
         COUNT(*) as sales,
         COALESCE(SUM(value), 0) as revenue
       FROM purchase_items
-      WHERE created_at >= ?
+      WHERE created_at >= ? AND created_at <= ?
         ${scope.clause('')}
       GROUP BY date(created_at, 'unixepoch'), product_id
       ORDER BY date ASC
-    `).bind(since, ...scope.binds()).all();
+    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds()).all();
 
     return json({
-      days,
+      days: win.days,
+      window: { since: win.since, until: win.until, kind: win.kind },
       workspace: scope.workspace,
       products: products.results || [],
       time_series: series.results || [],
@@ -69,10 +71,4 @@ function json(body, status = 200) {
       'Access-Control-Allow-Origin': '*',
     },
   });
-}
-
-function clampInt(raw, fallback, min, max) {
-  const n = parseInt(raw || '', 10);
-  if (Number.isNaN(n)) return fallback;
-  return Math.max(min, Math.min(max, n));
 }
