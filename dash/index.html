@@ -94,10 +94,10 @@
         <div class="card p-5" data-variant="full"><div class="kpi-label">Receita bruta</div><div class="kpi-value mono accent-amber mt-1" id="kpi-revenue">—</div><div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-revenue-sub">&nbsp;</div></div>
         <div class="card p-5" data-variant="full"><div class="kpi-label">Vendas</div><div class="kpi-value mono mt-1" id="kpi-sales">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Transações pagas</div></div>
         <div class="card p-5" data-variant="full"><div class="kpi-label">Ticket médio</div><div class="kpi-value mono accent-blue mt-1" id="kpi-aov">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Receita / vendas</div></div>
-        <div class="card p-5" data-variant="full"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-leads">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div></div>
+        <div class="card p-5" data-variant="full"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-leads-total">—</div><div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-leads-total-sub">Meta Lead Ads + landing pages</div></div>
 
         <!-- Variant: lead_focus (Captação local, B2B) -->
-        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-lead-count">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Não-bots, na janela</div></div>
+        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-lead-count">—</div><div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-lead-count-sub">Meta Lead Ads + landing pages</div></div>
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">CPL</div><div class="kpi-value mono accent-amber mt-1" id="kpi-lead-cpl">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Custo médio por lead</div></div>
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Investimento</div><div class="kpi-value mono accent-blue mt-1" id="kpi-lead-spend">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total de campanhas Meta</div></div>
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Alcance</div><div class="kpi-value mono mt-1" id="kpi-lead-reach">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Pessoas únicas atingidas</div></div>
@@ -461,7 +461,7 @@
       <div class="flex items-center justify-between mb-3">
         <div>
           <div class="font-semibold">Leads recentes</div>
-          <div class="text-xs text-[color:var(--muted)]">Clique numa linha para inspecionar o payload exato enviado ao Meta / GA4 e a resposta</div>
+          <div class="text-xs text-[color:var(--muted)]">Capturas via formulário em landing pages com o tracker da Usina (não inclui Lead Form do Meta — esses ficam no card "Leads" e em "Campanhas Meta"). Clique numa linha para inspecionar o payload enviado ao Meta CAPI / GA4.</div>
         </div>
       </div>
       <div class="overflow-x-auto">
@@ -612,6 +612,12 @@
   let currentUser = null;
   let workspaces = [];
   let currentWorkspaceId = null;
+  // Lead counts gathered from two independent sources — the unified KPI
+  // sums them (sources are mutually exclusive in practice: Lead Form Meta
+  // never hits the tracker; landing pages with the stack only ever fire
+  // through the tracker, never as Lead Form).
+  let leadsFromTracker = 0;
+  let leadsFromMetaAds = 0;
 
   // -------- Helpers --------
   function escAttr(s) {
@@ -844,10 +850,10 @@
 
   async function loadLeads(days) {
     const data = await fetchJson(`/api/leads?days=${days}&limit=50`);
-    qs('#kpi-leads').textContent = fmtInt((data.leads || []).length);
+    leadsFromTracker = (data.leads || []).length;
     const tbody = qs('#leads-tbody');
     if (!data.leads || data.leads.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">No leads in this window.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="7" class="py-6 text-center text-[color:var(--muted)]">Sem leads de landing page nesta janela.</td></tr>';
       return;
     }
     tbody.innerHTML = data.leads.map((l, i) => `
@@ -1113,16 +1119,31 @@
   function populateKpiVariants() {
     const ws = workspaces.find((w) => w.id === currentWorkspaceId);
     const variant = ws?.dash_variants?.kpi_strip || 'full';
+
+    // Total de leads = Meta Lead Ads (Marketing API) + capturas via tracker.
+    // Sources são mutuamente exclusivas na prática: o Lead Form do Meta nunca
+    // dispara o /tracker, e landing pages com a stack nunca aparecem como
+    // Lead Form. Soma reflete o total de leads do workspace na janela.
+    const totalLeads = (leadsFromTracker || 0) + (leadsFromMetaAds || 0);
+    const leadsLabel = formatLeadsBreakdown(leadsFromTracker, leadsFromMetaAds);
+
+    // Variant 'full' usa #kpi-leads-total
+    const leadsTotalEl = qs('#kpi-leads-total');
+    if (leadsTotalEl) {
+      leadsTotalEl.textContent = fmtInt(totalLeads);
+      const subEl = qs('#kpi-leads-total-sub');
+      if (subEl) subEl.textContent = leadsLabel;
+    }
+
     if (variant === 'lead_focus') {
-      // Leads = use existing #kpi-leads (populated by loadRevenue)
-      const leadsTxt = qs('#kpi-leads')?.textContent || '—';
-      qs('#kpi-lead-count').textContent = leadsTxt;
-      // CPL/Spend/Reach come from campaigns totals (populated by loadCampaigns)
+      qs('#kpi-lead-count').textContent = fmtInt(totalLeads);
+      const subEl = qs('#kpi-lead-count-sub');
+      if (subEl) subEl.textContent = leadsLabel;
+      // CPL/Spend/Reach come from campaigns totals (populated by loadCampaigns).
+      // CPL aqui é o do Marketing API (spend / Meta Ads leads) — métrica de
+      // custo por lead da campanha paga. Não dilui com leads orgânicos de LP.
       const spendTxt = qs('#camp-kpi-spend')?.textContent || '—';
       const cplTxt   = qs('#camp-kpi-cpl')?.textContent   || '—';
-      // approximate reach: max single-day reach across campaigns isn't ideal,
-      // but the campaigns endpoint exposes a workspace-wide totals.reach via MAX
-      // — we already render that nowhere visible. Fall back to '—' for now.
       qs('#kpi-lead-cpl').textContent   = cplTxt;
       qs('#kpi-lead-spend').textContent = spendTxt;
       qs('#kpi-lead-reach').textContent = qs('#camp-kpi-reach')?.textContent || '—';
@@ -1148,6 +1169,21 @@
       }
     }
   }
+  // Build a breakdown string for the leads KPI subtitle.
+  // Meta Ads + Landing pages → "61 anúncios · 0 LPs"
+  // Só Meta Ads → "61 anúncios"
+  // Só LPs → "1 landing page"
+  // Ambos zero → "Meta Lead Ads + landing pages"
+  function formatLeadsBreakdown(tracker, metaAds) {
+    const t = tracker || 0;
+    const m = metaAds || 0;
+    if (t === 0 && m === 0) return 'Meta Lead Ads + landing pages';
+    const parts = [];
+    if (m > 0) parts.push(`${m} via anúncios`);
+    if (t > 0) parts.push(`${t} via landing page${t === 1 ? '' : 's'}`);
+    return parts.join(' · ');
+  }
+
   function parseMoney(txt) {
     // strips currency symbol/locale separators, leaves a number.
     const m = String(txt).match(/[\d.,]+/);
@@ -1325,6 +1361,7 @@
     }
 
     const totals = data.totals || {};
+    leadsFromMetaAds = totals.leads || 0;
     qs('#camp-kpi-spend').textContent  = money(totals.spend_cents / 100, 'BRL');
     qs('#camp-kpi-impr').textContent   = compactNum(totals.impressions);
     qs('#camp-kpi-reach').textContent  = compactNum(totals.reach);
