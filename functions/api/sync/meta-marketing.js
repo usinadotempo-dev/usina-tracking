@@ -135,6 +135,39 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       `&time_increment=1&level=ad&limit=500`
     );
     adInsights = await upsertAdInsights(env.DB, wsId, adInsRaw);
+
+    // --- 6. Unique reach (deduplicated by Meta) for the 3 dashboard windows.
+    // The dashboard reads these from meta_workspace_reach so totals.reach
+    // shows the real number of unique people, not a sum of daily reaches.
+    // Three calls per workspace, each with no time_increment so Meta
+    // dedupes server-side over the entire range.
+    const today = new Date();
+    const upsertReach = env.DB.prepare(`
+      INSERT INTO meta_workspace_reach (workspace_id, period_days, unique_reach, date_from, date_to, synced_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(workspace_id, period_days) DO UPDATE SET
+        unique_reach = excluded.unique_reach,
+        date_from = excluded.date_from,
+        date_to = excluded.date_to,
+        synced_at = excluded.synced_at
+    `);
+    const reachJobs = [];
+    for (const periodDays of [7, 30, 90]) {
+      const wf = ymd(addDays(today, -periodDays));
+      const wt = ymd(today);
+      reachJobs.push(
+        meta.get(
+          `/act_${accountId}/insights?fields=reach` +
+          `&time_range=${encodeURIComponent(JSON.stringify({ since: wf, until: wt }))}` +
+          `&level=account`
+        ).then((r) => {
+          const reach = toInt(r.data?.[0]?.reach);
+          return upsertReach.bind(wsId, periodDays, reach, wf, wt, Math.floor(Date.now() / 1000));
+        }).catch((_) => null)
+      );
+    }
+    const reachStmts = (await Promise.all(reachJobs)).filter(Boolean);
+    if (reachStmts.length) await env.DB.batch(reachStmts);
   } catch (err) {
     status = 'error';
     errorMessage = err.message || String(err);

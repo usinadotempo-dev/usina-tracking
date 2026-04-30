@@ -104,10 +104,10 @@ export async function onRequestGet(context) {
       time_series: seriesByCampaign[c.campaign_id] || [],
     }));
 
-    // Workspace-level totals = sum across campaigns. reach is summed too
-    // (campaign-level reach is already a within-campaign daily sum, so
-    // workspace.reach is the gross "people-day touches" across all paid
-    // campaigns in the window — useful for trend/scale, not unique users).
+    // Workspace-level totals = sum across campaigns. We override reach below
+    // with the deduplicated value from meta_workspace_reach when the window
+    // matches one of the three cached periods (7/30/90 days). Otherwise the
+    // SUM stays as a "people-day touches" approximation.
     const totals = campaigns.reduce((acc, c) => {
       acc.spend_cents          += c.totals.spend_cents || 0;
       acc.impressions          += c.totals.impressions || 0;
@@ -118,6 +118,22 @@ export async function onRequestGet(context) {
       acc.purchase_value_cents += c.totals.purchase_value_cents || 0;
       return acc;
     }, { spend_cents: 0, impressions: 0, reach: 0, clicks: 0, leads: 0, purchases: 0, purchase_value_cents: 0 });
+
+    // Prefer the deduplicated reach if the window is one of the cached ones.
+    let reachKind = 'accumulated';
+    let reachSyncedAt = null;
+    if ([7, 30, 90].includes(days)) {
+      const cached = await env.DB.prepare(
+        'SELECT unique_reach, synced_at FROM meta_workspace_reach WHERE workspace_id = ? AND period_days = ?'
+      ).bind(scope.workspace?.id || '', days).first();
+      if (cached && cached.unique_reach != null) {
+        totals.reach = cached.unique_reach;
+        reachKind = 'unique';
+        reachSyncedAt = cached.synced_at;
+      }
+    }
+    totals.reach_kind = reachKind;             // 'unique' (real) | 'accumulated' (sum of daily)
+    totals.reach_synced_at = reachSyncedAt;    // unix seconds, null if not cached
     totals.ctr       = totals.impressions > 0 ? (totals.clicks / totals.impressions) * 100 : 0;
     totals.cpm_cents = totals.impressions > 0 ? Math.round((totals.spend_cents / totals.impressions) * 1000) : 0;
     totals.cpc_cents = totals.clicks      > 0 ? Math.round(totals.spend_cents / totals.clicks) : 0;
