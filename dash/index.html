@@ -66,18 +66,21 @@
     position: absolute;
     bottom: calc(100% + 6px);
     left: 50%;
-    transform: translateX(-50%);
+    /* --tip-x é ajustado via JS quando o tooltip iria estourar o viewport. */
+    transform: translateX(calc(-50% + var(--tip-x, 0px)));
     background: var(--text);
     color: #fff;
     font-style: normal;
     font-weight: 400;
-    font-size: 11px;
-    line-height: 1.4;
-    padding: 6px 10px;
+    font-size: 12px;
+    line-height: 1.45;
+    letter-spacing: normal;
+    text-transform: none;     /* não herda o uppercase do .kpi-label / .uppercase */
+    text-align: left;
+    padding: 8px 11px;
     border-radius: 6px;
     white-space: normal;
     width: 240px;
-    text-align: left;
     pointer-events: none;
     opacity: 0;
     transition: opacity 0.15s;
@@ -1698,6 +1701,36 @@
     if (!pop.contains(e.target) && e.target.id !== 'range-custom-btn' && !qs('#range-custom-btn').contains(e.target)) {
       pop.classList.add('hidden');
     }
+  });
+
+  // Tooltips "i": antes do tooltip aparecer, calcula se ele caberia centralizado.
+  // Se estouraria a esquerda ou a direita do viewport, ajusta --tip-x para
+  // empurrar o balão para o lado seguro. Tooltip tem 240px de largura.
+  // Usamos pointerenter (cobre mouse + touch) e focus (acessibilidade teclado).
+  // Delegação no document para pegar tooltips renderizados depois (innerHTML).
+  function adjustInfoTip(el) {
+    if (!el || !el.classList?.contains('info-tip')) return;
+    const TIP_WIDTH = 240;
+    const MARGIN = 8;
+    const rect = el.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const center = rect.left + rect.width / 2;
+    const halfTip = TIP_WIDTH / 2;
+    let shift = 0;
+    if (center - halfTip < MARGIN) {
+      shift = MARGIN - (center - halfTip);                   // empurra à direita
+    } else if (center + halfTip > vw - MARGIN) {
+      shift = (vw - MARGIN) - (center + halfTip);            // empurra à esquerda (negativo)
+    }
+    el.style.setProperty('--tip-x', `${shift}px`);
+  }
+  document.addEventListener('pointerenter', (e) => {
+    const t = e.target.closest?.('.info-tip');
+    if (t) adjustInfoTip(t);
+  }, true);
+  document.addEventListener('focusin', (e) => {
+    const t = e.target.closest?.('.info-tip');
+    if (t) adjustInfoTip(t);
   });
 
   qs('#campaigns-refresh')?.addEventListener('click', () => loadCampaigns());
