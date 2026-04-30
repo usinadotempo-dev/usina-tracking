@@ -137,11 +137,15 @@
     }
     .hero h1 .rainbow {
       display: inline-block;
-      background: linear-gradient(90deg, #d6332e, #ff8c00, #ffd400, #009b3a, #002776, #6b2c91);
+      /* Cores escuras saturadas — todas contrastam bem com o fundo amarelo.
+         Removidos amarelo (#ffd400) e laranja claro (#ff8c00) que sumiam. */
+      background: linear-gradient(90deg, #b71c1c 0%, #ef6c00 16%, #2e7d32 38%, #1565c0 60%, #6a1b9a 82%, #b71c1c 100%);
       -webkit-background-clip: text;
               background-clip: text;
       -webkit-text-fill-color: transparent;
       color: transparent;
+      /* text-shadow sutil pra dar profundidade sem comprometer a leitura */
+      filter: drop-shadow(0 2px 0 rgba(0, 39, 118, 0.18));
     }
     .hero .eyebrow {
       display: inline-flex;
