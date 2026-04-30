@@ -2221,28 +2221,39 @@ async function loadPlatform() {
       </div>
 
       <div class="card p-6 mt-5">
-        <h3 class="display text-[15px] text-brand-navy mb-1.5">Sincronização de dados</h3>
-        <p class="text-[13px] text-brand-gray mb-4">
-          Os dados de campanhas, Instagram e Páginas são sincronizados via cron externo batendo nos endpoints abaixo.
-          Cadência sugerida: <strong>1h</strong> para Marketing, <strong>4h</strong> para IG/Pages.
-        </p>
-        <div class="space-y-2 text-[13px]">
-          <div class="flex items-center gap-2"><code class="mono text-[12px] bg-[#f3f4f8] px-2 py-1 rounded">POST /api/sync/meta-marketing</code><span class="text-brand-gray">campanhas + ad sets + ads + insights</span></div>
-        </div>
-        <p class="help mt-3">Os endpoints exigem header <code class="mono">x-sync-secret: $SYNC_SECRET</code>. Pra disparar agora sem esperar o cron, use o botão abaixo.</p>
-
-        <div class="mt-5 pt-5 border-t border-brand-border">
-          <div class="flex items-start justify-between gap-4 flex-wrap">
-            <div>
-              <h4 class="display text-[14px] text-brand-navy">Sincronizar Meta agora</h4>
-              <p class="text-[13px] text-brand-gray mt-0.5">Dispara <code class="mono text-[12px]">/api/sync/meta-marketing</code> em todos os workspaces. Útil pra refletir mudanças recentes no dash sem aguardar o cron.</p>
-            </div>
-            <button type="button" class="btn btn-secondary" id="pf-sync-now" style="white-space: nowrap;">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:-2px;margin-right:6px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-              Sincronizar agora
-            </button>
+        <div class="flex items-start justify-between gap-4 flex-wrap mb-4">
+          <div>
+            <h3 class="display text-[15px] text-brand-navy">Sincronização de dados</h3>
+            <p class="text-[13px] text-brand-gray mt-0.5">
+              Os dados Meta são puxados por cron externo. Use os 3 endpoints abaixo no <a href="https://console.cron-job.org/" target="_blank" rel="noopener" class="text-brand-navy underline">cronjob.org</a> (ou outro scheduler).
+            </p>
           </div>
-          <div id="pf-sync-result" class="mt-3 text-[13px] hidden"></div>
+          <button type="button" class="btn btn-secondary" id="pf-sync-now" style="white-space: nowrap;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:-2px;margin-right:6px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Sincronizar Marketing agora
+          </button>
+        </div>
+        <div id="pf-sync-result" class="text-[13px] hidden mb-4"></div>
+
+        <!-- Header do SYNC_SECRET (compartilhado pelos 3 jobs) -->
+        <div class="mb-5 p-4 rounded-lg bg-[#fbfcfe] border border-brand-border">
+          <div class="flex items-start gap-3">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" class="text-brand-navy mt-0.5 flex-shrink-0"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+            <div class="flex-1 min-w-0">
+              <div class="text-[13px] font-semibold text-brand-navy">Header de autenticação dos 3 endpoints</div>
+              <div class="mt-2 flex gap-2 items-center">
+                <code class="mono text-[12px] bg-white border border-brand-border rounded px-2 py-1 flex-1 min-w-0 truncate">x-sync-secret: <span id="sync-secret-display">••••••••••••••••</span></code>
+                <button type="button" id="sync-secret-toggle" class="btn btn-secondary btn-sm" style="white-space:nowrap">Mostrar</button>
+                <button type="button" id="sync-secret-copy" class="btn btn-secondary btn-sm" style="white-space:nowrap">Copiar</button>
+              </div>
+              <p class="help mt-2">O mesmo valor é usado nos 3 jobs. Mantenha em segredo — quem tem ele consegue disparar sync na sua conta.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Cards dos 3 endpoints -->
+        <div id="cron-cards" class="space-y-3">
+          <div class="text-[13px] text-brand-gray">Carregando endpoints…</div>
         </div>
       </div>
     </div>`;
@@ -2293,6 +2304,96 @@ async function loadPlatform() {
     btn.disabled = false;
     btn.innerHTML = orig;
   });
+
+  // Carrega informações dos crons (URLs + secret + last_run de cada plataforma)
+  // pra montar os 3 cards pré-prontos pra colar no cronjob.org.
+  let cronInfo = null;
+  try {
+    cronInfo = await api('GET', '/admin/cron-info');
+  } catch (e) {
+    $('#cron-cards').innerHTML = `<div class="text-[13px]" style="color:var(--brand-coral)">Falha ao carregar info dos crons: ${escapeHtml(e.message)}</div>`;
+  }
+
+  if (cronInfo) {
+    // Toggle do secret (oculto por default)
+    let secretVisible = false;
+    const secretEl = $('#sync-secret-display');
+    const toggleBtn = $('#sync-secret-toggle');
+    const copyBtn = $('#sync-secret-copy');
+    const SECRET = cronInfo.sync_secret || '';
+    if (!SECRET) {
+      secretEl.textContent = '(SYNC_SECRET não configurado nas env vars do Pages)';
+      toggleBtn.disabled = true;
+      copyBtn.disabled = true;
+    }
+    toggleBtn.addEventListener('click', () => {
+      secretVisible = !secretVisible;
+      secretEl.textContent = secretVisible ? SECRET : '••••••••••••••••';
+      toggleBtn.textContent = secretVisible ? 'Ocultar' : 'Mostrar';
+    });
+    copyBtn.addEventListener('click', () => {
+      navigator.clipboard.writeText(SECRET);
+      toast('SYNC_SECRET copiado.', 'success');
+    });
+
+    // Cards dos endpoints
+    function fmtRel(unixSec) {
+      if (!unixSec) return '<span class="text-brand-gray">nunca executado</span>';
+      const diff = Math.floor((Date.now() / 1000) - unixSec);
+      if (diff < 60)    return `há ${diff}s`;
+      if (diff < 3600)  return `há ${Math.floor(diff/60)} min`;
+      if (diff < 86400) return `há ${Math.floor(diff/3600)} h`;
+      return `há ${Math.floor(diff/86400)} dias`;
+    }
+    function statusBadge(s) {
+      if (s === 'ok')      return '<span class="badge badge-active" style="font-size:10px">✓ ok</span>';
+      if (s === 'partial') return '<span class="badge" style="background:rgba(245,168,42,0.15); color:#7a4f0b; font-size:10px">⚠ parcial</span>';
+      if (s === 'error')   return '<span class="badge" style="background:rgba(220,74,48,0.15); color:#902715; font-size:10px">✕ erro</span>';
+      return '<span class="badge badge-muted" style="font-size:10px">—</span>';
+    }
+    $('#cron-cards').innerHTML = (cronInfo.platforms || []).map(p => `
+      <div class="border border-brand-border rounded-lg p-4">
+        <div class="flex items-start justify-between gap-3 mb-3 flex-wrap">
+          <div>
+            <div class="display text-[14px] text-brand-navy">${escapeHtml(p.label)}</div>
+            <div class="text-[12px] text-brand-gray">${escapeHtml(p.description)} · <strong>${escapeHtml(p.cadence_label)}</strong></div>
+          </div>
+          <div class="text-[12px] flex items-center gap-2 mono">
+            ${p.last ? statusBadge(p.last.last_status) : statusBadge(null)}
+            <span class="text-brand-gray">${fmtRel(p.last?.last_run_at)}</span>
+          </div>
+        </div>
+        <div class="grid gap-2 text-[12px]" style="grid-template-columns: 80px 1fr auto">
+          <div class="text-brand-gray font-semibold">URL</div>
+          <code class="mono bg-[#f3f4f8] rounded px-2 py-1 truncate">${escapeHtml(p.url)}</code>
+          <button type="button" class="btn btn-secondary btn-sm" data-copy="${escapeHtml(p.url)}">Copiar</button>
+
+          <div class="text-brand-gray font-semibold">Método</div>
+          <code class="mono bg-[#f3f4f8] rounded px-2 py-1">POST</code>
+          <span></span>
+
+          <div class="text-brand-gray font-semibold">Cron</div>
+          <code class="mono bg-[#f3f4f8] rounded px-2 py-1">${escapeHtml(p.cron)}</code>
+          <button type="button" class="btn btn-secondary btn-sm" data-copy="${escapeHtml(p.cron)}">Copiar</button>
+
+          <div class="text-brand-gray font-semibold">Body</div>
+          <code class="mono bg-[#f3f4f8] rounded px-2 py-1">{}</code>
+          <span></span>
+        </div>
+        ${p.last?.last_status === 'error' && p.last?.last_error ? `
+          <div class="mt-3 p-2 rounded bg-[#fef5f3] text-[12px]" style="color:#902715">
+            <strong>Último erro:</strong> ${escapeHtml(p.last.last_error.slice(0, 200))}
+          </div>` : ''}
+      </div>`).join('');
+
+    // Wire copy buttons (URL e cron)
+    $$('#cron-cards button[data-copy]').forEach(b => {
+      b.addEventListener('click', () => {
+        navigator.clipboard.writeText(b.dataset.copy);
+        toast('Copiado.', 'success');
+      });
+    });
+  }
 
   // Status check
   $('#pf-check').addEventListener('click', async () => {

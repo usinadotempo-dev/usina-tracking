@@ -4,7 +4,7 @@ A Usina Tracking não roda jobs internamente — Cloudflare Pages não tem cron 
 
 ## Endpoints disponíveis
 
-Todos exigem header `x-sync-secret: <SYNC_SECRET>` (gerado durante deploy, gravado em `~/.cf-tracking-token` no host do operador). Sem ele, retornam `401`.
+Todos exigem header `x-sync-secret: <SYNC_SECRET>` (definido como secret no Cloudflare Pages durante o deploy). O admin pode ver o valor em **Plataforma → Configurações → Sincronização de dados** com botão "Mostrar". Sem o header, os endpoints retornam `401`.
 
 | Endpoint | O que sincroniza | Cadência sugerida |
 |---|---|---|
@@ -26,7 +26,7 @@ Quando cadastrar um workspace novo, dispare um sync amplo (1-2 anos atrás) **um
 
 ```bash
 # Faculdade Vidal — sync histórico de 18 meses
-curl -X POST "https://admin.tracking.usinadotempo.com.br/api/sync/meta-marketing" \
+curl -X POST "https://tracking.usinadotempo.com.br/api/sync/meta-marketing" \
   -H "x-sync-secret: $SYNC_SECRET" \
   -H "Content-Type: application/json" \
   -d '{"date_from":"2024-11-01","date_to":"2026-04-29"}'
@@ -40,7 +40,7 @@ Usar **cronjob.org** (free tier suficiente: 50 jobs, intervalo mínimo 1 min, 1.
 
 ### Job 1 — Marketing (campanhas + insights)
 
-- **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-marketing`
+- **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-marketing`
 - **Method**: POST
 - **Headers**: `x-sync-secret: <valor>` + `Content-Type: application/json`
 - **Body**: `{}`
@@ -49,7 +49,7 @@ Usar **cronjob.org** (free tier suficiente: 50 jobs, intervalo mínimo 1 min, 1.
 
 ### Job 2 — Instagram
 
-- **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-instagram`
+- **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-instagram`
 - **Method**: POST
 - **Headers**: idem
 - **Body**: `{}`
@@ -58,7 +58,7 @@ Usar **cronjob.org** (free tier suficiente: 50 jobs, intervalo mínimo 1 min, 1.
 
 ### Job 3 — Pages
 
-- **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-pages`
+- **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-pages`
 - **Method**: POST
 - **Headers**: idem
 - **Body**: `{}`
@@ -93,7 +93,7 @@ O `cronjob.org` deve marcar 207 como sucesso (configura "Allowed status codes": 
 ## Troubleshooting
 
 ### `401 Unauthorized`
-- Header `x-sync-secret` ausente ou incorreto. Verificar valor em `~/.cf-tracking-token` no host do operador.
+- Header `x-sync-secret` ausente ou incorreto. Verificar valor em `painel admin (Plataforma → Sincronização → "Mostrar")` no host do operador.
 
 ### `skipped: platform_config.meta_long_lived_token not set`
 - Token global da Usina não foi cadastrado em `/admin/platform`. Cadastrar o System User token long-lived com scopes Marketing+IG+Pages.
@@ -138,11 +138,11 @@ Migrar para **System User Token** (Business Manager → System Users → Generat
    - **Pages** (Faculdade Vidal + Escola Normal Rural) — permissão **"Criar conteúdo, gerenciar Página, criar anúncios e ver insights"** (importante: marca "ver insights")
 4. **Gerar novo token** → seleciona o app → marca **todos os 17 scopes** que você usa hoje (mesmo set do User Token atual: `ads_read`, `ads_management`, `read_insights`, `business_management`, `pages_*`, `instagram_basic`, `instagram_manage_insights`, etc.)
 5. **Generate Token** → copia o valor (começa com `EAA...`, ~200+ chars)
-6. **Cadastra no painel:** `admin.tracking.usinadotempo.com.br/admin/#platform` → cola o novo token → Salvar → "Verificar token"
+6. **Cadastra no painel:** `tracking.usinadotempo.com.br/admin/#platform` → cola o novo token → Salvar → "Verificar token"
    - Resposta esperada: `type: SYSTEM_USER`, `expires_at: 0` (nunca), `scopes: [17+]`
 7. **Disparar nova sync de Pages** pra repreencher `meta_page_insights` que estavam vazios:
    ```bash
-   curl -X POST https://admin.tracking.usinadotempo.com.br/api/sync/meta-pages \
+   curl -X POST https://tracking.usinadotempo.com.br/api/sync/meta-pages \
      -H "x-sync-secret: $SYNC_SECRET" -H "Content-Type: application/json" -d '{}'
    ```
 
@@ -158,12 +158,12 @@ Migrar para **System User Token** (Business Manager → System Users → Generat
 
    ### Job 1 — Marketing API (campanhas)
    - **Title**: `Usina · Meta Marketing sync`
-   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-marketing`
+   - **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-marketing`
    - **Schedule**: cada hora — escolha "Every hour" ou cron expression `5 * * * *`
    - **Request method**: POST
    - **Request body**: `{}` (Content-Type: `application/json`)
    - **Custom headers**: adicionar 2 linhas:
-     - `x-sync-secret: <SYNC_SECRET>` ← cola o valor de `~/.cf-tracking-token`
+     - `x-sync-secret: <SYNC_SECRET>` ← cola o valor de `painel admin (Plataforma → Sincronização → "Mostrar")`
      - `Content-Type: application/json`
    - **Notification settings** (opcional): notify em `failure` only
    - **Allowed status codes**: `200, 207`
@@ -171,11 +171,11 @@ Migrar para **System User Token** (Business Manager → System Users → Generat
 
    ### Job 2 — Instagram Graph
    Mesmo padrão, com:
-   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-instagram`
+   - **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-instagram`
    - **Schedule**: a cada 4 horas — cron `15 */4 * * *`
 
    ### Job 3 — Facebook Pages
-   - **URL**: `https://admin.tracking.usinadotempo.com.br/api/sync/meta-pages`
+   - **URL**: `https://tracking.usinadotempo.com.br/api/sync/meta-pages`
    - **Schedule**: a cada 6 horas — cron `25 */6 * * *`
 
 4. **Verificar funcionamento**: depois de salvar cada job, clica **"Test run"**. Resposta esperada: HTTP 200 com `{"ok": true, "totals": {...}}`. Falhas ficam em **Execution history**.
