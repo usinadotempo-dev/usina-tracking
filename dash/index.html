@@ -814,9 +814,19 @@
       ? groups.map(g => `<optgroup label="${escAttr(g.name)}">${g.items.map(w => `<option value="${escAttr(w.id)}">${escAttr(w.name)}</option>`).join('')}</optgroup>`).join('')
       : groups[0].items.map(w => `<option value="${escAttr(w.id)}">${escAttr(w.tenant_name)} · ${escAttr(w.name)}</option>`).join('');
 
-    // Restore last selection if still accessible
+    // Pre-select workspace by precedence: ?workspace=<id> > sessionStorage > first.
+    // Param `workspace` permite o admin abrir /dash/?workspace=<id> pra ir
+    // direto a um workspace específico (linkado a partir do admin).
+    const urlParams = new URLSearchParams(window.location.search);
+    const fromUrl = urlParams.get('workspace');
     const last = sessionStorage.getItem('currentWorkspaceId');
-    currentWorkspaceId = (last && workspaces.some(w => w.id === last)) ? last : workspaces[0].id;
+    if (fromUrl && workspaces.some(w => w.id === fromUrl)) {
+      currentWorkspaceId = fromUrl;
+    } else if (last && workspaces.some(w => w.id === last)) {
+      currentWorkspaceId = last;
+    } else {
+      currentWorkspaceId = workspaces[0].id;
+    }
     sel.value = currentWorkspaceId;
 
     sel.addEventListener('change', async () => {
