@@ -75,7 +75,12 @@ export async function onRequestGet(context) {
            OR COALESCE(SUM(i.clicks), 0) > 0
            OR COALESCE(SUM(i.leads), 0) > 0
            OR COALESCE(SUM(i.purchases), 0) > 0)
-      ORDER BY spend_cents DESC, c.name ASC
+      -- Ordem cronológica de criação. Não temos created_time da Meta no
+      -- schema atual, mas campaign_id da Meta é monotônico crescente —
+      -- IDs maiores = criadas mais recentemente. Cast pra INTEGER porque
+      -- IDs vêm como string e ORDER lexicográfico daria errado em IDs
+      -- de tamanhos diferentes.
+      ORDER BY CAST(c.campaign_id AS INTEGER) DESC, c.name ASC
     `).bind(win.since, win.until, scope.workspace?.id || '').all();
 
     // Daily series for each campaign (small rows; sequential is fine for ~50 campaigns).
