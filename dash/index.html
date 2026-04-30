@@ -100,7 +100,7 @@
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Leads</div><div class="kpi-value mono accent-green mt-1" id="kpi-lead-count">—</div><div class="text-xs text-[color:var(--muted)] mt-1" id="kpi-lead-count-sub">Meta Lead Ads + landing pages</div></div>
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">CPL</div><div class="kpi-value mono accent-amber mt-1" id="kpi-lead-cpl">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Custo médio por lead</div></div>
         <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Investimento</div><div class="kpi-value mono accent-blue mt-1" id="kpi-lead-spend">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total de campanhas Meta</div></div>
-        <div class="card p-5 hidden" data-variant="lead_focus"><div class="kpi-label">Alcance</div><div class="kpi-value mono mt-1" id="kpi-lead-reach">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Pessoas únicas atingidas</div></div>
+        <div class="card p-5 hidden" data-variant="lead_focus" title="Soma do alcance diário das campanhas. Inclui possível repetição entre dias."><div class="kpi-label">Alcance acumulado</div><div class="kpi-value mono mt-1" id="kpi-lead-reach">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Soma diária das campanhas</div></div>
 
         <!-- Variant: roas_focus (Infoproduto) -->
         <div class="card p-5 hidden" data-variant="roas_focus"><div class="kpi-label">Receita</div><div class="kpi-value mono accent-amber mt-1" id="kpi-roas-revenue">—</div><div class="text-xs text-[color:var(--muted)] mt-1">Total no período</div></div>
@@ -250,8 +250,8 @@
           <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Impressões</div>
           <div class="text-lg" id="camp-kpi-impr">—</div>
         </div>
-        <div class="border border-[color:var(--border)] rounded-lg p-3">
-          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Alcance</div>
+        <div class="border border-[color:var(--border)] rounded-lg p-3" title="Soma do alcance diário das campanhas no período. Inclui possível repetição entre dias (a mesma pessoa atingida em dois dias conta nas duas).">
+          <div class="text-[10px] text-[color:var(--muted)] uppercase tracking-wider font-semibold">Alcance acumulado</div>
           <div class="text-lg" id="camp-kpi-reach">—</div>
         </div>
         <div class="border border-[color:var(--border)] rounded-lg p-3">

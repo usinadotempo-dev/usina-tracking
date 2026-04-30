@@ -35,6 +35,11 @@ export async function onRequestGet(context) {
 
   try {
     // Per-campaign aggregates over the window.
+    // `reach` is summed across days. Meta returns a per-day deduplicated
+    // value, so summing days inflates by inter-day overlap (same person
+    // counted in multiple days). True period-deduplicated reach would
+    // require a separate Meta API call per request — too expensive. The
+    // dashboard label calls this out as "alcance acumulado".
     const { results: rows } = await env.DB.prepare(`
       SELECT
         c.campaign_id,
@@ -42,7 +47,7 @@ export async function onRequestGet(context) {
         c.daily_budget_cents, c.lifetime_budget_cents,
         COALESCE(SUM(i.spend_cents), 0)        AS spend_cents,
         COALESCE(SUM(i.impressions), 0)         AS impressions,
-        COALESCE(MAX(i.reach), 0)               AS reach,
+        COALESCE(SUM(i.reach), 0)               AS reach,
         COALESCE(SUM(i.clicks), 0)              AS clicks,
         COALESCE(SUM(i.leads), 0)               AS leads,
         COALESCE(SUM(i.purchases), 0)           AS purchases,
@@ -99,11 +104,14 @@ export async function onRequestGet(context) {
       time_series: seriesByCampaign[c.campaign_id] || [],
     }));
 
-    // Workspace-level totals = sum across campaigns.
+    // Workspace-level totals = sum across campaigns. reach is summed too
+    // (campaign-level reach is already a within-campaign daily sum, so
+    // workspace.reach is the gross "people-day touches" across all paid
+    // campaigns in the window — useful for trend/scale, not unique users).
     const totals = campaigns.reduce((acc, c) => {
       acc.spend_cents          += c.totals.spend_cents || 0;
       acc.impressions          += c.totals.impressions || 0;
-      acc.reach                 = Math.max(acc.reach, c.totals.reach || 0);
+      acc.reach                += c.totals.reach || 0;
       acc.clicks               += c.totals.clicks || 0;
       acc.leads                += c.totals.leads || 0;
       acc.purchases            += c.totals.purchases || 0;
