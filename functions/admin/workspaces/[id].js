@@ -18,7 +18,17 @@ const CONFIG_FIELDS = [
   'meta_ads_access_token', 'meta_ads_account_id',
   'meta_ig_account_id', 'meta_page_id',
   'business_type', 'dash_modules',
+  // Kommo CRM
+  'kommo_subdomain', 'kommo_integration_id', 'kommo_secret_key', 'kommo_long_lived_token',
+  'kommo_pipeline_id', 'kommo_stage_id', 'kommo_responsible_user_id',
+  'kommo_tags', 'kommo_won_stage_id',
 ];
+
+// Campos que são INTEIROS (caem como TEXT por default no PATCH genérico — aqui
+// detectamos e fazemos o cast pra que SQLite armazene corretamente como INTEGER).
+const INT_CONFIG_FIELDS = new Set([
+  'kommo_pipeline_id', 'kommo_stage_id', 'kommo_responsible_user_id', 'kommo_won_stage_id',
+]);
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
@@ -96,12 +106,32 @@ export async function onRequestPatch(context) {
   // Workspace config fields (any subset)
   const cfg = body.config && typeof body.config === 'object' ? body.config : null;
   if (cfg) {
+    // Auto-gera webhook_slug se o admin acabou de habilitar Kommo (token presente)
+    // e a coluna ainda está vazia. Slug é UUID v4 — fica numa URL secreta tipo
+    // /webhook/kommo/<slug> que a Kommo precisa cadastrar pra entregar webhooks.
+    if (cfg.kommo_long_lived_token) {
+      const existingSlug = await context.env.DB.prepare(
+        'SELECT kommo_webhook_slug FROM workspace_config WHERE workspace_id = ?'
+      ).bind(id).first();
+      if (!existingSlug?.kommo_webhook_slug) {
+        cfg.kommo_webhook_slug = crypto.randomUUID();
+      }
+    }
+
     const cols = [];
     const vals = [];
-    for (const f of CONFIG_FIELDS) {
+    const allowed = new Set([...CONFIG_FIELDS, 'kommo_webhook_slug']); // slug entra via auto-gen, não via input
+    for (const f of allowed) {
       if (cfg[f] !== undefined) {
         cols.push(f);
-        vals.push(cfg[f] === null || cfg[f] === '' ? null : String(cfg[f]));
+        if (cfg[f] === null || cfg[f] === '') {
+          vals.push(null);
+        } else if (INT_CONFIG_FIELDS.has(f)) {
+          const n = parseInt(cfg[f], 10);
+          vals.push(Number.isNaN(n) ? null : n);
+        } else {
+          vals.push(String(cfg[f]));
+        }
       }
     }
     if (cols.length) {

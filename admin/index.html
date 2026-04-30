@@ -837,8 +837,11 @@ async function boot() {
     state.user = data.user;
     state.workspaces = data.workspaces || [];
 
+    // Tenant_viewer não acessa o admin — redireciona pro dashboard.
+    // Mesmo padrão de roteamento da raiz: a URL canônica é única, e o role
+    // do usuário define onde ele cai.
     if (state.user.role !== 'usina_admin') {
-      showRestrictedScreen();
+      location.replace('/dash/');
       return;
     }
     showAppScreen();

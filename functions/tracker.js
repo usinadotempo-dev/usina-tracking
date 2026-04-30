@@ -1,5 +1,6 @@
 import { resolveHost } from './_lib/workspace.js';
 import { loadWorkspaceConfig } from './_lib/workspace-config.js';
+import { createKommoLead } from './_lib/kommo.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -167,6 +168,46 @@ export async function onRequestPost(context) {
       ga4ResponseBody = `Fetch error: ${results[1].reason?.message || 'unknown'}`;
     }
 
+    // --- Kommo: cria Contact + Lead na CRM (Fase 1 da integração).
+    // Só dispara para event_name='Lead' E quando o workspace tem o token
+    // configurado. Roda em paralelo conceitual, mas SEQUENCIAL em relação
+    // a Meta/GA4 — fica fora do Promise.allSettled porque a chamada Kommo
+    // já é interna em sequência (cria Contact, depois Lead) e não vale a
+    // pena complicar.
+    let kommoStatusCode = 0, kommoResponseOk = 0, kommoResponseBody = '', kommoPayloadSent = null;
+    let kommoLeadId = null, kommoContactId = null, sentToKommo = 0;
+    const isLeadEvent = (body.event_name || '').toLowerCase() === 'lead';
+    if (!isBot && isLeadEvent && cfg.kommo_long_lived_token && cfg.kommo_subdomain) {
+      sentToKommo = 1;
+      try {
+        const kommoRes = await createKommoLead(cfg, {
+          name: ((userData.fn || '') + ' ' + (userData.ln || '')).trim() || null,
+          firstName: userData.fn || null,
+          lastName:  userData.ln || null,
+          email:     userData.em || null,
+          phone:     userData.ph || null,
+          utms: {
+            utm_source:   sessionData.utm_source   || null,
+            utm_medium:   sessionData.utm_medium   || null,
+            utm_campaign: sessionData.utm_campaign || null,
+            utm_content:  sessionData.utm_content  || null,
+            utm_term:     sessionData.utm_term     || null,
+          },
+          source_url_path: (() => {
+            try { return new URL(body.event_source_url || '').pathname; } catch { return null; }
+          })(),
+        });
+        kommoStatusCode = kommoRes.status_code || 0;
+        kommoResponseOk = kommoRes.ok ? 1 : 0;
+        kommoResponseBody = kommoRes.skipped ? `skipped: ${kommoRes.reason}` : JSON.stringify(kommoRes.body || {}).slice(0, 4000);
+        kommoPayloadSent = kommoRes.payload_sent ? JSON.stringify(kommoRes.payload_sent).slice(0, 4000) : null;
+        kommoLeadId = kommoRes.lead_id || null;
+        kommoContactId = kommoRes.contact_id || null;
+      } catch (e) {
+        kommoResponseBody = `Fetch error: ${e.message}`;
+      }
+    }
+
     const rawEmail = userData.em || '';
 
     // --- Log to D1 (background) ---
@@ -189,9 +230,11 @@ export async function onRequestPost(context) {
                 is_bot, bot_reason, consent_status,
                 sent_to_meta, meta_status_code, meta_response_ok, meta_response_body, meta_payload_sent,
                 sent_to_ga4, ga4_status_code, ga4_response_ok, ga4_response_body, ga4_payload_sent,
+                sent_to_kommo, kommo_status_code, kommo_response_ok, kommo_response_body, kommo_payload_sent,
+                kommo_lead_id, kommo_contact_id,
                 has_email, has_phone, has_name,
                 raw_email
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
               sessionId, workspaceId, body.event_name, body.event_id, body.event_time,
               browserInfo.browser, browserInfo.version, browserInfo.os, browserInfo.isMobile ? 1 : 0,
@@ -200,6 +243,8 @@ export async function onRequestPost(context) {
               isBot ? 1 : 0, botReason, body.consent_status || 'unknown',
               isBot ? 0 : 1, metaStatusCode, metaResponseOk, metaResponseBody, metaPayloadSent ?? null,
               isBot ? 0 : 1, ga4StatusCode, ga4ResponseOk, ga4ResponseBody, ga4PayloadSent ?? null,
+              sentToKommo, kommoStatusCode, kommoResponseOk, kommoResponseBody, kommoPayloadSent,
+              kommoLeadId, kommoContactId,
               hashedEm ? 1 : 0, hashedPh ? 1 : 0, (hashedFn || hashedLn) ? 1 : 0,
               rawEmail
             ).run();

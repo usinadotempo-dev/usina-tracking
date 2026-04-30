@@ -1,13 +1,13 @@
 // Resolves the request's tenant + workspace from the Host header.
 //
-// Three host shapes:
-//   1) admin.tracking.usinadotempo.com.br   → kind="admin"      (no tenant, no workspace)
-//   2) <slug>.tracking.usinadotempo.com.br  → kind="tenant"     (tenant resolved by slug; workspace null until user picks one)
-//      OR kind="workspace" if <slug> doesn't match a tenant but matches a
-//      workspace_domains entry — this lets multiple workspaces of the same
-//      tenant get their own subdomain (e.g. escola.tracking... vs faculdade.tracking...).
-//   3) <any other host>                     → kind="workspace"  (custom landing-page domain → workspace_domains lookup)
-//   *) usina-tracking.pages.dev / localhost → kind="dev"        (treat as admin host for bootstrap/dev)
+// Host shapes:
+//   1) tracking.usinadotempo.com.br         → kind="admin"      (URL ÚNICA da plataforma — login + admin + dash)
+//   2) admin.tracking.usinadotempo.com.br   → kind="admin"      (subdomínio legado, mesmo comportamento)
+//   3) <slug>.tracking.usinadotempo.com.br  → kind="tenant"     (tenant resolvido por slug; workspace null até o usuário escolher)
+//      OR kind="workspace" se <slug> não bate com tenant mas bate com workspace_domains
+//      (subdomínios por workspace, ex: escola.tracking... vs faculdade.tracking...)
+//   4) <any other host>                     → kind="workspace"  (domínio próprio de cliente apontando para uma LP)
+//   *) usina-tracking.pages.dev / localhost → kind="dev"        (mesmo comportamento de admin host pra dev)
 //
 // Cached per-request via context.data.workspace to avoid re-querying D1.
 
@@ -28,7 +28,9 @@ async function resolveHostInner(host, env) {
   if (!host) return { kind: 'unknown', host: '', tenant: null, workspace: null };
 
   // 1. Admin platform host — highest priority, never overrideable.
-  if (host === ADMIN_HOST) {
+  // Aceita tanto a URL canônica (tracking.usinadotempo.com.br) quanto o
+  // subdomínio admin.tracking... (legado, mesmo comportamento).
+  if (host === ADMIN_HOST || host === PLATFORM_ROOT) {
     return { kind: 'admin', host, tenant: null, workspace: null };
   }
 
@@ -82,5 +84,5 @@ async function resolveHostInner(host, env) {
 
 export function isPlatformHost(host) {
   const h = (host || '').split(':')[0].toLowerCase();
-  return h === ADMIN_HOST || h.endsWith(`.${PLATFORM_ROOT}`) || DEV_HOSTS.has(h) || h.endsWith('.usina-tracking.pages.dev');
+  return h === ADMIN_HOST || h === PLATFORM_ROOT || h.endsWith(`.${PLATFORM_ROOT}`) || DEV_HOSTS.has(h) || h.endsWith('.usina-tracking.pages.dev');
 }

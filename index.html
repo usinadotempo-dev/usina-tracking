@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Usina Tracking</title>
+<meta name="description" content="Plataforma de tracking da Usina do Tempo.">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<meta name="robots" content="noindex, nofollow">
+<style>
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #faf9f7;
+    color: #293556;
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+  }
+  .splash { text-align: center; }
+  .splash img { height: 44px; opacity: 0.9; margin-bottom: 22px; }
+  .dots { display: inline-flex; gap: 8px; }
+  .dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .dots span:nth-child(1) { background: #dc4a30; }
+  .dots span:nth-child(2) { background: #f5a82a; animation-delay: 120ms; }
+  .dots span:nth-child(3) { background: #7fc7b8; animation-delay: 240ms; }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.85); }
+    50%      { opacity: 1;   transform: scale(1); }
+  }
+</style>
+</head>
+<body>
+
+<div class="splash">
+  <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo">
+  <div class="dots"><span></span><span></span><span></span></div>
+</div>
+
+<script>
+(async function () {
+  // Roteador único da plataforma. /auth/me decide pra onde enviar:
+  //   - 401 (não logado)        → /admin/  (lá fica a tela de login)
+  //   - role = usina_admin      → /admin/
+  //   - role = tenant_viewer    → /dash/
+  // Esse arquivo é a entrada canônica em https://tracking.usinadotempo.com.br/
+  // — qualquer dos 3 cenários acima envolve apenas redirect.
+  try {
+    const r = await fetch('/auth/me', { credentials: 'include' });
+    if (r.status === 401) { location.replace('/admin/'); return; }
+    if (!r.ok) { location.replace('/admin/'); return; }
+    const me = await r.json();
+    if (me?.user?.role === 'usina_admin') {
+      location.replace('/admin/');
+    } else if (me?.user?.role === 'tenant_viewer') {
+      location.replace('/dash/');
+    } else {
+      location.replace('/admin/');
+    }
+  } catch (_) {
+    location.replace('/admin/');
+  }
+})();
+</script>
+
+</body>
+</html>
