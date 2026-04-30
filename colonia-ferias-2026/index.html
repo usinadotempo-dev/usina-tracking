@@ -1,0 +1,741 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Colônia de Férias 2026 · Brasil de Todas as Cores · Escola Normal Rural</title>
+  <meta name="description" content="Inscrições abertas para a Colônia de Férias da Escola Normal Rural em Limoeiro do Norte. Três semanas de julho, infantil ao 5º ano, aberto ao público. Garanta a blusa personalizada inscrevendo até 27/05.">
+  <meta property="og:title" content="Colônia de Férias 2026 · Brasil de Todas as Cores">
+  <meta property="og:description" content="Três semanas de muita energia em julho, na Escola Normal Rural. Inscreva seu filho e garanta a blusa personalizada até 27/05.">
+  <meta property="og:type" content="website">
+  <meta property="og:image" content="/colonia-ferias-2026/assets/hero.jpeg">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="preload" as="image" href="/colonia-ferias-2026/assets/hero.jpeg">
+
+  <!-- Fonts: Bricolage Grotesque (display, com peso pra título) + Inter (body) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!--
+    ========================================================================
+    Colônia de Férias 2026 — Escola Normal Rural · Brasil de Todas as Cores
+    Workspace: Escola Normal Rural · Tenant: Grupo Vidal
+    Pixel Meta: 1003382177612689
+    GA4: NÃO USADO nesta LP (apenas Meta Pixel + CAPI server-side).
+
+    Captura: nome, WhatsApp e e-mail do responsável (não da criança).
+    Stack /tracker hasheia PII e enriquece com fbp/fbc/UTMs antes de
+    enviar pra Meta CAPI server-side.
+    ========================================================================
+  -->
+
+  <!-- Meta Pixel -->
+  <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
+    document,'script','https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init', '1003382177612689');
+
+    // PageView dual-fire (pixel + CAPI) com event_id compartilhado pra dedup.
+    (function () {
+      var pvEventId = (crypto.randomUUID && crypto.randomUUID()) ||
+        (Date.now() + '-' + Math.random().toString(36).slice(2));
+      fbq('track', 'PageView', {}, { eventID: pvEventId });
+      fetch('/tracker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        keepalive: true,
+        body: JSON.stringify({
+          event_name: 'PageView',
+          event_id: pvEventId,
+          event_time: Math.floor(Date.now() / 1000),
+          event_source_url: window.location.href,
+          user_data: {},
+        }),
+      }).catch(function () {});
+    })();
+  </script>
+
+  <style>
+    *,*::before,*::after { box-sizing: border-box; }
+
+    /* Paleta inspirada na arte: amarelo Brasil + verde + azul + branco. */
+    :root {
+      --yellow:    #ffd400;
+      --yellow-2:  #ffc20a;
+      --green:     #009b3a;
+      --green-2:   #007a2e;
+      --blue:      #002776;
+      --red:       #d6332e;
+      --ink:       #1a1a1a;
+      --ink-soft:  #4a4a4a;
+      --line:      #e6e6e6;
+      --surface:   #ffffff;
+      --bg:        #fffbe6;
+      --shadow:    0 8px 24px rgba(0, 0, 0, 0.08);
+      --shadow-lg: 0 20px 60px rgba(0, 39, 118, 0.18);
+      --radius:    14px;
+    }
+
+    html, body { height: 100%; margin: 0; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .container { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+
+    /* ---------- Header ---------- */
+    .topbar {
+      background: var(--green);
+      color: #fff;
+      padding: 10px 0;
+      font-size: 13px;
+      letter-spacing: 0.02em;
+    }
+    .topbar .container { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .topbar strong { font-weight: 700; }
+    .topbar a { color: #fff; text-decoration: none; }
+
+    /* ---------- Hero ---------- */
+    .hero {
+      background: linear-gradient(180deg, var(--yellow) 0%, var(--yellow-2) 100%);
+      padding: 40px 0 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-image: radial-gradient(circle at 20% 80%, rgba(0,155,58,0.18) 0%, transparent 28%),
+                        radial-gradient(circle at 85% 20%, rgba(0,39,118,0.12) 0%, transparent 30%);
+      pointer-events: none;
+    }
+    .hero .container {
+      position: relative;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 48px;
+      align-items: center;
+    }
+
+    .hero h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800;
+      font-size: clamp(2.4rem, 5vw, 3.6rem);
+      line-height: 0.98;
+      letter-spacing: -0.02em;
+      margin: 0 0 14px;
+      color: var(--blue);
+    }
+    .hero h1 .rainbow {
+      display: inline-block;
+      background: linear-gradient(90deg, #d6332e, #ff8c00, #ffd400, #009b3a, #002776, #6b2c91);
+      -webkit-background-clip: text;
+              background-clip: text;
+      -webkit-text-fill-color: transparent;
+      color: transparent;
+    }
+    .hero .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--blue);
+      color: #fff;
+      padding: 6px 14px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 18px;
+    }
+    .hero .eyebrow::before {
+      content: ""; width: 8px; height: 8px; border-radius: 50%;
+      background: var(--yellow); box-shadow: 0 0 0 3px rgba(255,212,0,0.4);
+    }
+    .hero p.lead {
+      font-size: clamp(1rem, 1.6vw, 1.15rem);
+      color: var(--ink);
+      margin: 0 0 24px;
+      max-width: 32rem;
+    }
+    .hero .cta-row {
+      display: flex; gap: 12px; flex-wrap: wrap;
+    }
+    .hero .btn-primary,
+    .hero .btn-secondary {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 14px 24px;
+      border-radius: var(--radius);
+      font-weight: 700;
+      font-size: 1rem;
+      text-decoration: none;
+      transition: transform .12s ease, box-shadow .15s ease, filter .15s ease;
+      cursor: pointer;
+      border: 0;
+      font-family: inherit;
+    }
+    .hero .btn-primary {
+      background: var(--green);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(0, 155, 58, 0.32);
+    }
+    .hero .btn-primary:hover { filter: brightness(1.06); transform: translateY(-1px); }
+    .hero .btn-secondary {
+      background: #fff;
+      color: var(--blue);
+      border: 2px solid var(--blue);
+    }
+    .hero .btn-secondary:hover { background: var(--blue); color: #fff; }
+
+    .hero-art {
+      position: relative;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: var(--shadow-lg);
+      border: 4px solid #fff;
+      transform: rotate(-2deg);
+    }
+    .hero-art img { display: block; width: 100%; height: auto; }
+
+    /* ---------- Faixa de urgência ---------- */
+    .urgency {
+      background: var(--red);
+      color: #fff;
+      padding: 14px 0;
+      text-align: center;
+      font-weight: 600;
+      font-size: 0.95rem;
+      letter-spacing: 0.01em;
+    }
+    .urgency strong { font-weight: 800; }
+    .urgency svg { vertical-align: -3px; margin-right: 6px; }
+
+    /* ---------- Detalhes ---------- */
+    .details { padding: 56px 0; }
+    .details h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: clamp(1.75rem, 3vw, 2.25rem);
+      font-weight: 800;
+      letter-spacing: -0.015em;
+      text-align: center;
+      margin: 0 0 12px;
+      color: var(--blue);
+    }
+    .details .subtitle {
+      text-align: center;
+      color: var(--ink-soft);
+      max-width: 36rem;
+      margin: 0 auto 40px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .info-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      box-shadow: var(--shadow);
+      position: relative;
+      transition: transform .15s ease;
+    }
+    .info-card:hover { transform: translateY(-2px); }
+    .info-card .icon {
+      width: 44px; height: 44px;
+      display: inline-flex; align-items: center; justify-content: center;
+      border-radius: 12px;
+      margin-bottom: 14px;
+      color: #fff;
+    }
+    .info-card.c-green .icon  { background: var(--green); }
+    .info-card.c-blue  .icon  { background: var(--blue); }
+    .info-card.c-yellow .icon { background: var(--yellow-2); color: var(--blue); }
+    .info-card.c-red   .icon  { background: var(--red); }
+    .info-card h3 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin: 0 0 6px;
+      color: var(--ink);
+    }
+    .info-card p {
+      margin: 0;
+      color: var(--ink-soft);
+      font-size: 0.95rem;
+    }
+    .info-card strong { color: var(--ink); font-weight: 700; }
+
+    /* ---------- Semanas ---------- */
+    .weeks {
+      background: var(--blue);
+      color: #fff;
+      padding: 56px 0;
+    }
+    .weeks h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: clamp(1.75rem, 3vw, 2.25rem);
+      font-weight: 800;
+      letter-spacing: -0.015em;
+      text-align: center;
+      margin: 0 0 8px;
+    }
+    .weeks .subtitle { text-align: center; opacity: 0.85; margin: 0 0 36px; font-size: 0.95rem; }
+    .weeks .grid {
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    }
+    .week-card {
+      background: rgba(255,255,255,0.08);
+      border: 2px solid rgba(255,212,0,0.4);
+      border-radius: var(--radius);
+      padding: 24px 22px;
+      text-align: center;
+      backdrop-filter: blur(6px);
+    }
+    .week-card .num {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 3rem;
+      font-weight: 800;
+      line-height: 1;
+      color: var(--yellow);
+      letter-spacing: -0.02em;
+    }
+    .week-card .label {
+      font-size: 0.8rem;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      opacity: 0.85;
+      margin: 6px 0 12px;
+    }
+    .week-card .dates {
+      font-size: 1.15rem;
+      font-weight: 700;
+    }
+
+    /* ---------- Form ---------- */
+    .form-section {
+      padding: 64px 0 80px;
+      background: linear-gradient(180deg, var(--bg) 0%, #fff 100%);
+    }
+    .form-card {
+      max-width: 560px;
+      margin: 0 auto;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      border: 4px solid var(--yellow);
+    }
+    .form-card .form-head {
+      background: var(--green);
+      color: #fff;
+      padding: 28px 28px 22px;
+      text-align: center;
+    }
+    .form-card .form-head h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 800;
+      margin: 0 0 6px;
+      letter-spacing: -0.01em;
+    }
+    .form-card .form-head p {
+      margin: 0;
+      font-size: 0.95rem;
+      opacity: 0.92;
+    }
+    .form-body { padding: 28px; }
+    .form-body label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: var(--ink);
+      margin-bottom: 6px;
+      letter-spacing: 0.01em;
+    }
+    .form-body input {
+      width: 100%;
+      appearance: none;
+      border: 1.5px solid var(--line);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 1rem;
+      color: var(--ink);
+      background: #fafafa;
+      font-family: inherit;
+      transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+    }
+    .form-body input:focus {
+      outline: 0;
+      border-color: var(--green);
+      background: #fff;
+      box-shadow: 0 0 0 4px rgba(0,155,58,0.15);
+    }
+    .form-body input::placeholder { color: #a0a0a0; }
+    .form-body .row + .row { margin-top: 16px; }
+
+    .form-body button.btn-submit {
+      width: 100%;
+      margin-top: 22px;
+      padding: 16px 20px;
+      border: 0;
+      border-radius: 12px;
+      font-family: inherit;
+      font-weight: 800;
+      font-size: 1.05rem;
+      letter-spacing: 0.01em;
+      color: #fff;
+      background: linear-gradient(180deg, var(--green) 0%, var(--green-2) 100%);
+      cursor: pointer;
+      box-shadow: 0 6px 18px rgba(0,155,58,0.35);
+      transition: transform .08s ease, filter .15s ease;
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    }
+    .form-body button.btn-submit:hover { filter: brightness(1.05); transform: translateY(-1px); }
+    .form-body button.btn-submit:active { transform: translateY(1px); }
+    .form-body button.btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .form-body .fine {
+      margin: 14px 0 0;
+      font-size: 0.78rem;
+      color: var(--ink-soft);
+      text-align: center;
+    }
+    .form-body .error {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 12px;
+      background: #fff5f5;
+      border: 1px solid #fed7d7;
+      border-radius: 8px;
+      color: #c53030;
+      font-size: 0.875rem;
+    }
+    .form-body .error.is-on { display: block; }
+
+    .success {
+      display: none;
+      padding: 32px 28px;
+      text-align: center;
+    }
+    .success.is-on { display: block; }
+    .success .check {
+      width: 64px; height: 64px;
+      margin: 0 auto 18px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #fff;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .success h3 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 1.4rem;
+      margin: 0 0 8px;
+      color: var(--blue);
+    }
+    .success p {
+      margin: 0;
+      color: var(--ink-soft);
+    }
+
+    /* ---------- Footer ---------- */
+    footer.foot {
+      background: var(--ink);
+      color: #b0b0b0;
+      padding: 28px 0;
+      font-size: 0.875rem;
+      text-align: center;
+    }
+    footer.foot strong { color: #fff; }
+    footer.foot a { color: var(--yellow); text-decoration: none; }
+
+    /* ---------- Responsive ---------- */
+    @media (max-width: 800px) {
+      .hero { padding: 32px 0 24px; }
+      .hero .container { grid-template-columns: 1fr; gap: 28px; }
+      .hero-art { transform: none; max-width: 480px; margin: 0 auto; }
+      .topbar { font-size: 12px; }
+      .topbar .container { justify-content: center; text-align: center; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <div class="container">
+      <span><strong>Escola Normal Rural</strong> · Limoeiro do Norte/CE</span>
+      <span>📞 <a href="https://wa.me/5588997975408" target="_blank" rel="noopener">(88) 9 9797-5408</a></span>
+    </div>
+  </div>
+
+  <!-- Hero -->
+  <section class="hero">
+    <div class="container">
+      <div>
+        <span class="eyebrow">Inscrições abertas · Julho 2026</span>
+        <h1>Colônia de Férias <span class="rainbow">Brasil de Todas as Cores</span></h1>
+        <p class="lead">
+          Três semanas de muita energia, esporte e aprendizado para crianças do
+          infantil ao 5º ano do Ensino Fundamental. <strong>Aberto ao público</strong> —
+          não precisa ser aluno da escola.
+        </p>
+        <div class="cta-row">
+          <a href="#inscricao" class="btn-primary">
+            Inscrever meu filho
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </a>
+          <a href="#detalhes" class="btn-secondary">Ver detalhes</a>
+        </div>
+      </div>
+      <div class="hero-art">
+        <img src="/colonia-ferias-2026/assets/hero.jpeg" alt="Colônia de Férias Brasil de Todas as Cores · Escola Normal Rural" loading="eager" fetchpriority="high">
+      </div>
+    </div>
+  </section>
+
+  <!-- Faixa de urgência -->
+  <div class="urgency">
+    <div class="container">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/>
+        <path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+      Inscrições até <strong>27/05/2026</strong> ganham <strong>blusa personalizada do evento</strong>
+    </div>
+  </div>
+
+  <!-- Detalhes -->
+  <section class="details" id="detalhes">
+    <div class="container">
+      <h2>O que esperar</h2>
+      <p class="subtitle">Tudo o que sua família precisa saber antes de garantir a vaga.</p>
+
+      <div class="grid">
+        <div class="info-card c-green">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M17 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M9 7a4 4 0 1 0 0 8 4 4 0 0 0 0-8zm10 1v6m-3-3h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Faixa etária</h3>
+          <p>Crianças do <strong>infantil 1 ao 5º ano</strong> do Ensino Fundamental.</p>
+        </div>
+
+        <div class="info-card c-blue">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><path d="M12 6v6l4 2" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Horário</h3>
+          <p>Manhã, das <strong>07h30 às 11h30</strong>.</p>
+        </div>
+
+        <div class="info-card c-yellow">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M3 7l9-4 9 4v10l-9 4-9-4V7z M3 7l9 4 9-4 M12 11v10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <h3>Quem pode</h3>
+          <p><strong>Aberto ao público</strong>. Sua criança não precisa ser aluna da Escola Normal.</p>
+        </div>
+
+        <div class="info-card c-red">
+          <div class="icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M20 7H4v13h16V7z M16 3v4 M8 3v4 M4 11h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Período</h3>
+          <p>Três semanas em julho. Você escolhe quantas semanas seu filho vai participar.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Semanas -->
+  <section class="weeks">
+    <div class="container">
+      <h2>As três semanas</h2>
+      <p class="subtitle">Você pode inscrever para uma, duas ou as três semanas inteiras.</p>
+      <div class="grid">
+        <div class="week-card">
+          <div class="num">1ª</div>
+          <div class="label">Primeira semana</div>
+          <div class="dates">29/06 a 03/07</div>
+        </div>
+        <div class="week-card">
+          <div class="num">2ª</div>
+          <div class="label">Segunda semana</div>
+          <div class="dates">06/07 a 10/07</div>
+        </div>
+        <div class="week-card">
+          <div class="num">3ª</div>
+          <div class="label">Terceira semana</div>
+          <div class="dates">13/07 a 17/07</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Form -->
+  <section class="form-section" id="inscricao">
+    <div class="container">
+      <div class="form-card">
+        <div class="form-head">
+          <h2>Garanta a vaga do seu filho</h2>
+          <p>Em seguida nossa equipe entra em contato pelo WhatsApp pra confirmar tudo.</p>
+        </div>
+
+        <div class="form-body" id="form-body-wrap">
+          <form id="signup" novalidate>
+            <div class="row">
+              <label for="name">Seu nome completo</label>
+              <input id="name" name="name" type="text" required autocomplete="name" placeholder="Como devemos te chamar?">
+            </div>
+            <div class="row">
+              <label for="phone">WhatsApp com DDD</label>
+              <input id="phone" name="phone" type="tel" inputmode="tel" required autocomplete="tel" placeholder="(88) 9 9999-9999">
+            </div>
+            <div class="row">
+              <label for="email">Seu melhor e-mail</label>
+              <input id="email" name="email" type="email" inputmode="email" required autocomplete="email" placeholder="voce@email.com">
+            </div>
+
+            <button type="submit" class="btn-submit" id="submit-btn">
+              Quero inscrever meu filho
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M3 8h10M9 4l4 4-4 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <p class="fine">Seus dados são usados apenas para entrar em contato sobre a colônia.</p>
+            <p class="error" id="form-error" role="alert"></p>
+          </form>
+
+          <div class="success" id="success" role="status" aria-live="polite">
+            <div class="check">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M5 12l5 5L20 7" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <h3>Inscrição recebida!</h3>
+            <p>Em até 1 dia útil entraremos em contato pelo seu WhatsApp pra confirmar a vaga e tirar todas as suas dúvidas.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="foot">
+    <div class="container">
+      <strong>Escola Normal Rural</strong> · Colônia de Férias 2026 · Brasil de Todas as Cores
+      <br>
+      Dúvidas? Fale com a gente: <a href="https://wa.me/5588997975408" target="_blank" rel="noopener">(88) 9 9797-5408</a>
+    </div>
+  </footer>
+
+  <script>
+  (function () {
+    const form = document.getElementById('signup');
+    const success = document.getElementById('success');
+    const errorEl = document.getElementById('form-error');
+    const submitBtn = document.getElementById('submit-btn');
+    if (!form) return;
+
+    // Máscara simples de WhatsApp BR. Aceita digitar livre, mas formata pro
+    // padrão (XX) X XXXX-XXXX em tempo real. Ao enviar, mandamos só os
+    // dígitos pra Meta (a stack adiciona country code 55 automaticamente
+    // se o número parecer local; ver DEFAULT_COUNTRY_CODE no workspace_config).
+    const phoneInput = document.getElementById('phone');
+    phoneInput.addEventListener('input', () => {
+      let v = phoneInput.value.replace(/\D/g, '').slice(0, 11);
+      if (v.length > 10)      v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{0,4}).*/, '($1) $2 $3-$4');
+      else if (v.length > 6)  v = v.replace(/^(\d{2})(\d{4,5})(\d{0,4}).*/, '($1) $2-$3');
+      else if (v.length > 2)  v = v.replace(/^(\d{2})(\d*).*/, '($1) $2');
+      else if (v.length > 0)  v = v.replace(/^(\d*)/, '($1');
+      phoneInput.value = v;
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      errorEl.classList.remove('is-on');
+      errorEl.textContent = '';
+
+      const name  = (form.elements.name.value  || '').trim();
+      const phone = (form.elements.phone.value || '').trim();
+      const email = (form.elements.email.value || '').trim();
+
+      if (!name || name.length < 3) { showError('Por favor, informe seu nome completo.'); form.elements.name.focus(); return; }
+      if (!phone || phone.replace(/\D/g, '').length < 10) { showError('Verifique o WhatsApp informado.'); phoneInput.focus(); return; }
+      if (!email || !form.elements.email.checkValidity()) { showError('Verifique o e-mail informado.'); form.elements.email.focus(); return; }
+
+      // Separa primeiro nome e sobrenome (pra Meta Advanced Matching).
+      const parts = name.split(/\s+/);
+      const firstName = parts[0] || '';
+      const lastName  = parts.slice(1).join(' ') || '';
+
+      // Telefone: só dígitos. Server normaliza com DEFAULT_COUNTRY_CODE.
+      const phoneDigits = phone.replace(/\D/g, '');
+
+      submitBtn.disabled = true;
+      const originalLabel = submitBtn.innerHTML;
+      submitBtn.textContent = 'Enviando…';
+
+      // event_id compartilhado entre o pixel (browser) e o CAPI (server) pra dedup.
+      const eventId = crypto.randomUUID();
+      const eventTime = Math.floor(Date.now() / 1000);
+
+      // Browser-side fire (Meta deduplica pelo event_id).
+      try {
+        if (window.fbq) {
+          fbq('track', 'Lead', {}, { eventID: eventId });
+        }
+      } catch (_) {}
+
+      // Server-side fire — autoritativo. /tracker hasheia o PII antes de mandar.
+      try {
+        const response = await fetch('/tracker', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event_name: 'Lead',
+            event_id: eventId,
+            event_time: eventTime,
+            event_source_url: window.location.href,
+            user_data: {
+              em: email,
+              ph: phoneDigits,
+              fn: firstName,
+              ln: lastName,
+            },
+          }),
+        });
+
+        if (!response.ok) {
+          const errBody = await response.json().catch(() => ({}));
+          throw new Error(errBody.error || `server returned ${response.status}`);
+        }
+
+        // Sucesso: troca form pelo bloco de confirmação.
+        form.style.display = 'none';
+        success.classList.add('is-on');
+      } catch (err) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = originalLabel;
+        showError('Não conseguimos enviar agora. Tente novamente em alguns segundos.');
+        console.error('Lead submit failed:', err);
+      }
+    });
+
+    function showError(msg) {
+      errorEl.textContent = msg;
+      errorEl.classList.add('is-on');
+    }
+  })();
+  </script>
+</body>
+</html>
