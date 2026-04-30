@@ -2211,7 +2211,21 @@ async function loadPlatform() {
         <div class="space-y-2 text-[13px]">
           <div class="flex items-center gap-2"><code class="mono text-[12px] bg-[#f3f4f8] px-2 py-1 rounded">POST /api/sync/meta-marketing</code><span class="text-brand-gray">campanhas + ad sets + ads + insights</span></div>
         </div>
-        <p class="help mt-3">Ambos os endpoints exigem header <code class="mono">x-sync-secret: $SYNC_SECRET</code>.</p>
+        <p class="help mt-3">Os endpoints exigem header <code class="mono">x-sync-secret: $SYNC_SECRET</code>. Pra disparar agora sem esperar o cron, use o botão abaixo.</p>
+
+        <div class="mt-5 pt-5 border-t border-brand-border">
+          <div class="flex items-start justify-between gap-4 flex-wrap">
+            <div>
+              <h4 class="display text-[14px] text-brand-navy">Sincronizar Meta agora</h4>
+              <p class="text-[13px] text-brand-gray mt-0.5">Dispara <code class="mono text-[12px]">/api/sync/meta-marketing</code> em todos os workspaces. Útil pra refletir mudanças recentes no dash sem aguardar o cron.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" id="pf-sync-now" style="white-space: nowrap;">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:inline-block;vertical-align:-2px;margin-right:6px"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+              Sincronizar agora
+            </button>
+          </div>
+          <div id="pf-sync-result" class="mt-3 text-[13px] hidden"></div>
+        </div>
       </div>
     </div>`;
 
@@ -2230,6 +2244,37 @@ async function loadPlatform() {
   } catch (e) {
     toast('Falha ao carregar config: ' + e.message, 'error');
   }
+
+  // Sincronizar Meta agora — fan-out em todos workspaces.
+  $('#pf-sync-now')?.addEventListener('click', async () => {
+    const btn = $('#pf-sync-now');
+    const out = $('#pf-sync-result');
+    btn.disabled = true;
+    const orig = btn.innerHTML;
+    btn.innerHTML = 'Sincronizando…';
+    out.classList.remove('hidden');
+    out.innerHTML = '<span class="text-brand-gray">Chamando a Meta Marketing API… isso costuma levar 10-30s.</span>';
+    try {
+      const res = await api('POST', '/admin/sync/meta-marketing', {});
+      const t = res.totals || {};
+      const okBadge = `<span style="color:#2e7c6c">✓ ${t.ok || 0} ok</span>`;
+      const failBadge = (t.failed || 0) > 0 ? `<span style="color:var(--brand-coral)">${t.failed} com erro</span>` : '';
+      out.innerHTML = `
+        <div class="text-brand-navy">${okBadge} ${failBadge}</div>
+        <div class="text-brand-gray mt-1">
+          ${t.workspaces || 0} workspaces ·
+          ${t.campaigns_upserted || 0} campanhas ·
+          ${t.campaign_insights || 0} insights de campanha ·
+          ${t.ad_insights || 0} insights de ads
+        </div>`;
+      toast('Sincronização concluída.', 'success');
+    } catch (err) {
+      out.innerHTML = `<span style="color:var(--brand-coral)">Erro: ${escapeHtml(err.message)}</span>`;
+      toast(err.message, 'error');
+    }
+    btn.disabled = false;
+    btn.innerHTML = orig;
+  });
 
   // Status check
   $('#pf-check').addEventListener('click', async () => {
