@@ -1451,6 +1451,35 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
         { label: 'API Secret',      key: 'ga4_api_secret',        value: cfg.ga4_api_secret,       mono: true, secret: true },
       ])}
 
+      ${configCard('Kommo CRM — credenciais', 'Subdomínio e token da integração Kommo. Quando preenchidos, todo Lead capturado pelas LPs deste workspace cria Contact + Lead automaticamente na Kommo.', [
+        { label: 'Subdomínio Kommo', key: 'kommo_subdomain',        value: cfg.kommo_subdomain,           mono: true, placeholder: 'escolanormal', help: 'A parte antes de .kommo.com (ex: escolanormal.kommo.com → escolanormal).' },
+        { label: 'ID de integração', key: 'kommo_integration_id',   value: cfg.kommo_integration_id,      mono: true, placeholder: 'd1f2…', secret: true },
+        { label: 'Chave secreta',    key: 'kommo_secret_key',       value: cfg.kommo_secret_key,          mono: true, secret: true },
+        { label: 'Token de longa duração', key: 'kommo_long_lived_token', value: cfg.kommo_long_lived_token, mono: true, secret: true, full: true, help: 'O token usado em runtime — gerado em Configurações → Integrações → Sua integração → Chaves e escopos.' },
+      ])}
+
+      ${configCard('Kommo CRM — mapeamento', 'Em qual pipeline + etapa o lead deve cair, quem é responsável e quais tags marcar. Os IDs aparecem na URL da Kommo quando você abre o pipeline (números após /leads/pipeline/).', [
+        { label: 'Pipeline ID',          key: 'kommo_pipeline_id',          value: cfg.kommo_pipeline_id,          mono: true, placeholder: '1234567', help: 'ID numérico do pipeline.' },
+        { label: 'Stage ID (etapa inicial)', key: 'kommo_stage_id',         value: cfg.kommo_stage_id,             mono: true, placeholder: '12345678', help: 'ID da etapa onde leads novos entram.' },
+        { label: 'Responsável (User ID, opcional)', key: 'kommo_responsible_user_id', value: cfg.kommo_responsible_user_id, mono: true, placeholder: '1234567', help: 'Em branco = distribuído pela regra do pipeline.' },
+        { label: 'Tags (separadas por vírgula)', key: 'kommo_tags',          value: cfg.kommo_tags,                 mono: false, placeholder: 'colonia-ferias,lp-tracker', full: true, help: 'Marcadas em todo lead vindo das LPs. UTMs viram tags adicionais (utm_source:facebook, etc).' },
+        { label: 'Stage de "Lead Ganho" (Fase 2)', key: 'kommo_won_stage_id', value: cfg.kommo_won_stage_id,         mono: true, placeholder: '142', help: 'Quando lead chega nesta etapa, dispara Purchase no Meta CAPI. Padrão Kommo é 142.' },
+      ])}
+
+      ${cfg.kommo_webhook_slug ? `
+      <div class="card p-6 mb-5 bg-[#fbfcfe]">
+        <h3 class="display text-[15px] text-brand-navy mb-1.5">Webhook da Kommo</h3>
+        <p class="text-[13px] text-brand-gray mb-3">Cadastre esta URL na Kommo (Configurações → Integrações → Webhooks) para que mudanças de etapa do lead disparem eventos Purchase pro Meta CAPI.</p>
+        <div class="flex gap-2 items-center">
+          <input class="input mono flex-1" readonly value="${escapeHtml(`https://tracking.usinadotempo.com.br/webhook/kommo/${cfg.kommo_webhook_slug}`)}">
+          <button type="button" class="btn btn-secondary" onclick="navigator.clipboard.writeText('https://tracking.usinadotempo.com.br/webhook/kommo/${cfg.kommo_webhook_slug}'); toast('URL copiada', 'success');">Copiar</button>
+        </div>
+        <p class="help mt-2">Eventos a habilitar na Kommo: <span class="mono">leads → status changed</span>.</p>
+      </div>` : `
+      <div class="card p-6 mb-5 bg-[#fbfcfe] border-dashed">
+        <p class="text-[13px] text-brand-gray">Salve um <span class="mono">Token de longa duração</span> acima para gerar a URL de webhook automaticamente.</p>
+      </div>`}
+
       ${configCard('Google Ads', 'OAuth + Customer ID para upload server-side de conversions. Os 6 campos são obrigatórios juntos.', [
         { label: 'Client ID',          key: 'google_ads_client_id',          value: cfg.google_ads_client_id,          mono: true, full: true },
         { label: 'Client Secret',      key: 'google_ads_client_secret',      value: cfg.google_ads_client_secret,      mono: true, secret: true },
