@@ -35,6 +35,7 @@ export async function onRequestGet(context) {
       SELECT
         a.ad_id,
         a.ad_set_id,
+        s.name                           AS ad_set_name,
         a.name,
         a.status,
         a.effective_status,
@@ -44,15 +45,19 @@ export async function onRequestGet(context) {
         COALESCE(SUM(i.impressions), 0)  AS impressions,
         COALESCE(SUM(i.reach), 0)        AS reach,
         COALESCE(SUM(i.clicks), 0)       AS clicks,
+        COALESCE(SUM(i.leads), 0)        AS leads,
         MAX(i.currency)                  AS currency
       FROM meta_ads a
+      LEFT JOIN meta_ad_sets s
+        ON s.workspace_id = a.workspace_id
+       AND s.ad_set_id    = a.ad_set_id
       LEFT JOIN meta_ad_insights i
         ON i.workspace_id = a.workspace_id
        AND i.ad_id        = a.ad_id
        AND i.date >= ?
        AND i.date <= ?
       WHERE a.workspace_id = ? AND a.campaign_id = ?
-      GROUP BY a.ad_id, a.ad_set_id, a.name, a.status, a.effective_status,
+      GROUP BY a.ad_id, a.ad_set_id, s.name, a.name, a.status, a.effective_status,
                a.creative_thumbnail_url, a.creative_name
       HAVING (COALESCE(SUM(i.spend_cents), 0) > 0
            OR COALESCE(SUM(i.impressions), 0) > 0
@@ -63,6 +68,7 @@ export async function onRequestGet(context) {
     const ads = (rows || []).map((a) => ({
       ad_id: a.ad_id,
       ad_set_id: a.ad_set_id,
+      ad_set_name: a.ad_set_name,
       name: a.name,
       status: a.status,
       effective_status: a.effective_status,
@@ -74,9 +80,11 @@ export async function onRequestGet(context) {
         impressions: a.impressions,
         reach: a.reach,
         clicks: a.clicks,
+        leads: a.leads,
         ctr: a.impressions > 0 ? (a.clicks / a.impressions) * 100 : 0,
         cpm_cents: a.impressions > 0 ? Math.round((a.spend_cents / a.impressions) * 1000) : 0,
         cpc_cents: a.clicks > 0 ? Math.round(a.spend_cents / a.clicks) : 0,
+        cpl_cents: a.leads > 0 ? Math.round(a.spend_cents / a.leads) : null,
       },
     }));
 

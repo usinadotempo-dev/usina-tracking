@@ -113,8 +113,10 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     adSets = await upsertAdSets(env.DB, wsId, adSetsRaw);
 
     // --- 3. Ads (with creative) ---
+    // Pedimos thumb 400x400 via field expansion: o default da Meta é ~64x64,
+    // que fica borrado quando renderizado nos cards do dash (250x140+).
     const adsRaw = await meta.fetchAll(
-      `/act_${accountId}/ads?fields=id,adset_id,campaign_id,name,status,effective_status,creative{id,name,thumbnail_url}&limit=500`
+      `/act_${accountId}/ads?fields=id,adset_id,campaign_id,name,status,effective_status,creative{id,name,thumbnail_url.width(400).height(400)}&limit=500`
     );
     ads = await upsertAds(env.DB, wsId, adsRaw);
 
@@ -128,9 +130,10 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     campaignInsights = await upsertCampaignInsights(env.DB, wsId, campInsRaw);
 
     // --- 5. Ad-level daily insights ---
+    // Inclui `actions` para extrair leads por anuncio (CPL no drill-down).
     const adInsRaw = await meta.fetchAll(
       `/act_${accountId}/insights?` +
-      `fields=ad_id,adset_id,campaign_id,spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,account_currency` +
+      `fields=ad_id,adset_id,campaign_id,spend,impressions,reach,clicks,ctr,cpm,cpc,frequency,actions,account_currency` +
       `&time_range=${encodeURIComponent(JSON.stringify({ since: dateFrom, until: dateTo }))}` +
       `&time_increment=1&level=ad&limit=500`
     );
@@ -356,8 +359,8 @@ async function upsertAdInsights(db, workspaceId, rows) {
   const stmt = db.prepare(`
     INSERT INTO meta_ad_insights
       (workspace_id, ad_id, campaign_id, ad_set_id, date,
-       spend_cents, impressions, reach, clicks, ctr, cpm_cents, cpc_cents, frequency, currency, synced_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       spend_cents, impressions, reach, clicks, ctr, cpm_cents, cpc_cents, frequency, leads, currency, synced_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(workspace_id, ad_id, date) DO UPDATE SET
       campaign_id = excluded.campaign_id,
       ad_set_id = excluded.ad_set_id,
@@ -369,16 +372,21 @@ async function upsertAdInsights(db, workspaceId, rows) {
       cpm_cents = excluded.cpm_cents,
       cpc_cents = excluded.cpc_cents,
       frequency = excluded.frequency,
+      leads = excluded.leads,
       currency = excluded.currency,
       synced_at = excluded.synced_at
   `);
-  const batch = rows.map((r) => stmt.bind(
-    workspaceId, r.ad_id || '', r.campaign_id || '', r.adset_id || '', r.date_start,
-    toCents(r.spend), toInt(r.impressions), toInt(r.reach), toInt(r.clicks),
-    toFloat(r.ctr), toCents(r.cpm), toCents(r.cpc), toFloat(r.frequency),
-    r.account_currency || null,
-    now,
-  ));
+  const batch = rows.map((r) => {
+    const leads = pickAction(r.actions, ['lead', 'onsite_conversion.lead_grouped', 'offsite_conversion.fb_pixel_lead']);
+    return stmt.bind(
+      workspaceId, r.ad_id || '', r.campaign_id || '', r.adset_id || '', r.date_start,
+      toCents(r.spend), toInt(r.impressions), toInt(r.reach), toInt(r.clicks),
+      toFloat(r.ctr), toCents(r.cpm), toCents(r.cpc), toFloat(r.frequency),
+      leads != null ? Math.round(leads) : null,
+      r.account_currency || null,
+      now,
+    );
+  });
   await db.batch(batch);
   return rows.length;
 }
