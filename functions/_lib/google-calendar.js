@@ -56,12 +56,18 @@ function b64urlStr(str) {
 }
 
 function pemToArrayBuffer(pem) {
-  const clean = pem
-    .replace(/\\n/g, '\n')
-    .replace(/-----BEGIN [^-]+-----/, '')
-    .replace(/-----END [^-]+-----/, '')
-    .replace(/\s+/g, '');
-  const bin = atob(clean);
+  let s = String(pem == null ? '' : pem).trim();
+  // Aspas externas que vieram coladas junto do valor JSON.
+  if (s.length > 1 && ((s[0] === '"' && s[s.length - 1] === '"') ||
+                       (s[0] === "'" && s[s.length - 1] === "'"))) {
+    s = s.slice(1, -1);
+  }
+  s = s
+    .replace(/\\r/g, '')             // CR escapado (\r literal)
+    .replace(/\\n/g, '\n')           // LF escapado (\n literal) -> newline real
+    .replace(/-----[^-]+-----/g, '') // remove cabeçalhos BEGIN/END (qualquer label)
+    .replace(/[^A-Za-z0-9+/=]/g, ''); // só sobra base64 (mata newline real, espaço, aspas)
+  const bin = atob(s);
   const buf = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i);
   return buf.buffer;
