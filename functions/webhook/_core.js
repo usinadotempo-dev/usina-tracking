@@ -37,10 +37,13 @@
 
 import PRODUCTS_CONFIG from '../../config/products.js';
 import { loadWorkspaceConfig } from '../_lib/workspace-config.js';
+import { resolveGoogleAdsCreds } from '../_lib/google-ads-creds.js';
 
 // Module-scope OAuth2 access token cache for Google Ads API.
-// Per-workspace because each workspace has its own client/secret/refresh token.
-// Map<workspaceId, { token, expiresAt }>
+// Keyed by credential IDENTITY (client_id|login_customer_id|refresh_token),
+// not by workspace — no modelo multi-tenant a credencial-gerente da MCC é
+// compartilhada entre vários workspaces, então 1 token serve todos eles.
+// Map<credKey, { token, expiresAt }>
 const googleAdsTokenCache = new Map();
 
 // -----------------------------------------------------------------------------
@@ -154,7 +157,7 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
   const [metaResult, ga4Result, googleAdsResult] = await Promise.allSettled([
     sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }),
     sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }),
-    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId }),
+    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId, env }),
   ]);
 
   // Parse Meta response
@@ -567,9 +570,11 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
 // -----------------------------------------------------------------------------
 // Pinning v21 in the URL: Google Ads SDKs (google-ads-api, google-ads-node) lag
 // the REST API and break with "API version not found" — call REST directly.
-async function getGoogleAdsAccessToken(cfg, workspaceId) {
+async function getGoogleAdsAccessToken(cfg) {
   const now = Math.floor(Date.now() / 1000);
-  const cacheKey = workspaceId || '_';
+  // Cache pela identidade da credencial (não pelo workspace): a mesma
+  // credencial-gerente da MCC atende N workspaces com 1 token só.
+  const cacheKey = `${cfg.google_ads_client_id || ''}|${cfg.google_ads_login_customer_id || ''}|${cfg.google_ads_refresh_token || ''}`;
   const cached = googleAdsTokenCache.get(cacheKey);
   if (cached && cached.token && cached.expiresAt > now + 30) {
     return cached.token;
@@ -626,11 +631,16 @@ function formatConversionDateTime(unixSeconds, offsetString) {
     `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}${tz}`;
 }
 
-async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId }) {
-  if (!cfg.google_ads_customer_id || !cfg.google_ads_login_customer_id ||
-      !cfg.google_ads_developer_token || !cfg.google_ads_client_id ||
-      !cfg.google_ads_client_secret || !cfg.google_ads_refresh_token) {
-    return { skipped: 'missing google ads config for workspace', payload: null, response: null };
+async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId, env }) {
+  // Resolve credenciais efetivas: 5 compartilhadas (platform_config) +
+  // customer_id por workspace + override legado/independente. cfg ainda é
+  // usado para timezone_offset (config por workspace).
+  const g = await resolveGoogleAdsCreds(env, cfg);
+
+  if (!g.google_ads_customer_id || !g.google_ads_login_customer_id ||
+      !g.google_ads_developer_token || !g.google_ads_client_id ||
+      !g.google_ads_client_secret || !g.google_ads_refresh_token) {
+    return { skipped: 'missing google ads config (platform/workspace)', payload: null, response: null };
   }
 
   if (!productConfig?.googleAdsConversionActionId) {
@@ -646,13 +656,13 @@ async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transact
     return { skipped: 'no click id', payload: null, response: null };
   }
 
-  const accessToken = await getGoogleAdsAccessToken(cfg, workspaceId);
+  const accessToken = await getGoogleAdsAccessToken(g);
   if (!accessToken) {
     return { skipped: 'oauth token unavailable', payload: null, response: null };
   }
 
-  const customerId = String(cfg.google_ads_customer_id).replace(/-/g, '');
-  const loginCustomerId = String(cfg.google_ads_login_customer_id).replace(/-/g, '');
+  const customerId = String(g.google_ads_customer_id).replace(/-/g, '');
+  const loginCustomerId = String(g.google_ads_login_customer_id).replace(/-/g, '');
 
   const conversion = {
     conversionAction: `customers/${customerId}/conversionActions/${productConfig.googleAdsConversionActionId}`,
@@ -682,7 +692,7 @@ async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transact
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${accessToken}`,
-        'developer-token': cfg.google_ads_developer_token,
+        'developer-token': g.google_ads_developer_token,
         'login-customer-id': loginCustomerId,
         'Content-Type': 'application/json',
       },

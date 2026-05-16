@@ -9,9 +9,19 @@ const ALLOWED_KEYS = new Set([
   'meta_long_lived_token',
   'meta_app_id',
   'meta_app_secret',
+  // Google Ads — 5 credenciais COMPARTILHADAS da plataforma (MCC da Usina).
+  // O customer_id continua por workspace (workspace_config), não aqui.
+  'google_ads_developer_token',
+  'google_ads_client_id',
+  'google_ads_client_secret',
+  'google_ads_refresh_token',
+  'google_ads_login_customer_id',
 ]);
 
-const SECRET_KEYS = new Set(['meta_long_lived_token', 'meta_app_secret']);
+const SECRET_KEYS = new Set([
+  'meta_long_lived_token', 'meta_app_secret',
+  'google_ads_developer_token', 'google_ads_client_secret', 'google_ads_refresh_token',
+]);
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);

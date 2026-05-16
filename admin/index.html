@@ -2225,6 +2225,54 @@ async function loadPlatform() {
       </div>
 
       <div class="card p-6 mt-5">
+        <div class="mb-5">
+          <h3 class="display text-[15px] text-brand-navy">Google Ads API — credenciais da plataforma</h3>
+          <p class="text-[13px] text-brand-gray mt-0.5">
+            As 5 credenciais compartilhadas da MCC da Usina. Cobrem todos os workspaces sob a MCC —
+            cada workspace declara apenas o <code class="mono">customer_id</code> (na tela do workspace).
+            Cliente com conta independente fora da MCC pode sobrescrever refresh token / login customer id no próprio workspace.
+          </p>
+        </div>
+        <form id="gads-form" class="space-y-4">
+          <div>
+            <label class="label">Developer Token</label>
+            <div class="flex gap-2">
+              <input id="ga-dev" class="input mono" type="password" placeholder="••••••" autocomplete="off">
+              <button type="button" class="btn btn-secondary" data-toggle-pw="ga-dev" aria-label="Mostrar/ocultar">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <p class="help" id="ga-dev-help">Token da Central de API da MCC (precisa de acesso Basic+ p/ conta real).</p>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="label">Client ID (OAuth)</label>
+              <input id="ga-cid" class="input mono" placeholder="123…apps.googleusercontent.com">
+            </div>
+            <div>
+              <label class="label">Login Customer ID <span class="text-brand-gray font-normal">(MCC, sem hífens)</span></label>
+              <input id="ga-lcid" class="input mono" placeholder="1234567890">
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4">
+            <div>
+              <label class="label">Client Secret (OAuth)</label>
+              <input id="ga-csec" class="input mono" type="password" placeholder="••••••" autocomplete="off">
+              <p class="help" id="ga-csec-help">—</p>
+            </div>
+            <div>
+              <label class="label">Refresh Token</label>
+              <input id="ga-rt" class="input mono" type="password" placeholder="1//…" autocomplete="off">
+              <p class="help" id="ga-rt-help">Do usuário-gerente da MCC, app OAuth em produção.</p>
+            </div>
+          </div>
+          <div class="flex justify-end items-center pt-4 border-t border-brand-border">
+            <button type="submit" class="btn btn-primary">Salvar Google Ads</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card p-6 mt-5">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-4">
           <div>
             <h3 class="display text-[15px] text-brand-navy">Sincronização de dados</h3>
@@ -2274,6 +2322,12 @@ async function loadPlatform() {
     }
     if (cfg.meta_app_id?.set)     $('#pf-app-id').value = cfg.meta_app_id.value || '';
     if (cfg.meta_app_secret?.set) $('#pf-app-secret').placeholder = `••••••${cfg.meta_app_secret.last4}`;
+    // Google Ads — credenciais compartilhadas da plataforma
+    if (cfg.google_ads_client_id?.set)         $('#ga-cid').value = cfg.google_ads_client_id.value || '';
+    if (cfg.google_ads_login_customer_id?.set) $('#ga-lcid').value = cfg.google_ads_login_customer_id.value || '';
+    if (cfg.google_ads_developer_token?.set)   { $('#ga-dev').placeholder = `••••••${cfg.google_ads_developer_token.last4}`; $('#ga-dev-help').textContent = 'Token cadastrado. Em branco mantém o atual.'; }
+    if (cfg.google_ads_client_secret?.set)     { $('#ga-csec').placeholder = `••••••${cfg.google_ads_client_secret.last4}`; $('#ga-csec-help').textContent = 'Cadastrado. Em branco mantém.'; }
+    if (cfg.google_ads_refresh_token?.set)     { $('#ga-rt').placeholder = `••••••${cfg.google_ads_refresh_token.last4}`; $('#ga-rt-help').textContent = 'Cadastrado. Em branco mantém o atual.'; }
   } catch (e) {
     toast('Falha ao carregar config: ' + e.message, 'error');
   }
@@ -2434,6 +2488,33 @@ async function loadPlatform() {
       toast(err.message, 'error');
     }
     btn.disabled = false; btn.textContent = 'Salvar credenciais';
+  });
+
+  // Submit — Google Ads (credenciais compartilhadas da plataforma)
+  $('#gads-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {};
+    const dev  = $('#ga-dev').value.trim();
+    const cid  = $('#ga-cid').value.trim();
+    const csec = $('#ga-csec').value.trim();
+    const rt   = $('#ga-rt').value.trim();
+    const lcid = $('#ga-lcid').value.trim();
+    if (dev)  payload.google_ads_developer_token = dev;       // segredo: só troca se preenchido
+    payload.google_ads_client_id = cid;                       // vazio limpa
+    if (csec) payload.google_ads_client_secret = csec;        // segredo
+    if (rt)   payload.google_ads_refresh_token = rt;           // segredo
+    payload.google_ads_login_customer_id = lcid;              // vazio limpa
+    const btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = 'Salvando…';
+    try {
+      await api('PATCH', '/admin/platform', payload);
+      toast('Google Ads salvo.', 'success');
+      $('#ga-dev').value = ''; $('#ga-csec').value = ''; $('#ga-rt').value = '';
+      loadPlatform();
+    } catch (err) {
+      toast(err.message, 'error');
+    }
+    btn.disabled = false; btn.textContent = 'Salvar Google Ads';
   });
 
   // If token already set, eagerly check status on load
