@@ -6,6 +6,15 @@ import { resolveHost } from './_lib/workspace.js';
 // /api/booking/* caem direto (sem o trabalho de cookie de tracking).
 const MARKETING_HOSTS = new Set(['lp.usinadotempo.com.br']);
 
+// URLs limpas servidas no host de marketing → arquivo estático na pasta da LP.
+const MARKETING_DIR = '/marketing/lp-usina-tracking';
+const MARKETING_PAGES = {
+  '/': 'index.html',
+  '/privacidade': 'privacidade.html',
+  '/termos': 'termos.html',
+  '/cookies': 'cookies.html',
+};
+
 // --- Cabeçalhos de segurança (auditoria 2026-05, OWASP A02/A05) -------------
 // Aplicados a TODA resposta (estático + Functions) — o arquivo _headers do
 // Pages não cobre respostas de Function, por isso é feito aqui.
@@ -53,8 +62,12 @@ export async function onRequest(context) {
   // Marketing host: split por Host antes de qualquer lógica de tracking.
   const reqHost = (request.headers.get('host') || '').split(':')[0].toLowerCase();
   if (MARKETING_HOSTS.has(reqHost)) {
-    if (url.pathname === '/' || url.pathname === '') {
-      const assetReq = new Request(new URL('/marketing/lp-usina-tracking/index.html', url), request);
+    // Normaliza: "" → "/", remove barra final ("/termos/" → "/termos").
+    let p = url.pathname || '/';
+    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
+    const file = MARKETING_PAGES[p === '' ? '/' : p];
+    if (file) {
+      const assetReq = new Request(new URL(`${MARKETING_DIR}/${file}`, url), request);
       if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
         return withSec(await env.ASSETS.fetch(assetReq));
       }
