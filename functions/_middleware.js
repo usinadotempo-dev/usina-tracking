@@ -6,6 +6,46 @@ import { resolveHost } from './_lib/workspace.js';
 // /api/booking/* caem direto (sem o trabalho de cookie de tracking).
 const MARKETING_HOSTS = new Set(['lp.usinadotempo.com.br']);
 
+// --- Cabeçalhos de segurança (auditoria 2026-05, OWASP A02/A05) -------------
+// Aplicados a TODA resposta (estático + Functions) — o arquivo _headers do
+// Pages não cobre respostas de Function, por isso é feito aqui.
+// CSP mantém 'unsafe-inline'/'unsafe-eval' porque as páginas têm <script>
+// inline e o admin/dash usam Tailwind Play CDN (JIT usa eval). O ganho forte
+// é frame-ancestors/object-src/base-uri/form-action + allowlist de hosts;
+// remoção do unsafe-* exige build step (backlog).
+const CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "upgrade-insecure-requests",
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdn.tailwindcss.com https://cdn.jsdelivr.net https://connect.facebook.net https://www.googletagmanager.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://www.google-analytics.com",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "font-src 'self' https://fonts.gstatic.com data:",
+  "img-src 'self' data: https:",
+  "connect-src 'self' https://www.google-analytics.com https://*.google-analytics.com https://region1.google-analytics.com https://www.googletagmanager.com https://connect.facebook.net https://www.facebook.com https://www.googleadservices.com https://googleads.g.doubleclick.net https://*.g.doubleclick.net https://stats.g.doubleclick.net",
+  "frame-src 'self' https://td.doubleclick.net https://www.googletagmanager.com https://bid.g.doubleclick.net",
+].join('; ');
+
+const SEC_HEADERS = {
+  'X-Content-Type-Options': 'nosniff',
+  'Referrer-Policy': 'strict-origin-when-cross-origin',
+  'X-Frame-Options': 'DENY',
+  'Strict-Transport-Security': 'max-age=31536000; includeSubDomains',
+  'Permissions-Policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Content-Security-Policy': CSP,
+};
+
+// Devolve a mesma resposta com os cabeçalhos de segurança adicionados.
+// Não sobrescreve Set-Cookie nem nada que a resposta já definiu.
+function withSec(resp) {
+  const h = new Headers(resp.headers);
+  for (const [k, v] of Object.entries(SEC_HEADERS)) h.set(k, v);
+  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
+}
+
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
@@ -16,11 +56,11 @@ export async function onRequest(context) {
     if (url.pathname === '/' || url.pathname === '') {
       const assetReq = new Request(new URL('/marketing/lp-usina-tracking/index.html', url), request);
       if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
-        return env.ASSETS.fetch(assetReq);
+        return withSec(await env.ASSETS.fetch(assetReq));
       }
-      return next(assetReq);
+      return withSec(await next(assetReq));
     }
-    return next();
+    return withSec(await next());
   }
 
   // Resolve tenant/workspace from Host once per request and cache in context.data
@@ -46,7 +86,7 @@ export async function onRequest(context) {
   // Don't set first-party tracking cookies on platform hosts (admin/tenant dashboards).
   // Those cookies belong to landing pages on workspace custom domains.
   if (!isPageRequest || hostInfo.kind === 'admin' || hostInfo.kind === 'tenant' || hostInfo.kind === 'dev') {
-    return next();
+    return withSec(await next());
   }
 
   // --- Extract tracking parameters from URL ---
@@ -121,6 +161,7 @@ export async function onRequest(context) {
     newHeaders.append('Set-Cookie', `_fbc=${fbc}; ${cookieBase}`);
   }
 
+  for (const [k, v] of Object.entries(SEC_HEADERS)) newHeaders.set(k, v);
   const newResponse = new Response(response.body, {
     status: response.status,
     statusText: response.statusText,

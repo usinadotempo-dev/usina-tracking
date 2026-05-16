@@ -617,6 +617,7 @@
           <input class="bk-in" id="bkPhone" autocomplete="tel" placeholder="WhatsApp (opcional)">
           <input class="bk-in" id="bkCompany" autocomplete="organization" placeholder="Empresa (opcional)">
           <textarea class="bk-in" id="bkMsg" placeholder="Conta rapidamente seu cenário — quanto investe em anúncio, o que vende (opcional)"></textarea>
+          <input id="bkHP" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none">
           <div class="sched-confirm">
             <button type="submit" class="btn-primary" id="confirmBtn">
               Confirmar reunião
@@ -796,7 +797,7 @@ window.USINATRK=(function(){
   document.querySelectorAll("[data-count]").forEach(function(el){ nio.observe(el); });
 
   /* ---- agendador real (/api/booking) ---- */
-  var BK={ days:[], dayIdx:0, slotISO:null, slotLabel:null };
+  var BK={ days:[], dayIdx:0, slotISO:null, slotLabel:null, startedAt:Date.now() };
 
   function attribution(){
     var q=new URLSearchParams(location.search);
@@ -879,7 +880,8 @@ window.USINATRK=(function(){
     var payload=Object.assign({
       name:name, email:email,
       phone:el('bkPhone').value.trim(), company:el('bkCompany').value.trim(),
-      message:el('bkMsg').value.trim(), slot_iso:BK.slotISO
+      message:el('bkMsg').value.trim(), slot_iso:BK.slotISO,
+      hp:(el('bkHP')||{}).value||'', elapsed_ms:Date.now()-BK.startedAt
     }, attribution());
     fetch('/api/booking/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
       .then(function(r){ return r.json().then(function(j){ return {s:r.status,j:j}; }); })

@@ -5,6 +5,16 @@ wrangler.toml.audit
 .env
 .env.*
 
+# Defensive: credential material that must never land in the repo
+# (service-account JSON keys, private keys, exported secrets)
+*.pem
+*.key
+*-key.json
+*service-account*.json
+*credentials*.json
+gcal_key*.txt
+.cf-tracking-token
+
 # Cloudflare build artifacts
 .wrangler/
 .cloudflare/

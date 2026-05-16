@@ -21,7 +21,8 @@ export async function onRequestPost(context) {
 
   const cfg = calendarConfig(env);
   if (!cfg.ok) {
-    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 200);
+    console.log('booking/create: calendar não configurado, faltam', cfg.missing.join(','));
+    return json({ ok: false, error: 'agenda_indisponivel' }, 200);
   }
 
   let body;
@@ -37,6 +38,17 @@ export async function onRequestPost(context) {
   if (!name) return json({ ok: false, error: 'nome_obrigatorio' }, 400);
   if (!isEmail(email)) return json({ ok: false, error: 'email_invalido' }, 400);
 
+  // Anti-spam (auditoria 2026-05, M2): honeypot + tempo mínimo de
+  // preenchimento. Defesa em profundidade junto da regra de rate-limit
+  // do Cloudflare. Cliente em cache antigo (sem os campos) não é punido:
+  // só aplica a checagem de tempo quando elapsed_ms vem como número.
+  if (typeof body.hp === 'string' && body.hp.trim() !== '') {
+    return json({ ok: false, error: 'rejeitado' }, 200);
+  }
+  if (typeof body.elapsed_ms === 'number' && body.elapsed_ms >= 0 && body.elapsed_ms < 3000) {
+    return json({ ok: false, error: 'rejeitado', detail: 'Tente novamente.' }, 200);
+  }
+
   const v = validateRequestedSlot(slotISO);
   if (!v.ok) return json({ ok: false, error: 'slot_invalido', detail: v.reason }, 400);
 
@@ -51,7 +63,8 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: 'slot_ocupado', detail: 'Esse horário acabou de ser preenchido. Escolha outro.' }, 409);
     }
   } catch (err) {
-    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
+    console.log('booking/create freebusy error:', (err && (err.message || err)) || 'unknown');
+    return json({ ok: false, error: 'freebusy_falhou' }, 200);
   }
 
   // Cria o evento no Google Calendar (com Meet + convite nativo).
@@ -70,7 +83,8 @@ export async function onRequestPost(context) {
       attendeeName: name,
     });
   } catch (err) {
-    return json({ ok: false, error: 'calendar_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
+    console.log('booking/create calendar error:', (err && (err.message || err)) || 'unknown');
+    return json({ ok: false, error: 'calendar_falhou' }, 200);
   }
 
   const id = crypto.randomUUID();

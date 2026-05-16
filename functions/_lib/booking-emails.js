@@ -42,7 +42,7 @@ function shell(env, { preheader, title, bodyHtml }) {
 }
 
 function btn(href, label) {
-  return `<a href="${href}" style="display:inline-block;background:${NAVY};color:#fff;text-decoration:none;
+  return `<a href="${escAttr(href)}" style="display:inline-block;background:${NAVY};color:#fff;text-decoration:none;
     font-weight:700;font-size:15px;padding:14px 26px;border-radius:12px">${label}</a>`;
 }
 function p(txt) { return `<p style="margin:0 0 16px;font-size:15px;line-height:1.65;color:#3b4252">${txt}</p>`; }
@@ -144,9 +144,9 @@ export async function notifyInternal(env, b) {
   const cfg = resendConfig(env);
   if (!cfg.notifyTo) return { ok: false, error: 'BOOKING_NOTIFY_EMAIL/GCAL_IMPERSONATE ausente' };
   const when = formatHuman(b.slot_start_iso);
-  const row = (k, v) => v ? `<tr><td style="padding:4px 12px 4px 0;color:${GRAY};font-size:13px">${k}</td><td style="padding:4px 0;font-size:13px;color:${NAVY}">${v}</td></tr>` : '';
+  const row = (k, v) => v ? `<tr><td style="padding:4px 12px 4px 0;color:${GRAY};font-size:13px">${k}</td><td style="padding:4px 0;font-size:13px;color:${NAVY}">${esc(v)}</td></tr>` : '';
   const html = shell(env, {
-    preheader: `Nova reunião: ${b.name} — ${when}`,
+    preheader: `Nova reunião: ${esc(b.name)} — ${when}`,
     title: '🗓️ Nova apresentação agendada',
     bodyHtml:
       `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:0 0 18px">
@@ -161,9 +161,17 @@ export async function notifyInternal(env, b) {
         ${row('Página', b.landing_url)}
       </table>` +
       (b.meet_url ? btn(b.meet_url, 'Abrir no Google Meet') : '') +
-      (b.gcal_html_link ? ` &nbsp; <a href="${b.gcal_html_link}" style="color:${CORAL};font-size:14px">ver no Google Agenda</a>` : ''),
+      (b.gcal_html_link ? ` &nbsp; <a href="${escAttr(b.gcal_html_link)}" style="color:${CORAL};font-size:14px">ver no Google Agenda</a>` : ''),
   });
   return sendEmail(env, { to: cfg.notifyTo, subject: `Nova reunião — ${b.name} (${when})`, html, replyTo: b.email });
 }
 
-function firstName(n) { return (n || '').trim().split(/\s+/)[0] || 'Olá'; }
+// Escape HTML — todo campo vindo do lead (name/message/company/utm/links)
+// passa por aqui antes de entrar no HTML do e-mail (auditoria 2026-05, M1).
+function esc(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+  ));
+}
+function escAttr(s) { return esc(s); }
+function firstName(n) { return esc((n || '').trim().split(/\s+/)[0] || 'Olá'); }

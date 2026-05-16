@@ -17,7 +17,9 @@ export async function onRequestGet(context) {
   if (!cfg.ok) {
     // status 200 (não 5xx): a Cloudflare mascara o corpo de 502/503/504 em
     // domínio proxied. A LP decide pelo campo `ok`, não pelo status HTTP.
-    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 200);
+    // Detalhe (quais envs faltam) só no log — não exposto ao cliente (L1).
+    console.log('booking/slots: calendar não configurado, faltam', cfg.missing.join(','));
+    return json({ ok: false, error: 'agenda_indisponivel' }, 200);
   }
 
   try {
@@ -27,7 +29,8 @@ export async function onRequestGet(context) {
     const days = buildAvailability(busy);
     return json({ ok: true, days, tz: 'America/Sao_Paulo' });
   } catch (err) {
-    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
+    console.log('booking/slots freebusy error:', (err && (err.message || err)) || 'unknown');
+    return json({ ok: false, error: 'freebusy_falhou' }, 200);
   }
 }
 
