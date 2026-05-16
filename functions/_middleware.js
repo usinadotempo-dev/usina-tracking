@@ -1,8 +1,27 @@
 import { resolveHost } from './_lib/workspace.js';
 
+// Hosts que servem a landing de VENDA do produto Usina Tracking (não é LP
+// de tenant — é a Usina vendendo o próprio produto). Nesses hosts o "/"
+// renderiza marketing/lp-usina-tracking/index.html; /assets/* e
+// /api/booking/* caem direto (sem o trabalho de cookie de tracking).
+const MARKETING_HOSTS = new Set(['lp.usinadotempo.com.br']);
+
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
+
+  // Marketing host: split por Host antes de qualquer lógica de tracking.
+  const reqHost = (request.headers.get('host') || '').split(':')[0].toLowerCase();
+  if (MARKETING_HOSTS.has(reqHost)) {
+    if (url.pathname === '/' || url.pathname === '') {
+      const assetReq = new Request(new URL('/marketing/lp-usina-tracking/index.html', url), request);
+      if (env.ASSETS && typeof env.ASSETS.fetch === 'function') {
+        return env.ASSETS.fetch(assetReq);
+      }
+      return next(assetReq);
+    }
+    return next();
+  }
 
   // Resolve tenant/workspace from Host once per request and cache in context.data
   // so downstream functions (tracker, checkout-session, api/*) can read it.

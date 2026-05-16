@@ -39,6 +39,15 @@ const PLATFORMS = [
     cron: '25 */6 * * *',
     timeout_seconds: 90,
   },
+  {
+    key: 'booking',
+    label: 'Lembretes de reunião',
+    description: 'Lembrete 24h/1h, no-show e follow-up das apresentações agendadas na LP.',
+    path: '/api/sync/booking-reminders',
+    cadence_label: 'A cada 1 hora',
+    cron: '45 * * * *',
+    timeout_seconds: 60,
+  },
 ];
 
 const PLATFORM_ROOT_URL = 'https://tracking.usinadotempo.com.br';
@@ -60,7 +69,7 @@ export async function onRequestGet(context) {
               WHERE s2.platform = s1.platform
               ORDER BY run_at DESC LIMIT 1) AS last_error
       FROM sync_log s1
-     WHERE platform IN ('meta_marketing','meta_instagram','meta_pages')
+     WHERE platform IN ('meta_marketing','meta_instagram','meta_pages','booking')
      GROUP BY platform
   `).all();
 
