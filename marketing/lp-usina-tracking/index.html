@@ -712,16 +712,22 @@ window.USINATRK=(function(){
       initGoogle(CFG.ga4_measurement_id,CFG.google_ads_aw_id);
     }).catch(function(){});
   }
+  // Dispara a conversão do Google Ads p/ um evento do mapa evento→label.
+  // Fallback retrocompat: evento 'schedule' usa o label único legado se o
+  // mapa não tiver entrada. Reutilizável por páginas futuras (lead/purchase).
+  function gAdsConversion(eventKey){
+    try{
+      if(!window.gtag || !CFG.google_ads_aw_id) return;
+      var map=CFG.google_ads_conversions||{};
+      var label=map[eventKey] || (eventKey==='schedule' ? CFG.google_ads_conversion_label : null);
+      if(label) gtag('event','conversion',{send_to:CFG.google_ads_aw_id+'/'+label});
+    }catch(e){}
+  }
   function fireSchedule(d){
     d=d||{};
     try{ if(window.fbq) fbq('track','Schedule',{},{eventID:EVID}); }catch(e){}
-    try{
-      if(window.gtag){
-        if(CFG.ga4_measurement_id) gtag('event','generate_lead',{currency:'BRL',value:0});
-        if(CFG.google_ads_aw_id&&CFG.google_ads_conversion_label)
-          gtag('event','conversion',{send_to:CFG.google_ads_aw_id+'/'+CFG.google_ads_conversion_label});
-      }
-    }catch(e){}
+    try{ if(window.gtag && CFG.ga4_measurement_id) gtag('event','generate_lead',{currency:'BRL',value:0}); }catch(e){}
+    gAdsConversion('schedule');
     // Servidor: Meta CAPI + GA4 MP pelo próprio /tracker do stack. Mesmo
     // event_id → Meta deduplica pixel↔CAPI. Workspace resolvido pelo Host.
     try{
@@ -742,7 +748,7 @@ window.USINATRK=(function(){
     }catch(e){}
   }
   init();
-  return { fireSchedule:fireSchedule, eid:function(){return EVID;} };
+  return { fireSchedule:fireSchedule, gAdsConversion:gAdsConversion, eid:function(){return EVID;} };
 })();
 </script>
 <script>

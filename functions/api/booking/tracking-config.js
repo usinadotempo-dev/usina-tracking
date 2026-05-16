@@ -24,16 +24,36 @@ export async function onRequestGet(context) {
   let cfg = {};
   try {
     cfg = await env.DB.prepare(
-      'SELECT meta_pixel_id, ga4_measurement_id, google_ads_aw_id, google_ads_conversion_label FROM workspace_config WHERE workspace_id = ? LIMIT 1'
+      'SELECT meta_pixel_id, ga4_measurement_id, google_ads_aw_id, google_ads_conversion_label, google_ads_conversions FROM workspace_config WHERE workspace_id = ? LIMIT 1'
     ).bind(workspaceId).first() || {};
   } catch (_) { cfg = {}; }
+
+  // Mapa evento→label. Parse seguro do JSON; fallback retrocompat: se não há
+  // entrada "schedule" mas existe o label único legado, usa-o como schedule.
+  let conversions = {};
+  if (cfg.google_ads_conversions) {
+    try {
+      const parsed = JSON.parse(cfg.google_ads_conversions);
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        for (const k of Object.keys(parsed)) {
+          if (typeof parsed[k] === 'string' && parsed[k].trim()) conversions[k] = parsed[k].trim();
+        }
+      }
+    } catch (_) { /* JSON inválido → ignora, cai no fallback abaixo */ }
+  }
+  if (!conversions.schedule && cfg.google_ads_conversion_label) {
+    conversions.schedule = cfg.google_ads_conversion_label;
+  }
 
   return json({
     ok: true,
     meta_pixel_id: cfg.meta_pixel_id || null,
     ga4_measurement_id: cfg.ga4_measurement_id || null,
     google_ads_aw_id: cfg.google_ads_aw_id || null,
-    google_ads_conversion_label: cfg.google_ads_conversion_label || null,
+    // Legado (LP em cache antiga ainda lê isso): label do evento schedule.
+    google_ads_conversion_label: conversions.schedule || cfg.google_ads_conversion_label || null,
+    // Novo: mapa completo evento→label.
+    google_ads_conversions: conversions,
   });
 }
 
