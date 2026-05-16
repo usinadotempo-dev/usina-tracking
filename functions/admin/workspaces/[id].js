@@ -13,6 +13,8 @@ const CONFIG_FIELDS = [
   'ga4_measurement_id', 'ga4_api_secret',
   'google_ads_client_id', 'google_ads_client_secret', 'google_ads_refresh_token',
   'google_ads_developer_token', 'google_ads_customer_id', 'google_ads_login_customer_id',
+  // IDs públicos da tag do browser (LP/agendamento) — não são segredo
+  'google_ads_aw_id', 'google_ads_conversion_label',
   'encharge_api_key', 'manychat_key',
   'default_country_code', 'timezone_offset',
   'meta_ads_access_token', 'meta_ads_account_id',

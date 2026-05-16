@@ -1544,13 +1544,15 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
         <p class="text-[13px] text-brand-gray">Salve um <span class="mono">Token de longa duração</span> acima para gerar a URL de webhook automaticamente.</p>
       </div>`}
 
-      ${configCard('Google Ads', 'OAuth + Customer ID para upload server-side de conversions. Os 6 campos são obrigatórios juntos.', [
-        { label: 'Client ID',          key: 'google_ads_client_id',          value: cfg.google_ads_client_id,          mono: true, full: true },
-        { label: 'Client Secret',      key: 'google_ads_client_secret',      value: cfg.google_ads_client_secret,      mono: true, secret: true },
-        { label: 'Refresh Token',      key: 'google_ads_refresh_token',      value: cfg.google_ads_refresh_token,      mono: true, secret: true },
-        { label: 'Developer Token',    key: 'google_ads_developer_token',    value: cfg.google_ads_developer_token,    mono: true, secret: true },
-        { label: 'Customer ID',        key: 'google_ads_customer_id',        value: cfg.google_ads_customer_id,        mono: true, placeholder: '1234567890', help: 'Sem hífens.' },
-        { label: 'Login Customer ID',  key: 'google_ads_login_customer_id',  value: cfg.google_ads_login_customer_id,  mono: true, placeholder: 'MCC ou mesmo do Customer ID' },
+      ${configCard('Google Ads', 'Normalmente preencha só o Customer ID + (LP) AW-ID e Conversion Label. As 5 credenciais OAuth são compartilhadas em Configurações (plataforma) — preencha-as aqui SÓ para cliente com conta independente fora da MCC (override).', [
+        { label: 'Customer ID',        key: 'google_ads_customer_id',        value: cfg.google_ads_customer_id,        mono: true, full: true, placeholder: '1234567890', help: 'A conta de anúncio deste cliente, sem hífens. (Único campo obrigatório p/ cliente sob a MCC.)' },
+        { label: 'AW-ID (tag do browser)',   key: 'google_ads_aw_id',             value: cfg.google_ads_aw_id,             mono: true, placeholder: 'AW-123456789', help: 'Conversão da LP/agendamento via tag do navegador.' },
+        { label: 'Conversion Label',         key: 'google_ads_conversion_label',  value: cfg.google_ads_conversion_label,  mono: true, placeholder: 'AbC-D_efGhi', help: 'Parte depois da “/” no send_to do snippet do Google Ads.' },
+        { label: 'Client ID (override)',     key: 'google_ads_client_id',          value: cfg.google_ads_client_id,          mono: true },
+        { label: 'Client Secret (override)', key: 'google_ads_client_secret',      value: cfg.google_ads_client_secret,      mono: true, secret: true },
+        { label: 'Refresh Token (override)', key: 'google_ads_refresh_token',      value: cfg.google_ads_refresh_token,      mono: true, secret: true, help: 'Só p/ conta independente fora da MCC.' },
+        { label: 'Developer Token (override)', key: 'google_ads_developer_token',  value: cfg.google_ads_developer_token,    mono: true, secret: true },
+        { label: 'Login Customer ID (override)', key: 'google_ads_login_customer_id', value: cfg.google_ads_login_customer_id, mono: true, placeholder: 'só p/ conta independente' },
       ])}
 
       ${configCard('Defaults & integrações', 'Configurações regionais e chaves de automação opcionais.', [
