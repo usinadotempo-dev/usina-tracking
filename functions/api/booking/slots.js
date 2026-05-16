@@ -15,7 +15,9 @@ export async function onRequestGet(context) {
 
   const cfg = calendarConfig(env);
   if (!cfg.ok) {
-    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 503);
+    // status 200 (não 5xx): a Cloudflare mascara o corpo de 502/503/504 em
+    // domínio proxied. A LP decide pelo campo `ok`, não pelo status HTTP.
+    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 200);
   }
 
   try {
@@ -25,7 +27,7 @@ export async function onRequestGet(context) {
     const days = buildAvailability(busy);
     return json({ ok: true, days, tz: 'America/Sao_Paulo' });
   } catch (err) {
-    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 200) }, 502);
+    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
   }
 }
 

@@ -21,7 +21,7 @@ export async function onRequestPost(context) {
 
   const cfg = calendarConfig(env);
   if (!cfg.ok) {
-    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 503);
+    return json({ ok: false, error: 'agenda_indisponivel', detail: `faltam: ${cfg.missing.join(', ')}` }, 200);
   }
 
   let body;
@@ -51,7 +51,7 @@ export async function onRequestPost(context) {
       return json({ ok: false, error: 'slot_ocupado', detail: 'Esse horário acabou de ser preenchido. Escolha outro.' }, 409);
     }
   } catch (err) {
-    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 200) }, 502);
+    return json({ ok: false, error: 'freebusy_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
   }
 
   // Cria o evento no Google Calendar (com Meet + convite nativo).
@@ -70,7 +70,7 @@ export async function onRequestPost(context) {
       attendeeName: name,
     });
   } catch (err) {
-    return json({ ok: false, error: 'calendar_falhou', detail: (err.message || String(err)).slice(0, 200) }, 502);
+    return json({ ok: false, error: 'calendar_falhou', detail: (err.message || String(err)).slice(0, 300) }, 200);
   }
 
   const id = crypto.randomUUID();
