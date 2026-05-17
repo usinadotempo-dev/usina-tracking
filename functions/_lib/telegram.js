@@ -9,6 +9,8 @@
 // Secrets (Cloudflare Pages → Settings → Environment variables):
 //   TELEGRAM_BOT_TOKEN   token do bot "Usina do Tempo" (do @BotFather)
 //   TELEGRAM_CHAT_ID     id do grupo da equipe (negativo p/ grupos, ex: -1001234567890)
+//   TELEGRAM_TOPIC_ID    opcional — message_thread_id do tópico (grupo-fórum).
+//                        Sem ele, a mensagem cai no tópico "General".
 //
 // Como descobrir o TELEGRAM_CHAT_ID do grupo (uma vez): adicione o bot ao
 // grupo, mande qualquer mensagem no grupo e abra no navegador
@@ -20,6 +22,7 @@ export function telegramConfig(env) {
     ok: !!(env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID),
     token: env.TELEGRAM_BOT_TOKEN,
     chatId: env.TELEGRAM_CHAT_ID,
+    topicId: env.TELEGRAM_TOPIC_ID || null,
   };
 }
 
@@ -35,6 +38,7 @@ export async function sendTelegram(env, text) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         chat_id: cfg.chatId,
+        ...(cfg.topicId ? { message_thread_id: Number(cfg.topicId) } : {}),
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,

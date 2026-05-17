@@ -191,8 +191,12 @@ não bloqueia o outro (flags `tg_*` próprias na `demo_bookings`).
 
    | Variável | Valor |
    |---|---|
-   | `TELEGRAM_BOT_TOKEN` | token do @usinadotempo_bot (do @BotFather) |
+   | `TELEGRAM_BOT_TOKEN` | token do @usinadotempo_bot (do @BotFather) — começa com `8698988565:` |
    | `TELEGRAM_CHAT_ID` | `-1003937304323` |
+   | `TELEGRAM_TOPIC_ID` | (opcional) `message_thread_id` do tópico "Agendamentos" no grupo-fórum; sem ele, cai no "General". Obter via `createForumTopic` (bot admin c/ "Gerenciar tópicos") ou `getUpdates`. |
+
+> `Telegram 404 Not Found` no `sendMessage` = valor do `TELEGRAM_BOT_TOKEN`
+> errado/truncado (não é chat/permissão). Regrave o secret e redeploy.
 
 5. **Redeploy** (push ou "Retry deployment" — env var só vale em deploy
    novo). Sem os 2 secrets, `telegramConfig` retorna `ok:false` e tudo
