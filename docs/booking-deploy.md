@@ -11,10 +11,12 @@ executa esta parte.
 
 ## 1. Aplicar a migration (D1)
 
-Migrations **aditivas** `0031_demo_bookings.sql` (tabela `demo_bookings`)
-e `0032_usina_self_tracking.sql` (tenant/workspace interno da Usina +
-mapeamento do host da LP + 2 colunas em `workspace_config`). `apply`
-aplica as duas pendentes de uma vez. Não tocam em nada existente.
+Migrations **aditivas**: `0031_demo_bookings.sql` (tabela `demo_bookings`),
+`0032_usina_self_tracking.sql` (tenant/workspace interno da Usina +
+mapeamento do host da LP + 2 colunas em `workspace_config`) e
+`0034_demo_bookings_telegram.sql` (4 flags `tg_*` p/ os avisos da equipe no
+Telegram — seção 10). `apply` aplica todas as pendentes de uma vez. Nenhuma
+toca em nada existente.
 
 ```bash
 source ~/.cf-tracking-token
@@ -168,6 +170,39 @@ Como funciona depois de configurado:
 > A conversão Google Ads "Reunião agendada" precisa existir na conta
 > Google Ads (Ferramentas → Conversões → nova, tipo *Lead*/site). Pegue o
 > `AW-id` e o `label` do snippet que o Google gera e cole nos campos acima.
+
+## 10. Avisos da equipe no Telegram
+
+A equipe é avisada no **grupo do Telegram** a cada evento do ciclo da
+reunião: **agendamento, lembrete 24h, lembrete 1h e no-show**. Bot:
+**@usinadotempo_bot** ("Usina do Tempo"). Independente do e-mail — um canal
+não bloqueia o outro (flags `tg_*` próprias na `demo_bookings`).
+
+1. **Migration 0034** (`0034_demo_bookings_telegram.sql`, aditiva, 4 colunas
+   `tg_*`): aplicada junto das pendentes na seção 1
+   (`npx wrangler d1 migrations apply usina-tracking-db --remote`).
+2. **Adicionar o @usinadotempo_bot ao grupo** da equipe como membro.
+3. **Descobrir o `chat_id`** (uma vez): no grupo, mande
+   `/start@usinadotempo_bot` (comando endereçado fura o modo privacidade);
+   logo em seguida abra `https://api.telegram.org/bot<TOKEN>/getUpdates` e
+   copie o `chat.id` (negativo, começa em `-100`).
+   Grupo atual: `TELEGRAM_CHAT_ID = -1003937304323`.
+4. **Secrets no Pages** (Settings → Environment variables → Production):
+
+   | Variável | Valor |
+   |---|---|
+   | `TELEGRAM_BOT_TOKEN` | token do @usinadotempo_bot (do @BotFather) |
+   | `TELEGRAM_CHAT_ID` | `-1003937304323` |
+
+5. **Redeploy** (push ou "Retry deployment" — env var só vale em deploy
+   novo). Sem os 2 secrets, `telegramConfig` retorna `ok:false` e tudo
+   segue sem Telegram (degradação silenciosa, igual ao Resend).
+
+Smoke test: agende uma reunião de teste na LP → "🗓️ Nova apresentação
+agendada" cai no grupo em segundos. Se não cair, cheque `sync_log`
+(`platform='booking'`) e os logs do Pages (`telegramConfig ok:false` =
+secret faltando ou deploy não refeito). O modo privacidade do bot **não**
+precisa ser desligado — o código só envia, nunca lê o grupo.
 
 ## Notas / decisões
 

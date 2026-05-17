@@ -15,6 +15,7 @@
 import { freeBusy, createEvent, calendarConfig } from '../../_lib/google-calendar.js';
 import { validateRequestedSlot, slotWindowISO, isoToUnix, formatHuman } from '../../_lib/booking.js';
 import { sendConfirmation, notifyInternal } from '../../_lib/booking-emails.js';
+import { notifyTelegramBooking } from '../../_lib/booking-telegram.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -141,8 +142,11 @@ export async function onRequestPost(context) {
     ).run();
   } catch (err) {
     // Evento já está na agenda mas o D1 falhou — devolvemos sucesso pro lead
-    // (a reunião existe) e logamos. O aviso interno ainda sai.
+    // (a reunião existe) e logamos. Avisos internos ainda saem (sem flag de
+    // idempotência: a linha não existe pra marcar — risco aceito, pois é o
+    // caminho de falha raro do D1).
     context.waitUntil(notifyInternal(env, booking).catch(() => {}));
+    context.waitUntil(notifyTelegramBooking(env, booking).catch(() => {}));
     return json({
       ok: true, booking_id: id, meet_url: booking.meet_url,
       when: formatHuman(startISO), warn: 'persist_falhou',
@@ -159,6 +163,11 @@ export async function onRequestPost(context) {
     const note = await notifyInternal(env, booking).catch((e) => ({ ok: false, error: String(e) }));
     if (note.ok) {
       await env.DB.prepare('UPDATE demo_bookings SET internal_notified = 1 WHERE id = ?')
+        .bind(id).run().catch(() => {});
+    }
+    const tg = await notifyTelegramBooking(env, booking).catch((e) => ({ ok: false, error: String(e) }));
+    if (tg.ok) {
+      await env.DB.prepare('UPDATE demo_bookings SET tg_notified = 1 WHERE id = ?')
         .bind(id).run().catch(() => {});
     }
   })());

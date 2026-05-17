@@ -42,7 +42,7 @@ const PLATFORMS = [
   {
     key: 'booking',
     label: 'Lembretes de reunião',
-    description: 'Lembrete 24h/1h, no-show e follow-up das apresentações agendadas na LP.',
+    description: 'Lembrete 24h/1h, no-show e follow-up das apresentações agendadas na LP. Também avisa a equipe no grupo do Telegram (agendamento, 24h, 1h, no-show).',
     path: '/api/sync/booking-reminders',
     cadence_label: 'A cada 1 hora',
     cron: '45 * * * *',

@@ -14,6 +14,7 @@
 // Auth: header `x-sync-secret: <env.SYNC_SECRET>` (mesmo gate dos syncs).
 
 import { sendReminder, sendNoShow, sendFollowup } from '../../_lib/booking-emails.js';
+import { notifyTelegramReminder, notifyTelegramNoShow } from '../../_lib/booking-telegram.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -25,7 +26,10 @@ export async function onRequestPost(context) {
 
   const startedAt = Date.now();
   const now = Math.floor(Date.now() / 1000);
-  const out = { reminded_24h: 0, reminded_1h: 0, no_show: 0, followup: 0, errors: [] };
+  const out = {
+    reminded_24h: 0, reminded_1h: 0, no_show: 0, followup: 0,
+    tg_24h: 0, tg_1h: 0, tg_no_show: 0, errors: [],
+  };
 
   try {
     // ---- lembrete 24h ----
@@ -88,6 +92,49 @@ export async function onRequestPost(context) {
         out.followup++;
       } else out.errors.push(`followup ${b.id}: ${r.error}`);
     }
+
+    // ---- Telegram da equipe (gates próprios, independentes do e-mail) ----
+    // Cada bloco re-tenta na hora seguinte até a flag tg_* ligar, então um
+    // Telegram que falhou não fica preso a um e-mail que falhou e vice-versa.
+
+    // 24h: equipe avisada ~24h antes (mesma janela do e-mail).
+    const tg24 = await env.DB.prepare(`
+      SELECT * FROM demo_bookings
+       WHERE status='agendada' AND tg_reminded_24h=0
+         AND slot_start > ? AND slot_start <= ?
+    `).bind(now, now + 24 * 3600).all();
+    for (const b of tg24.results || []) {
+      const r = await notifyTelegramReminder(env, b, '24h');
+      if (r.ok) { await mark(env, b.id, 'tg_reminded_24h=1'); out.tg_24h++; }
+      else out.errors.push(`tg24 ${b.id}: ${r.error}`);
+    }
+
+    // 1h: equipe avisada ~1h antes.
+    const tg1 = await env.DB.prepare(`
+      SELECT * FROM demo_bookings
+       WHERE status='agendada' AND tg_reminded_1h=0
+         AND slot_start > ? AND slot_start <= ?
+    `).bind(now, now + 3600).all();
+    for (const b of tg1.results || []) {
+      const r = await notifyTelegramReminder(env, b, '1h');
+      if (r.ok) { await mark(env, b.id, 'tg_reminded_1h=1'); out.tg_1h++; }
+      else out.errors.push(`tg1 ${b.id}: ${r.error}`);
+    }
+
+    // No-show: status já virou 'no_show' no bloco de e-mail acima (mesma run).
+    // Janela de 2 dias: evita que o 1º cron após o deploy dispare Telegram
+    // para todo no_show histórico (tg_no_show=0 nas linhas pré-migração);
+    // cobre folga de cron parado por até ~2 dias.
+    const tgns = await env.DB.prepare(`
+      SELECT * FROM demo_bookings
+       WHERE status='no_show' AND tg_no_show=0
+         AND slot_end > ?
+    `).bind(now - 2 * 86400).all();
+    for (const b of tgns.results || []) {
+      const r = await notifyTelegramNoShow(env, b);
+      if (r.ok) { await mark(env, b.id, 'tg_no_show=1'); out.tg_no_show++; }
+      else out.errors.push(`tgns ${b.id}: ${r.error}`);
+    }
   } catch (err) {
     out.errors.push(`fatal: ${(err.message || String(err)).slice(0, 200)}`);
   }
@@ -100,7 +147,8 @@ export async function onRequestPost(context) {
       VALUES (?, 'booking', ?, ?, NULL, NULL, ?, ?, ?)
     `).bind(
       'system', status,
-      out.reminded_24h + out.reminded_1h + out.no_show + out.followup,
+      out.reminded_24h + out.reminded_1h + out.no_show + out.followup
+        + out.tg_24h + out.tg_1h + out.tg_no_show,
       out.errors.length ? out.errors.join(' | ').slice(0, 500) : null,
       durationMs, Math.floor(Date.now() / 1000),
     ).run();
