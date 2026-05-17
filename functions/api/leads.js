@@ -1,11 +1,13 @@
 // GET /api/leads?key=...&days=30&limit=100
 //   ou /api/leads?since=YYYY-MM-DD&until=YYYY-MM-DD&limit=100
 //
-// Returns Lead events joined to their originating session so each row carries
-// its UTMs / fbclid / gclid. This is the "where did my leads come from" view
-// — the whole reason the tracking stack persists anything at all.
+// Returns Lead + Schedule events joined to their originating session so each
+// row carries its UTMs / fbclid / gclid. This is the "where did my leads come
+// from" view — the whole reason the tracking stack persists anything at all.
+// Schedule (reunião agendada na LP de venda) conta como lead aqui; o Meta CAPI
+// segue recebendo o evento com o nome correto (Schedule), só o dash agrega.
 //
-// Source: event_log (Lead events only) LEFT JOIN sessions via session_id.
+// Source: event_log (Lead + Schedule events) LEFT JOIN sessions via session_id.
 // Bots are excluded by default; pass include_bots=1 to see them.
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
@@ -61,7 +63,7 @@ export async function onRequestGet(context) {
         s.landing_url
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
-      WHERE e.event_name = 'Lead'
+      WHERE e.event_name IN ('Lead', 'Schedule')
         AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         ${botClause}
@@ -76,7 +78,7 @@ export async function onRequestGet(context) {
         COUNT(*) as count
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
-      WHERE e.event_name = 'Lead'
+      WHERE e.event_name IN ('Lead', 'Schedule')
         AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         AND e.is_bot = 0
