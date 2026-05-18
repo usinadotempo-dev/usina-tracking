@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prospecção · Usina Tracking</title>
+<meta name="robots" content="noindex, nofollow">
+<style>
+  :root{--navy:#293556;--navy-2:#1f2d4a;--coral:#dc4a30;--teal:#7fc7b8;
+    --gray:#8a8e96;--bg:#f7f8fb;--card:#fff;--border:#e6e8ee;--ink:#222838;}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:-apple-system,'Segoe UI',Roboto,sans-serif;background:var(--bg);color:var(--ink);font-size:14px}
+  .top{background:var(--navy-2);padding:16px 26px;display:flex;align-items:center;justify-content:space-between}
+  .top a{color:#c4cbdb;text-decoration:none;font-size:13px}.top a:hover{color:#fff}
+  .wrap{max-width:1200px;margin:0 auto;padding:28px 26px}
+  h1{font-size:22px;color:var(--navy);margin-bottom:4px}
+  .sub{color:var(--gray);margin-bottom:18px;font-size:13px}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px}
+  .chip{border:1px solid var(--border);background:var(--card);border-radius:999px;padding:7px 15px;
+    cursor:pointer;font-size:13px;color:var(--navy);font-weight:600}
+  .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .chip .n{opacity:.6;margin-left:6px;font-weight:500}
+  .quota{margin-left:auto;font-size:12.5px;color:var(--gray)}
+  button{font:inherit;font-weight:700;border:none;border-radius:9px;padding:9px 16px;background:var(--navy);color:#fff;cursor:pointer}
+  button:hover{background:var(--navy-2)}button.ghost{background:transparent;color:var(--navy);border:1px solid var(--border)}
+  button.sm{padding:6px 11px;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden}
+  th,td{padding:12px 15px;text-align:left;border-bottom:1px solid var(--border);font-size:13px;vertical-align:top}
+  th{background:var(--bg);color:var(--navy);font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.04em}
+  tr:last-child td{border-bottom:none}tr.row{cursor:pointer}tr.row:hover{background:#fafbfd}
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700}
+  .b-novo{background:#eef0f5;color:#5b6478}.b-em_cadencia{background:#e8eefb;color:#2f4ea0}
+  .b-respondeu{background:#fff4d6;color:#9a6b00}.b-agendou{background:#e6f5f1;color:#2b8a73}
+  .b-ganho{background:#e3f7e9;color:#1f8a45}.b-perdido{background:#fbe9e6;color:#b53c28}
+  .b-opt_out{background:#f2f3f6;color:#7b8194}.b-bounce{background:#fbe9e6;color:#b53c28}
+  .muted{color:var(--gray)}.detail td{background:#fafbfd;padding:18px 20px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  .grid b{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--gray);margin-bottom:2px}
+  textarea,input,select{font:inherit;border:1px solid var(--border);border-radius:9px;padding:9px 12px;background:#fff;color:var(--ink);width:100%}
+  textarea{min-height:60px;resize:vertical;margin:8px 0}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;border-top:1px solid var(--border);padding-top:14px}
+  .imp{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;margin-bottom:18px;display:none}
+  .imp.show{display:block}
+  .imp code{background:#f2f3f6;padding:2px 6px;border-radius:5px;font-size:12px}
+  .empty{padding:50px;text-align:center;color:var(--gray)}
+  .toast{position:fixed;bottom:24px;right:24px;background:var(--navy);color:#fff;padding:13px 20px;border-radius:12px;opacity:0;transform:translateY(10px);transition:.25s;pointer-events:none}
+  .toast.show{opacity:1;transform:none}
+</style>
+</head>
+<body>
+<div class="top">
+  <strong style="color:#fff">Usina Tracking · Prospecção</strong>
+  <a href="/admin/">← voltar ao admin</a>
+</div>
+<div class="wrap">
+  <h1>Prospecção (outbound)</h1>
+  <div class="sub">Lista de ICP + cadência de cold e-mail (LGPD-safe) integrada ao funil de agendamento.</div>
+
+  <div class="bar">
+    <div class="chip on" data-f="">Todos <span class="n" id="cAll">0</span></div>
+    <div class="chip" data-f="novo">Novos <span class="n" id="cNovo">0</span></div>
+    <div class="chip" data-f="em_cadencia">Em cadência <span class="n" id="cCad">0</span></div>
+    <div class="chip" data-f="respondeu">Responderam <span class="n" id="cResp">0</span></div>
+    <div class="chip" data-f="agendou">Agendaram <span class="n" id="cAg">0</span></div>
+    <div class="chip" data-f="opt_out">Opt-out <span class="n" id="cOpt">0</span></div>
+    <span class="quota" id="quota"></span>
+  </div>
+
+  <div style="margin-bottom:14px"><button id="btnImp">+ Importar lista</button></div>
+
+  <div class="imp" id="impBox">
+    <p style="margin-bottom:8px"><b>Colar CSV</b> — 1ª linha cabeçalho. Colunas:
+      <code>nome,empresa,email,cargo,segmento,origem,gancho,anuncio_url</code><br>
+      <span class="muted">Só e-mail corporativo (gmail/hotmail/etc. são rejeitados). <code>segmento</code>: agencia | gestor_solo | infoproduto. <code>gancho</code> = 1ª linha personalizada do e-mail.</span>
+    </p>
+    <textarea id="csv" placeholder="nome,empresa,email,cargo,segmento,origem,gancho&#10;Maria Silva,Agência X,maria@agenciax.com.br,Sócia,agencia,apollo,vi seu anúncio de e-commerce rodando"></textarea>
+    <button id="btnDoImp">Importar</button>
+    <button class="ghost" id="btnCancelImp">Cancelar</button>
+    <span id="impResult" class="muted" style="margin-left:10px"></span>
+  </div>
+
+  <div id="host"></div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const SL = {novo:'Novo',em_cadencia:'Em cadência',respondeu:'Respondeu',agendou:'Agendou',ganho:'Ganho',perdido:'Perdido',opt_out:'Opt-out',bounce:'Bounce'};
+let DATA={prospects:[],counts:{},sent_last_24h:0}, filter='', openId=null;
+
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function fmt(u){return u?new Intl.DateTimeFormat('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'}).format(new Date(u*1000)):'—';}
+
+async function load(){
+  const r=await fetch('/admin/prospects'+(filter?('?status='+filter):''),{credentials:'include'});
+  if(r.status===401||r.status===403){location.replace('/admin/');return;}
+  if(!r.ok){document.getElementById('host').innerHTML='<div class="empty">Erro ao carregar.</div>';return;}
+  DATA=await r.json(); render();
+}
+function render(){
+  const c=DATA.counts||{};
+  const tot=Object.values(c).reduce((a,b)=>a+b,0);
+  cAll.textContent=tot; cNovo.textContent=c.novo||0; cCad.textContent=c.em_cadencia||0;
+  cResp.textContent=c.respondeu||0; cAg.textContent=c.agendou||0; cOpt.textContent=c.opt_out||0;
+  document.getElementById('quota').textContent='E-mails enviados (24h): '+(DATA.sent_last_24h||0);
+  document.querySelectorAll('.chip').forEach(ch=>ch.classList.toggle('on',ch.dataset.f===filter));
+
+  const host=document.getElementById('host');
+  if(!DATA.prospects.length){host.innerHTML='<div class="empty">Nenhum prospect. Importe uma lista.</div>';return;}
+  let rows='';
+  for(const p of DATA.prospects){
+    rows+=`<tr class="row" data-id="${p.id}">
+      <td><b>${esc(p.nome)}</b><br><span class="muted">${esc(p.email)}</span></td>
+      <td>${esc(p.empresa||'—')}<br><span class="muted">${esc(p.cargo||'')}</span></td>
+      <td><span class="muted">${esc(p.segmento||'—')}</span></td>
+      <td><span class="badge b-${p.status}">${SL[p.status]||p.status}</span></td>
+      <td class="muted">${p.status==='em_cadencia'?('e-mail '+p.cadence_step+'/5 · próx '+fmt(p.next_action_at)):'—'}</td>
+    </tr>`;
+    if(openId===p.id) rows+=detail(p);
+  }
+  host.innerHTML=`<table><thead><tr><th>Lead</th><th>Empresa</th><th>Segmento</th><th>Status</th><th>Cadência</th></tr></thead><tbody>${rows}</tbody></table>`;
+  host.querySelectorAll('tr.row').forEach(tr=>tr.onclick=()=>{openId=openId===tr.dataset.id?null:tr.dataset.id;render();});
+}
+function detail(p){
+  const acts=[];
+  if(p.status==='novo') acts.push(`<button class="sm" onclick="act('${p.id}','start')">▶ Iniciar cadência</button>`);
+  if(p.status==='em_cadencia'){
+    acts.push(`<button class="sm" onclick="act('${p.id}','send_now')">Enviar próximo agora</button>`);
+    acts.push(`<button class="sm ghost" onclick="act('${p.id}','pause')">Pausar</button>`);
+    acts.push(`<button class="sm ghost" onclick="setStatus('${p.id}','respondeu')">Marcar: respondeu</button>`);
+  }
+  if(['novo','em_cadencia','respondeu','agendou'].includes(p.status)){
+    acts.push(`<button class="sm ghost" onclick="setStatus('${p.id}','ganho')">Ganho</button>`);
+    acts.push(`<button class="sm ghost" onclick="setStatus('${p.id}','perdido')">Perdido</button>`);
+  }
+  acts.push(`<button class="sm ghost" onclick="setStatus('${p.id}','opt_out')">Opt-out</button>`);
+  const linkedinHint = p.status==='em_cadencia'
+    ? `<div style="margin:10px 0;padding:10px 12px;background:#fff7e6;border-radius:9px;font-size:12.5px">📌 Toques manuais do playbook (LinkedIn): faça o toque 2 (~dia 2) e o toque 5 (~dia 9). O sistema só automatiza os e-mails.</div>` : '';
+  return `<tr class="detail"><td colspan="5">
+    <div class="grid">
+      <div><b>Contato</b>${esc(p.nome)} &lt;${esc(p.email)}&gt;${p.cargo?(' · '+esc(p.cargo)):''}</div>
+      <div><b>Origem / segmento</b>${esc(p.origem||'—')} · ${esc(p.segmento||'—')}</div>
+      <div><b>Gancho (1ª linha)</b>${esc(p.gancho||'—')}</div>
+      <div><b>Cadência</b>e-mail ${p.cadence_step}/5 · próximo ${fmt(p.next_action_at)} · último ${fmt(p.last_email_at)}</div>
+      ${p.booking_id?`<div><b>Agendamento</b><a href="/admin/agendamentos" style="color:var(--coral)">ver no funil →</a></div>`:''}
+    </div>
+    ${linkedinHint}
+    <textarea id="n-${p.id}" placeholder="Notas internas...">${esc(p.notas||'')}</textarea>
+    <div class="actions">
+      ${acts.join('')}
+      <button class="sm" onclick="saveNotes('${p.id}')">Salvar notas</button>
+      <button class="sm ghost" onclick="openId=null;render()">Fechar</button>
+    </div>
+  </td></tr>`;
+}
+async function patch(body){
+  const r=await fetch('/admin/prospects',{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(r.ok){toast('Salvo');openId=null;load();}
+  else if(r.status===401||r.status===403){location.replace('/admin/');}
+  else{const e=await r.json().catch(()=>({}));toast('Erro: '+(e.error||r.status));}
+}
+function act(id,action){patch({id,action});}
+function setStatus(id,status){patch({id,status});}
+function saveNotes(id){patch({id,notas:document.getElementById('n-'+id).value});}
+
+document.getElementById('btnImp').onclick=()=>document.getElementById('impBox').classList.toggle('show');
+document.getElementById('btnCancelImp').onclick=()=>document.getElementById('impBox').classList.remove('show');
+document.getElementById('btnDoImp').onclick=async()=>{
+  const csv=document.getElementById('csv').value.trim();
+  if(!csv){toast('Cole o CSV');return;}
+  const r=await fetch('/admin/prospects',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({csv})});
+  const j=await r.json().catch(()=>({}));
+  if(r.ok){document.getElementById('impResult').textContent=`✓ ${j.importados} importados · ${j.dup} duplicados · ${j.email_invalido} e-mail inválido`;document.getElementById('csv').value='';load();}
+  else{toast('Erro: '+(j.error||r.status));}
+};
+document.querySelectorAll('.chip').forEach(ch=>ch.onclick=()=>{filter=ch.dataset.f;openId=null;load();});
+load();
+</script>
+</body>
+</html>

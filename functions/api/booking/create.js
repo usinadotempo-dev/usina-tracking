@@ -194,6 +194,14 @@ export async function onRequestPost(context) {
       await env.DB.prepare('UPDATE demo_bookings SET tg_notified = 1 WHERE id = ?')
         .bind(id).run().catch(() => {});
     }
+    // Fecha o loop da prospecção: se este e-mail veio de um prospect em
+    // cadência, marca 'agendou' + linka o booking + para a cadência.
+    // Best-effort; não toca prospects já fechados/opt-out.
+    await env.DB.prepare(`
+      UPDATE prospects
+         SET status='agendou', booking_id=?, next_action_at=NULL, updated_at=?
+       WHERE email=? AND status IN ('novo','em_cadencia','respondeu')
+    `).bind(id, Math.floor(Date.now() / 1000), booking.email).run().catch(() => {});
   })());
 
   return json({ ok: true, booking_id: id, meet_url: booking.meet_url, when: formatHuman(startISO) });

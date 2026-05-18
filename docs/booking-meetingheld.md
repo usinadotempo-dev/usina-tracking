@@ -75,6 +75,13 @@ agendamento, então nada de atribuição se perde.
 - **GA4 client_id:** capturado do `_ga` original no agendamento (migration
   0036) — costura na sessão GA4 real. Fallback para id sintético estável só
   em agendamentos antigos (pré-0036) ou visitante sem cookie `_ga`.
+- **GA4 `session_id` é obrigatório:** o payload MP envia `session_id`
+  (sintético, estável por agendamento). Sem ele o MP responde 200 mas o
+  GA4 descarta o evento do Tempo real e dos relatórios. Não remover.
+- **Marcar como evento principal:** esta versão do GA4 não cria evento
+  principal por nome — é preciso esperar `meeting_held` aparecer em
+  Admin → Eventos → "Eventos recentes" (lag de até ~24h) e clicar a
+  estrela. O Tempo real confirma ingestão na hora.
 - `action_source: system_generated` (evento de CRM, sem ação direta do
   usuário no momento do disparo) — correto para evento de bastidor.
 

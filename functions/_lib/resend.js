@@ -20,9 +20,24 @@ export function resendConfig(env) {
   };
 }
 
+// Remetente dedicado da prospecção (cold). Subdomínio separado p/ isolar a
+// reputação do domínio transacional/booking. Configure OUTREACH_FROM com algo
+// como "Usina do Tempo <contato@mail.usinadotempo.com.br>" (domínio
+// verificado no Resend). Sem ele, NÃO cai no domínio do booking — retorna
+// erro explícito (cold nunca deve sair pelo domínio transacional).
+export function outreachConfig(env) {
+  return {
+    ok: !!(env.RESEND_API_KEY && env.OUTREACH_FROM),
+    apiKey: env.RESEND_API_KEY,
+    from: env.OUTREACH_FROM || null,
+    replyTo: env.OUTREACH_REPLY_TO || env.GCAL_IMPERSONATE || null,
+  };
+}
+
 // Envia um e-mail. Best-effort: retorna { ok, id?, error? } e nunca lança —
 // um e-mail que falha não pode derrubar a criação do agendamento.
-export async function sendEmail(env, { to, subject, html, replyTo }) {
+// `from` opcional sobrescreve o remetente (usado pela prospecção).
+export async function sendEmail(env, { to, subject, html, replyTo, from }) {
   const cfg = resendConfig(env);
   if (!cfg.ok) return { ok: false, error: 'RESEND_API_KEY ausente' };
   try {
@@ -30,7 +45,7 @@ export async function sendEmail(env, { to, subject, html, replyTo }) {
       method: 'POST',
       headers: { Authorization: `Bearer ${cfg.apiKey}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: cfg.from,
+        from: from || cfg.from,
         to: Array.isArray(to) ? to : [to],
         subject,
         html,
