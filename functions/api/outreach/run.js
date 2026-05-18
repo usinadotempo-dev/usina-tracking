@@ -28,7 +28,11 @@ export async function onRequestPost(context) {
   if (!oc.ok) {
     return json({ ok: false, skipped: 'OUTREACH_FROM/RESEND_API_KEY ausente — cold não enviado' }, 200);
   }
-  if (!inSendWindow()) {
+  // Override de teste: ?force=1 pula só a checagem de janela. Só é
+  // utilizável por quem tem o SYNC_SECRET (já exigido acima); o cron de
+  // produção nunca passa force, então a janela continua valendo no automático.
+  const force = new URL(request.url).searchParams.get('force') === '1';
+  if (!force && !inSendWindow()) {
     return json({ ok: true, skipped: 'fora da janela comercial (seg-sex 9-17 BRT)' }, 200);
   }
 
