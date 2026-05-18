@@ -71,6 +71,16 @@
 
 <script>
 const STATUS_LABELS = {agendada:'Agendada',realizada:'Realizada',no_show:'No-show',cancelada:'Cancelada',ganho:'Ganho',perdido:'Perdido'};
+// Espelha functions/_lib/booking-actions.js (vocabulário do form de qualificação).
+const SPEND_LABEL={lt5k:'Menos de R$5k/mês','5k_20k':'R$5k–20k/mês','20k_50k':'R$20k–50k/mês',gt50k:'R$50k+/mês',none:'Ainda não invisto'};
+const TRACKING_LABEL={pixel_only:'Só pixel',gtm:'GTM',stape:'Stape / similar',unknown:'Não sabe',other:'Outro'};
+const ROLE_LABEL={me:'Decide sozinho',me_partner:'Decide com sócio/gestor',agency_for_client:'Gestor de um cliente (agência)'};
+function icpTier(b){
+  if(b.spend_band==='20k_50k'||b.spend_band==='gt50k') return {emoji:'🟢',label:'ICP forte'};
+  if(b.spend_band==='5k_20k') return {emoji:'🟡',label:'ICP médio'};
+  if(b.spend_band==='lt5k'||b.spend_band==='none') return {emoji:'🔴',label:'fora do ICP'};
+  return {emoji:'⚪',label:'sem verba informada'};
+}
 let DATA = {bookings:[],counts:{},statuses:[]};
 let filter = '';
 let openId = null;
@@ -112,7 +122,7 @@ function renderTable(){
     const origem=[b.utm_source,b.utm_medium,b.utm_campaign].filter(Boolean).join(' / ')||(b.fbclid?'Meta':b.gclid?'Google':'direto');
     rows+=`<tr class="row" data-id="${b.id}">
       <td class="when">${fmtWhen(b.slot_start_iso)}</td>
-      <td><b>${esc(b.name)}</b><br><span class="muted">${esc(b.email)}</span></td>
+      <td><b>${esc(b.name)}</b><br><span class="muted">${esc(b.email)}</span>${b.spend_band?`<br><span class="muted" style="font-size:11.5px">${icpTier(b).emoji} ${icpTier(b).label}</span>`:''}</td>
       <td>${esc(b.company||'—')}</td>
       <td><span class="muted">${esc(origem)}</span></td>
       <td><span class="badge b-${b.status}">${STATUS_LABELS[b.status]}</span></td>
@@ -134,12 +144,26 @@ function detailRow(b){
     b.reminded_1h?'lembrete 1h ✓':'',
     b.followup_stage?('follow-up '+['','D+1','D+3','D+7'][b.followup_stage]):''
   ].filter(Boolean).join(' · ');
+  const icp=icpTier(b);
+  const qualParts=[
+    b.spend_band?('Verba: '+(SPEND_LABEL[b.spend_band]||b.spend_band)):'',
+    b.tracking_now?('Rastreia: '+(TRACKING_LABEL[b.tracking_now]||b.tracking_now)):'',
+    b.decision_role?('Decisão: '+(ROLE_LABEL[b.decision_role]||b.decision_role)):''
+  ].filter(Boolean);
+  const qualHtml = b.spend_band
+    ? `<span style="font-weight:700">${icp.emoji} ${icp.label}</span><br><span class="muted">${esc(qualParts.join(' · '))}</span>`
+    : '<span class="muted">não preenchida (agendamento antigo)</span>';
+  const heldHtml = b.held_at
+    ? `${fmtDate(b.held_at)}${b.meet_verified?' · <span class="muted">verificado no Meet</span>':''}`
+    : '<span class="muted">—</span>';
   return `<tr class="detail"><td colspan="6">
     <div class="det-grid">
       <div><b>Contato</b>${esc(b.name)} &lt;${esc(b.email)}&gt;${b.phone?(' · '+esc(b.phone)):''}</div>
       <div><b>Reunião</b>${b.meet_url?`<a class="link" href="${b.meet_url}" target="_blank">Google Meet</a>`:'—'} ${b.gcal_html_link?`· <a class="link" href="${b.gcal_html_link}" target="_blank">Google Agenda</a>`:''}</div>
       <div><b>Atribuição</b>${esc([b.utm_source,b.utm_medium,b.utm_campaign].filter(Boolean).join(' / ')||'—')}</div>
       <div><b>Página</b><span class="muted">${esc(b.landing_url||'—')}</span></div>
+      <div><b>Qualificação</b>${qualHtml}</div>
+      <div><b>Comparecimento</b>${heldHtml}</div>
       <div><b>Mensagem</b>${esc(b.message||'—')}</div>
       <div><b>E-mails</b><span class="muted">${emailState||'—'}</span></div>
     </div>
