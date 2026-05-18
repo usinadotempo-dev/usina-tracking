@@ -60,8 +60,17 @@ export async function onRequestPost(context) {
       const unsubUrl = `${base}/api/outreach/unsubscribe?p=${encodeURIComponent(p.id)}&t=${p.unsub_token}`;
       const { subject, html } = buildEmail(step, p, unsubUrl);
 
+      // One-Click List-Unsubscribe (RFC 8058) — protege a reputação do
+      // domínio compartilhado e atende às regras de remetente em massa
+      // Gmail/Yahoo. O endpoint aceita POST (one-click) e GET (link).
+      const headers = {
+        'List-Unsubscribe': `<${unsubUrl}>` +
+          (oc.replyTo ? `, <mailto:${oc.replyTo}?subject=unsubscribe>` : ''),
+        'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+      };
+
       const r = await sendEmail(env, {
-        to: p.email, subject, html, from: oc.from, replyTo: oc.replyTo,
+        to: p.email, subject, html, from: oc.from, replyTo: oc.replyTo, headers,
       }).catch((e) => ({ ok: false, error: String(e && e.message || e) }));
 
       const logId = crypto.randomUUID();

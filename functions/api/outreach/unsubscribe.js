@@ -6,29 +6,37 @@
 
 import { timingSafeEqual } from '../../_lib/outreach.js';
 
-export async function onRequestGet(context) {
-  const { request, env } = context;
-  const url = new URL(request.url);
-  const id = url.searchParams.get('p') || '';
-  const t = url.searchParams.get('t') || '';
-  if (!id || !t) return page('Link inválido', 'Faltam parâmetros.');
-
+// Aplica o opt-out (idempotente). Retorna: 'ok' | 'invalid' | 'notfound'.
+async function applyOptOut(env, id, t) {
+  if (!id || !t) return 'invalid';
   const p = await env.DB.prepare(
     'SELECT id, status, unsub_token FROM prospects WHERE id = ?'
   ).bind(id).first();
-  if (!p) return page('Não encontrado', 'Este contato não está mais na nossa base.');
-
-  if (!timingSafeEqual(t, p.unsub_token || '')) {
-    return page('Link inválido', 'Não foi possível validar o pedido.');
-  }
-
+  if (!p) return 'notfound';
+  if (!timingSafeEqual(t, p.unsub_token || '')) return 'invalid';
   if (p.status !== 'opt_out') {
-    const now = Math.floor(Date.now() / 1000);
     await env.DB.prepare(
       "UPDATE prospects SET status='opt_out', next_action_at=NULL, updated_at=? WHERE id=?"
-    ).bind(now, id).run();
+    ).bind(Math.floor(Date.now() / 1000), id).run();
   }
+  return 'ok';
+}
+
+// GET — clique no link do rodapé (mostra página de confirmação).
+export async function onRequestGet(context) {
+  const url = new URL(context.request.url);
+  const res = await applyOptOut(context.env, url.searchParams.get('p') || '', url.searchParams.get('t') || '');
+  if (res === 'notfound') return page('Não encontrado', 'Este contato não está mais na nossa base.');
+  if (res === 'invalid') return page('Link inválido', 'Não foi possível validar o pedido.');
   return page('Pronto, você saiu da lista', 'Não vamos mais te enviar e-mails. Sem ressentimentos. 👍');
+}
+
+// POST — One-Click List-Unsubscribe (RFC 8058): Gmail/Yahoo fazem POST
+// direto na URL (mesmos query params). Resposta mínima 200.
+export async function onRequestPost(context) {
+  const url = new URL(context.request.url);
+  await applyOptOut(context.env, url.searchParams.get('p') || '', url.searchParams.get('t') || '');
+  return new Response('OK', { status: 200, headers: { 'Content-Type': 'text/plain' } });
 }
 
 function page(title, msg) {

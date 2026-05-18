@@ -31,17 +31,26 @@ gancho é o que mais sobe a taxa de resposta.**
 
 ## 2. Setup (uma vez)
 
-### 2.1 Subdomínio de envio no Resend (isola reputação do domínio do booking)
-1. Resend → Domains → Add Domain: **`mail.usinadotempo.com.br`** (subdomínio).
-2. Adicione no DNS (Cloudflare zone usinadotempo.com.br) os registros
-   SPF/DKIM/DMARC que o Resend mostrar para esse subdomínio.
-3. Aguarde verificar (Verified).
+### 2.1 Domínio de envio — `usinadotempo.com.br` (decisão 2026-05-18)
+
+Decidido **não** criar subdomínio dedicado (custo/atrito). O cold sai pelo
+mesmo domínio já verificado no Resend (`usinadotempo.com.br`).
+
+> **Risco assumido:** reputação compartilhada com os e-mails transacionais
+> (confirmação/lembrete de reunião). Cold mal calibrado pode arranhar a
+> entregabilidade do booking. **Mitigações já no código** (não desligar):
+> One-Click `List-Unsubscribe` (RFC 8058), teto diário baixo + ramp lento,
+> lista só corporativa, para em resposta/opt-out. Use um **local-part
+> distinto** do transacional (`contato@`, não `agenda@`). Se algum dia a
+> entregabilidade do booking cair, a 1ª medida é mover o cold p/ subdomínio.
+
+Nada a configurar no Resend (domínio já verificado).
 
 ### 2.2 Variáveis (Cloudflare Pages → Settings → Environment variables)
 
 | Variável | Valor | Obrigatória |
 |---|---|---|
-| `OUTREACH_FROM` | `Usina do Tempo <contato@mail.usinadotempo.com.br>` | **Sim** — sem ela o cron NÃO envia (cold nunca cai no domínio transacional) |
+| `OUTREACH_FROM` | `Usina do Tempo <contato@usinadotempo.com.br>` (local-part ≠ do booking) | **Sim** — sem ela o cron NÃO envia |
 | `OUTREACH_DAILY_CAP` | `30` (suba ~+10/semana se sem bounce) | não (default 30) |
 | `OUTREACH_REPLY_TO` | e-mail real onde você lê respostas | recomendado |
 | `OUTREACH_BASE_URL` | `https://lp.usinadotempo.com.br` | não (default) |

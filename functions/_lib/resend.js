@@ -20,11 +20,13 @@ export function resendConfig(env) {
   };
 }
 
-// Remetente dedicado da prospecção (cold). Subdomínio separado p/ isolar a
-// reputação do domínio transacional/booking. Configure OUTREACH_FROM com algo
-// como "Usina do Tempo <contato@mail.usinadotempo.com.br>" (domínio
-// verificado no Resend). Sem ele, NÃO cai no domínio do booking — retorna
-// erro explícito (cold nunca deve sair pelo domínio transacional).
+// Remetente da prospecção (cold). Decisão 2026-05-18: usa o domínio
+// usinadotempo.com.br (mesmo do booking) p/ não criar subdomínio — risco de
+// reputação compartilhada mitigado com cap baixo, ramp lento, lista estrita
+// e One-Click List-Unsubscribe (ver run.js). Configure OUTREACH_FROM com
+// um local-part DISTINTO do transacional, ex.:
+// "Usina do Tempo <contato@usinadotempo.com.br>" (agenda@ é do booking).
+// Sem OUTREACH_FROM o cron NÃO envia (não cai em DEFAULT_FROM por acidente).
 export function outreachConfig(env) {
   return {
     ok: !!(env.RESEND_API_KEY && env.OUTREACH_FROM),
@@ -37,7 +39,8 @@ export function outreachConfig(env) {
 // Envia um e-mail. Best-effort: retorna { ok, id?, error? } e nunca lança —
 // um e-mail que falha não pode derrubar a criação do agendamento.
 // `from` opcional sobrescreve o remetente (usado pela prospecção).
-export async function sendEmail(env, { to, subject, html, replyTo, from }) {
+// `headers` opcional injeta cabeçalhos (ex.: List-Unsubscribe do cold).
+export async function sendEmail(env, { to, subject, html, replyTo, from, headers }) {
   const cfg = resendConfig(env);
   if (!cfg.ok) return { ok: false, error: 'RESEND_API_KEY ausente' };
   try {
@@ -50,6 +53,7 @@ export async function sendEmail(env, { to, subject, html, replyTo, from }) {
         subject,
         html,
         ...(replyTo || cfg.replyTo ? { reply_to: replyTo || cfg.replyTo } : {}),
+        ...(headers && Object.keys(headers).length ? { headers } : {}),
       }),
     });
     const data = await r.json().catch(() => ({}));
