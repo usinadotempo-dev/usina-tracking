@@ -105,7 +105,9 @@ async function sendMetaHeld(b, cfg, ev) {
       event_time: ev.time,
       event_id: ev.id,
       event_source_url: b.landing_url || '',
-      action_source: 'system_generated',
+      // 'website' (não 'system_generated'): é o mesmo do Schedule server-side
+      // que já funciona com este pixel/token — remove variável de rejeição.
+      action_source: 'website',
       user_data: user,
       custom_data: { value: ev.value, currency: 'BRL' },
     }],
@@ -157,7 +159,8 @@ export async function fireMeetingHeld(env, booking) {
       sendGa4Held(booking, cfg, ev).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
     ]);
   } catch (e) {
-    return { attempted: true, anyOk: false, error: String(e && e.message || e) };
+    const err = String(e && e.message || e);
+    return { attempted: true, anyOk: false, error: err, meta: { error: err }, ga4: { error: err } };
   }
   const anyOk = !!(meta && meta.ok) || !!(ga4 && ga4.ok);
   return { attempted: true, anyOk, meta, ga4 };

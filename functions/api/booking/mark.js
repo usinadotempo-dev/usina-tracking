@@ -76,21 +76,29 @@ export async function onRequestGet(context) {
   } else if (b.held_event_sent) {
     extra = ' Evento de comparecimento já havia sido enviado.';
   } else {
-    // Best-effort em segundo plano; só liga held_event_sent se algo deu ok,
-    // e só a partir de 0 (não re-dispara se uma corrida já marcou).
-    context.waitUntil((async () => {
-      const r = await fireMeetingHeld(env, { ...b, held_at: b.held_at || now })
-        .catch((e) => ({ anyOk: false, error: String(e && e.message || e) }));
-      if (r && r.anyOk) {
-        await env.DB.prepare(
-          `UPDATE demo_bookings SET held_event_sent=1, updated_at=?
-            WHERE id=? AND held_event_sent=0`
-        ).bind(Math.floor(Date.now() / 1000), id).run().catch(() => {});
-      } else {
-        console.log('MeetingHeld fan-out sem sucesso:', JSON.stringify(r).slice(0, 300));
-      }
-    })());
-    extra = ' Evento de comparecimento enviado (Meta/GA4) em segundo plano.';
+    // Síncrono de propósito: o operador espera ~1s e a página mostra o
+    // resultado real do Meta. Idempotência baseada no META (canal que
+    // importa) — o GA4 responde 200 sempre e não pode "mascarar" falha.
+    const r = await fireMeetingHeld(env, { ...b, held_at: b.held_at || now })
+      .catch((e) => ({ error: String(e && e.message || e) }));
+    const meta = (r && r.meta) || {};
+    const ga4 = (r && r.ga4) || {};
+    const metaConfigured = !meta.skipped;
+    const delivered = metaConfigured ? !!meta.ok : !!ga4.ok;
+    if (delivered) {
+      await env.DB.prepare(
+        `UPDATE demo_bookings SET held_event_sent=1, updated_at=?
+          WHERE id=? AND held_event_sent=0`
+      ).bind(Math.floor(Date.now() / 1000), id).run().catch(() => {});
+    }
+    const metaDesc = meta.skipped ? `skip(${esc(meta.skipped)})`
+      : meta.error ? `erro(${esc(meta.error)})`
+      : meta.status === undefined ? 'sem resposta'
+      : `${meta.status}${meta.ok ? ' ok' : ' ✗ ' + esc(String(meta.body || '').slice(0, 220))}`;
+    const ga4Desc = ga4.skipped ? 'skip' : ga4.error ? 'erro'
+      : ga4.ok ? 'ok' : `http ${ga4.status}`;
+    console.log('MeetingHeld', id, 'meta=', JSON.stringify(meta).slice(0, 300), 'ga4=', JSON.stringify(ga4).slice(0, 120));
+    extra = `<br><br><span class="m">Meta: ${metaDesc} · GA4: ${ga4Desc} · delivered=${delivered}</span>`;
   }
 
   const note = b.status === 'realizada' ? 'Já estava como realizada' : 'Marcado como realizada';
