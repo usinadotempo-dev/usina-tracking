@@ -72,11 +72,9 @@ no fim de `booking-events.js`. Até lá, o `gclid` segue gravado no
 agendamento, então nada de atribuição se perde.
 
 ## Limitações conhecidas
-- **GA4 client_id sintético:** o agendamento não persiste o `_ga` original,
-  então usamos um id estável derivado do booking. Conta a conversão, mas não
-  costura na sessão GA4 original. Se precisar dessa costura, adicionar
-  captura de `ga_client_id` no form (LP + `create.js` + coluna) — fora do
-  escopo do passo 3.
+- **GA4 client_id:** capturado do `_ga` original no agendamento (migration
+  0036) — costura na sessão GA4 real. Fallback para id sintético estável só
+  em agendamentos antigos (pré-0036) ou visitante sem cookie `_ga`.
 - `action_source: system_generated` (evento de CRM, sem ação direta do
   usuário no momento do disparo) — correto para evento de bastidor.
 

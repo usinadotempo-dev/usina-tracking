@@ -982,6 +982,7 @@ window.USINATRK=(function(){
       utm_campaign:q.get('utm_campaign')||'', utm_content:q.get('utm_content')||'',
       utm_term:q.get('utm_term')||'', fbclid:q.get('fbclid')||'', gclid:q.get('gclid')||'',
       fbp:ck('_fbp'), fbc:ck('_fbc'),
+      ga_client_id:(ck('_ga')||'').split('.').slice(-2).join('.'),
       referrer:document.referrer||'', landing_url:location.href
     };
   }

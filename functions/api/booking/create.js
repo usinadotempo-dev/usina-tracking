@@ -128,6 +128,7 @@ export async function onRequestPost(context) {
     spend_band: spendBand,
     tracking_now: trackingNow,
     decision_role: decisionRole,
+    ga_client_id: clean(body.ga_client_id, 64) || null,
     utm_source: clean(body.utm_source, 120) || null,
     utm_medium: clean(body.utm_medium, 120) || null,
     utm_campaign: clean(body.utm_campaign, 200) || null,
@@ -149,16 +150,16 @@ export async function onRequestPost(context) {
         (id, created_at, updated_at, name, email, phone, company, message,
          slot_start, slot_end, slot_start_iso, tz,
          gcal_event_id, meet_url, gcal_html_link, status,
-         spend_band, tracking_now, decision_role,
+         spend_band, tracking_now, decision_role, ga_client_id,
          utm_source, utm_medium, utm_campaign, utm_content, utm_term,
          fbclid, gclid, fbp, fbc, referrer, landing_url, ip_address, user_agent)
-      VALUES (?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?,?)
     `).bind(
       booking.id, booking.created_at, booking.updated_at, booking.name, booking.email,
       booking.phone, booking.company, booking.message,
       booking.slot_start, booking.slot_end, booking.slot_start_iso, booking.tz,
       booking.gcal_event_id, booking.meet_url, booking.gcal_html_link, booking.status,
-      booking.spend_band, booking.tracking_now, booking.decision_role,
+      booking.spend_band, booking.tracking_now, booking.decision_role, booking.ga_client_id,
       booking.utm_source, booking.utm_medium, booking.utm_campaign, booking.utm_content, booking.utm_term,
       booking.fbclid, booking.gclid, booking.fbp, booking.fbc, booking.referrer,
       booking.landing_url, booking.ip_address, booking.user_agent,

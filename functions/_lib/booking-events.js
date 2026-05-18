@@ -76,10 +76,11 @@ function deriveFbc(b) {
   return '';
 }
 
-// GA4 MP exige client_id. O agendamento não persiste o _ga original, então
-// sintetizamos um id estável a partir do booking — conta a conversão, mas
-// não costura na sessão GA original (limitação aceita p/ evento de bastidor).
-function syntheticGaClientId(b) {
+// GA4 MP exige client_id. Usa o _ga original capturado no agendamento
+// (migration 0036) p/ costurar na sessão GA4 real; só cai no id sintético
+// estável quando o agendamento é antigo ou o visitante não tinha cookie _ga.
+function gaClientId(b) {
+  if (b.ga_client_id && /^\d+\.\d+$/.test(b.ga_client_id)) return b.ga_client_id;
   const n = (String(b.id).replace(/\D/g, '').slice(0, 10) || '1');
   return `${parseInt(n, 10)}.${b.created_at || Math.floor(Date.now() / 1000)}`;
 }
@@ -122,7 +123,7 @@ async function sendGa4Held(b, cfg, ev) {
   if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) return { skipped: 'sem ga4 config' };
 
   const payload = {
-    client_id: syntheticGaClientId(b),
+    client_id: gaClientId(b),
     events: [{
       name: 'meeting_held',
       params: { value: ev.value, currency: 'BRL', engagement_time_msec: 100 },

@@ -43,7 +43,7 @@ export async function onRequestGet(context) {
 
   const b = await env.DB.prepare(
     `SELECT id, name, email, phone, slot_start_iso, status, held_at, held_event_sent,
-            spend_band, fbp, fbc, fbclid, gclid, ip_address, user_agent,
+            spend_band, fbp, fbc, fbclid, gclid, ga_client_id, ip_address, user_agent,
             landing_url, created_at
        FROM demo_bookings WHERE id = ?`
   ).bind(id).first();
