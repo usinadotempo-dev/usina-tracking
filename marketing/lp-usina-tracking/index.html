@@ -319,6 +319,10 @@
     margin-bottom:11px;background:var(--card);color:var(--ink);transition:.18s}
   .bk-in:focus{outline:none;border-color:var(--coral);box-shadow:0 0 0 3px rgba(220,74,48,.12)}
   textarea.bk-in{min-height:78px;resize:vertical}
+  select.bk-in{appearance:none;-webkit-appearance:none;cursor:pointer;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none'><path d='M6 9l6 6 6-6' stroke='%237a8a99' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>");
+    background-repeat:no-repeat;background-position:right 15px center;padding-right:40px}
+  select.bk-in:invalid{color:var(--gray)}
   .bk-back{background:none;border:none;color:var(--gray);font:inherit;font-weight:600;cursor:pointer;padding:10px}
   .bk-back:hover{color:var(--navy)}
   .bk-note{font-size:13px;color:var(--gray);margin-top:14px}
@@ -708,7 +712,29 @@
           <input class="bk-in" id="bkEmail" type="email" autocomplete="email" placeholder="Seu melhor e-mail" required>
           <input class="bk-in" id="bkPhone" autocomplete="tel" placeholder="WhatsApp (opcional)">
           <input class="bk-in" id="bkCompany" autocomplete="organization" placeholder="Empresa (opcional)">
-          <textarea class="bk-in" id="bkMsg" placeholder="Conta rapidamente seu cenário — quanto investe em anúncio, o que vende (opcional)"></textarea>
+          <select class="bk-in" id="bkSpend" required>
+            <option value="" disabled selected>Quanto investe em anúncio por mês?</option>
+            <option value="none">Ainda não invisto</option>
+            <option value="lt5k">Menos de R$5 mil</option>
+            <option value="5k_20k">R$5 mil a R$20 mil</option>
+            <option value="20k_50k">R$20 mil a R$50 mil</option>
+            <option value="gt50k">Mais de R$50 mil</option>
+          </select>
+          <select class="bk-in" id="bkTrk" required>
+            <option value="" disabled selected>Como rastreia conversão hoje?</option>
+            <option value="pixel_only">Só o pixel</option>
+            <option value="gtm">GTM</option>
+            <option value="stape">Stape ou similar</option>
+            <option value="unknown">Não sei</option>
+            <option value="other">Outro</option>
+          </select>
+          <select class="bk-in" id="bkRole" required>
+            <option value="" disabled selected>Quem decide a contratação?</option>
+            <option value="me">Sou eu</option>
+            <option value="me_partner">Eu + sócio/gestor</option>
+            <option value="agency_for_client">Sou gestor de um cliente</option>
+          </select>
+          <textarea class="bk-in" id="bkMsg" placeholder="Algo que ajude a preparar a call? (opcional)"></textarea>
           <input id="bkHP" name="website" type="text" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-9999px;top:-9999px;width:1px;height:1px;opacity:0;pointer-events:none">
           <div class="sched-confirm">
             <button type="submit" class="btn-primary" id="confirmBtn">
@@ -1030,6 +1056,8 @@ window.USINATRK=(function(){
       name:name, email:email,
       phone:el('bkPhone').value.trim(), company:el('bkCompany').value.trim(),
       message:el('bkMsg').value.trim(), slot_iso:BK.slotISO,
+      spend_band:el('bkSpend').value, tracking_now:el('bkTrk').value,
+      decision_role:el('bkRole').value,
       hp:(el('bkHP')||{}).value||'', elapsed_ms:Date.now()-BK.startedAt
     }, attribution());
     fetch('/api/booking/create',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})

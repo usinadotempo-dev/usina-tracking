@@ -25,6 +25,7 @@ export async function onRequestGet(context) {
     SELECT id, created_at, name, email, phone, company, message,
            slot_start, slot_start_iso, status, meet_url, gcal_html_link,
            confirmation_sent, reminded_24h, reminded_1h, followup_stage,
+           spend_band, tracking_now, decision_role, held_at, meet_verified,
            utm_source, utm_medium, utm_campaign, fbclid, gclid, landing_url, notes
       FROM demo_bookings
       ${whereSql}

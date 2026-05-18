@@ -28,8 +28,9 @@ export function telegramConfig(env) {
 
 // Envia uma mensagem para o grupo. `text` aceita HTML (parse_mode=HTML);
 // use o helper esc() do booking-telegram.js em qualquer campo vindo do lead.
+// `replyMarkup` (opcional) é um objeto inline_keyboard p/ botões de ação.
 // Best-effort: retorna { ok, id?, error? } e nunca lança.
-export async function sendTelegram(env, text) {
+export async function sendTelegram(env, text, replyMarkup) {
   const cfg = telegramConfig(env);
   if (!cfg.ok) return { ok: false, error: 'TELEGRAM_BOT_TOKEN/TELEGRAM_CHAT_ID ausente' };
   try {
@@ -42,6 +43,7 @@ export async function sendTelegram(env, text) {
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
+        ...(replyMarkup ? { reply_markup: replyMarkup } : {}),
       }),
     });
     const data = await r.json().catch(() => ({}));

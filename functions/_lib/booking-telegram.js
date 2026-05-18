@@ -6,6 +6,14 @@
 
 import { sendTelegram } from './telegram.js';
 import { formatHuman } from './booking.js';
+import { qualLines, actionKeyboard } from './booking-actions.js';
+
+// Bloco de qualificação BANT-light (ICP + verba + stack + decisão). Rótulos
+// são fixos (vocabulário controlado), não precisam de esc().
+function qualBlock(b) {
+  const lines = qualLines(b);
+  return lines.length ? `\n${lines.join('\n')}\n` : '';
+}
 
 // Origem legível do lead, mesma regra do aviso interno por e-mail.
 function origem(b) {
@@ -36,28 +44,32 @@ function links(b) {
 // ---- dispatch (best-effort, nunca lança) ----------------------------------
 
 // Novo agendamento — disparado em /api/booking/create.
-export function notifyTelegramBooking(env, b) {
+export async function notifyTelegramBooking(env, b) {
   const when = formatHuman(b.slot_start_iso);
   const text =
     `🗓️ <b>Nova apresentação agendada</b>\n` +
-    `📅 <b>${esc(when)}</b> (Brasília)\n\n` +
+    `📅 <b>${esc(when)}</b> (Brasília)\n` +
+    qualBlock(b) + `\n` +
     leadBlock(b) +
     links(b);
-  return sendTelegram(env, text);
+  return sendTelegram(env, text, await actionKeyboard(env, b));
 }
 
-// Lembrete pra equipe — 24h ou 1h antes (cron booking-reminders).
-export function notifyTelegramReminder(env, b, kind /* '24h' | '1h' */) {
+// Lembrete pra equipe — 24h ou 1h antes (cron booking-reminders). O lembrete
+// de 1h leva os botões de comparecimento (você toca logo após a call).
+export async function notifyTelegramReminder(env, b, kind /* '24h' | '1h' */) {
   const when = formatHuman(b.slot_start_iso);
   const head = kind === '1h'
     ? `⏰ <b>Reunião em ~1 hora</b>`
     : `🔔 <b>Reunião amanhã (em ~24h)</b>`;
   const text =
     `${head}\n` +
-    `📅 <b>${esc(when)}</b> (Brasília)\n\n` +
+    `📅 <b>${esc(when)}</b> (Brasília)\n` +
+    qualBlock(b) + `\n` +
     leadBlock(b) +
     links(b);
-  return sendTelegram(env, text);
+  const kb = kind === '1h' ? await actionKeyboard(env, b) : undefined;
+  return sendTelegram(env, text, kb);
 }
 
 // No-show — lead não compareceu (cron booking-reminders, após +30min do fim).

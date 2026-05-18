@@ -16,6 +16,10 @@ import { freeBusy, createEvent, calendarConfig } from '../../_lib/google-calenda
 import { validateRequestedSlot, slotWindowISO, isoToUnix, formatHuman } from '../../_lib/booking.js';
 import { sendConfirmation, notifyInternal } from '../../_lib/booking-emails.js';
 import { notifyTelegramBooking } from '../../_lib/booking-telegram.js';
+import {
+  pickCode, SPEND_BANDS, TRACKING_NOW, DECISION_ROLES,
+  spendLabel, trackingLabel, roleLabel,
+} from '../../_lib/booking-actions.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -35,6 +39,12 @@ export async function onRequestPost(context) {
   const company = clean(body.company, 140);
   const message = clean(body.message, 1000);
   const slotISO = clean(body.slot_iso, 40);
+
+  // Qualificação BANT-light do form (códigos do vocabulário controlado;
+  // valor inválido/ausente → null, nunca bloqueia o agendamento — soft-gate).
+  const spendBand = pickCode(body.spend_band, SPEND_BANDS);
+  const trackingNow = pickCode(body.tracking_now, TRACKING_NOW);
+  const decisionRole = pickCode(body.decision_role, DECISION_ROLES);
 
   if (!name) return json({ ok: false, error: 'nome_obrigatorio' }, 400);
   if (!isEmail(email)) return json({ ok: false, error: 'email_invalido' }, 400);
@@ -78,6 +88,14 @@ export async function onRequestPost(context) {
       description:
         `Apresentação do Usina Tracking (20 min).\n\n` +
         `Lead: ${name} <${email}>${phone ? ` · ${phone}` : ''}${company ? ` · ${company}` : ''}\n` +
+        (() => {
+          const q = [
+            spendLabel(spendBand) && `Verba ${spendLabel(spendBand)}`,
+            trackingLabel(trackingNow) && `Rastreia ${trackingLabel(trackingNow)}`,
+            roleLabel(decisionRole),
+          ].filter(Boolean).join(' · ');
+          return q ? `Qualificação: ${q}\n` : '';
+        })() +
         (message ? `Mensagem: ${message}\n` : '') +
         `Origem: ${[body.utm_source, body.utm_medium, body.utm_campaign].filter(Boolean).join(' / ') || (body.fbclid ? 'Meta' : body.gclid ? 'Google' : 'direto')}`,
       attendeeEmail: email,
@@ -107,6 +125,9 @@ export async function onRequestPost(context) {
     meet_url: ev.meetUrl || null,
     gcal_html_link: ev.htmlLink || null,
     status: 'agendada',
+    spend_band: spendBand,
+    tracking_now: trackingNow,
+    decision_role: decisionRole,
     utm_source: clean(body.utm_source, 120) || null,
     utm_medium: clean(body.utm_medium, 120) || null,
     utm_campaign: clean(body.utm_campaign, 200) || null,
@@ -128,14 +149,16 @@ export async function onRequestPost(context) {
         (id, created_at, updated_at, name, email, phone, company, message,
          slot_start, slot_end, slot_start_iso, tz,
          gcal_event_id, meet_url, gcal_html_link, status,
+         spend_band, tracking_now, decision_role,
          utm_source, utm_medium, utm_campaign, utm_content, utm_term,
          fbclid, gclid, fbp, fbc, referrer, landing_url, ip_address, user_agent)
-      VALUES (?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?, ?,?,?,?, ?,?,?,?, ?,?,?, ?,?,?,?,?, ?,?,?,?,?,?,?,?)
     `).bind(
       booking.id, booking.created_at, booking.updated_at, booking.name, booking.email,
       booking.phone, booking.company, booking.message,
       booking.slot_start, booking.slot_end, booking.slot_start_iso, booking.tz,
       booking.gcal_event_id, booking.meet_url, booking.gcal_html_link, booking.status,
+      booking.spend_band, booking.tracking_now, booking.decision_role,
       booking.utm_source, booking.utm_medium, booking.utm_campaign, booking.utm_content, booking.utm_term,
       booking.fbclid, booking.gclid, booking.fbp, booking.fbc, booking.referrer,
       booking.landing_url, booking.ip_address, booking.user_agent,
