@@ -184,10 +184,12 @@ reunião→proposta · proposta→fechamento · CAC por canal · ciclo · LTV ·
 > **Como o comparecimento é medido:** o agendamento dispara `Schedule`
 > (volume). Após a call você toca **✅ Compareceu / 🚫 No-show** no botão do
 > aviso de Telegram (lembrete de 1h) → status `realizada`/`no_show` no
-> mini-CRM. O evento server-side de qualidade (`MeetingHeld` → Meta CAPI /
-> GA4 / Google Ads, usando a atribuição já gravada no agendamento) é o
-> **passo 3**, a revisar antes de ativar — é ele que vai deixar otimizar a
-> campanha por reunião comparecida, não por lead.
+> mini-CRM. O evento server-side de qualidade (`MeetingHeld` → Meta CAPI +
+> GA4, com `value` por faixa de verba) já está implementado, **desligado por
+> padrão** atrás de `BOOKING_HELD_FANOUT`; ligue depois de criar a conversão
+> personalizada no Meta (passo a passo em `docs/booking-meetingheld.md`). É
+> ele que deixa otimizar a campanha por reunião comparecida, não por lead.
+> Google Ads fica deferido até o developer token destravar.
 
 ### 1.8 Fases de execução
 

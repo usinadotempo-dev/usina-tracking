@@ -38,6 +38,22 @@ const ROLE_LABEL = {
   agency_for_client: 'Gestor de um cliente (agência)',
 };
 
+// Valor relativo (BRL) por faixa de verba — sinal p/ value-based bidding do
+// Meta no evento MeetingHeld. NÃO é receita: é uma proxy do potencial do
+// lead (quem queima mais verba tende a virar conta maior), pra a entrega do
+// anúncio pender pra quem tem orçamento maior, não só pra quem agenda.
+// Ajuste livre quando o preço do SaaS estiver fechado.
+const MEETING_VALUE = {
+  gt50k: 3000,
+  '20k_50k': 1500,
+  '5k_20k': 600,
+  lt5k: 100,
+  none: 50,
+};
+export function meetingValue(b) {
+  return MEETING_VALUE[b && b.spend_band] != null ? MEETING_VALUE[b.spend_band] : 300;
+}
+
 export function spendLabel(v) { return SPEND_LABEL[v] || null; }
 export function trackingLabel(v) { return TRACKING_LABEL[v] || null; }
 export function roleLabel(v) { return ROLE_LABEL[v] || null; }

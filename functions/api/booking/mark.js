@@ -16,6 +16,7 @@
 // held_event_sent — ainda NÃO dispara nada para plataformas de anúncio.
 
 import { actionToken, timingSafeEqual } from '../../_lib/booking-actions.js';
+import { heldFanoutEnabled, fireMeetingHeld } from '../../_lib/booking-events.js';
 
 const ACTIONS = {
   held: { status: 'realizada', titulo: 'Comparecimento registrado', emoji: '✅' },
@@ -41,40 +42,59 @@ export async function onRequestGet(context) {
   }
 
   const b = await env.DB.prepare(
-    'SELECT id, name, slot_start_iso, status, held_at FROM demo_bookings WHERE id = ?'
+    `SELECT id, name, email, phone, slot_start_iso, status, held_at, held_event_sent,
+            spend_band, fbp, fbc, fbclid, gclid, ip_address, user_agent,
+            landing_url, created_at
+       FROM demo_bookings WHERE id = ?`
   ).bind(id).first();
   if (!b) return page(404, 'Não encontrado', 'Esse agendamento não existe mais.');
 
   const who = b.name ? ` — ${b.name}` : '';
-
-  // Já estava nesse estado: idempotente, só confirma.
-  if (b.status === def.status) {
-    return page(200, def.titulo, `Já estava marcado como <b>${def.status}</b>${esc(who)}.`);
-  }
-
   const now = Math.floor(Date.now() / 1000);
-  if (a === 'held') {
-    await env.DB.prepare(
-      `UPDATE demo_bookings
-          SET status='realizada',
-              held_at = COALESCE(held_at, ?),
-              updated_at = ?
-        WHERE id = ?`
-    ).bind(now, now, id).run();
 
-    // ---- PASSO 3 (reservado, NÃO ativo) -----------------------------------
-    // Aqui entra o disparo server-side do MeetingHeld (Meta CAPI + GA4 MP +
-    // Google Ads) usando fbp/fbc/fbclid/gclid/email já gravados na linha,
-    // gateado por held_event_sent=0 → set 1 (idempotência já migrada na
-    // 0035). Implementado e revisado com o usuário antes de ativar.
-    // -----------------------------------------------------------------------
-  } else {
+  // ---- no-show: idempotente, sem fan-out ----------------------------------
+  if (a === 'noshow') {
+    if (b.status === 'no_show') {
+      return page(200, def.titulo, `Já estava marcado como <b>no_show</b>${esc(who)}.`);
+    }
     await env.DB.prepare(
       `UPDATE demo_bookings SET status='no_show', updated_at=? WHERE id=?`
     ).bind(now, id).run();
+    return page(200, def.titulo, `${def.emoji} Marcado como <b>no_show</b>${esc(who)}.`);
   }
 
-  return page(200, def.titulo, `${def.emoji} Marcado como <b>${def.status}</b>${esc(who)}.`);
+  // ---- held: status idempotente + fan-out gateado por held_event_sent -----
+  await env.DB.prepare(
+    `UPDATE demo_bookings
+        SET status='realizada', held_at = COALESCE(held_at, ?), updated_at = ?
+      WHERE id = ?`
+  ).bind(now, now, id).run();
+
+  let extra = '';
+  if (!heldFanoutEnabled(env)) {
+    extra = ' (evento de anúncio desligado — BOOKING_HELD_FANOUT off)';
+  } else if (b.held_event_sent) {
+    extra = ' Evento de comparecimento já havia sido enviado.';
+  } else {
+    // Best-effort em segundo plano; só liga held_event_sent se algo deu ok,
+    // e só a partir de 0 (não re-dispara se uma corrida já marcou).
+    context.waitUntil((async () => {
+      const r = await fireMeetingHeld(env, { ...b, held_at: b.held_at || now })
+        .catch((e) => ({ anyOk: false, error: String(e && e.message || e) }));
+      if (r && r.anyOk) {
+        await env.DB.prepare(
+          `UPDATE demo_bookings SET held_event_sent=1, updated_at=?
+            WHERE id=? AND held_event_sent=0`
+        ).bind(Math.floor(Date.now() / 1000), id).run().catch(() => {});
+      } else {
+        console.log('MeetingHeld fan-out sem sucesso:', JSON.stringify(r).slice(0, 300));
+      }
+    })());
+    extra = ' Evento de comparecimento enviado (Meta/GA4) em segundo plano.';
+  }
+
+  const note = b.status === 'realizada' ? 'Já estava como realizada' : 'Marcado como realizada';
+  return page(200, def.titulo, `${def.emoji} ${note}${esc(who)}.${extra}`);
 }
 
 function esc(s) {
