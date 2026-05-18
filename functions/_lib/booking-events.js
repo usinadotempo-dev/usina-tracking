@@ -128,7 +128,15 @@ async function sendGa4Held(b, cfg, ev) {
     client_id: gaClientId(b),
     events: [{
       name: 'meeting_held',
-      params: { value: ev.value, currency: 'BRL', engagement_time_msec: 100 },
+      params: {
+        // session_id é obrigatório p/ o GA4 atribuir sessão e exibir o
+        // evento em Tempo real / relatórios (sem ele, MP responde 200 mas
+        // o evento some). Sintético estável a partir do agendamento.
+        session_id: String(b.created_at || Math.floor(Date.now() / 1000)),
+        engagement_time_msec: 100,
+        value: ev.value,
+        currency: 'BRL',
+      },
     }],
   };
   const em = await sha256(b.email);
