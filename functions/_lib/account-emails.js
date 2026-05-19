@@ -13,11 +13,13 @@ const BG = '#f7f8fb';
 const BORDER = '#e6e8ee';
 const GRAY = '#6b7280';
 
-// Onde o usuário faz login. A tela de login mora sempre em /admin/
-// (tenant_viewer loga lá e é roteado pro /dash/ depois). Configurável.
+// Entrada canônica da plataforma: a raiz roteia sozinha — quem ainda não
+// logou cai na tela de login; admin vai pro /admin/; viewer vai pro /dash/.
+// Mandar /admin/ no e-mail confunde o cliente (parece área restrita); a
+// raiz é neutra e leva cada papel pro lugar certo.
 function loginUrl(env) {
   const base = (env.PLATFORM_BASE || 'https://tracking.usinadotempo.com.br').replace(/\/$/, '');
-  return `${base}/admin/`;
+  return `${base}/`;
 }
 function publicBase(env) {
   return (env.PUBLIC_BASE || 'https://lp.usinadotempo.com.br').replace(/\/$/, '');

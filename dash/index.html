@@ -53,6 +53,13 @@
   html[data-theme="dark"] .bg-gray-100 { background-color: var(--placeholder) !important; }
   html[data-theme="dark"] .focus\:ring-blue-100:focus { --tw-ring-color: rgba(96, 165, 250, 0.25) !important; }
   html, body { background: var(--bg); color: var(--text); font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  /* Trava o scroll horizontal do documento. Tabelas/charts/grids largos
+     fazem scroll local dentro do proprio wrapper (overflow-x: auto neles);
+     a pagina nunca pode escapar a largura do viewport, senao o header
+     "rola pra direita" e mascara o conteudo da esquerda no mobile.
+     `clip` (em vez de `hidden`) preserva position: sticky de descendentes. */
+  html, body { overflow-x: clip; }
+  @supports not (overflow-x: clip) { html, body { overflow-x: hidden; } }
   .mono { font-family: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace; font-variant-numeric: tabular-nums; }
   .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; }
   .kpi-label { color: var(--dim); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 600; }
@@ -124,10 +131,13 @@
   }
   .info-tip:hover::after, .info-tip:focus::after { opacity: 1; }
 
-  /* Tabela com cabeçalho fixo + scroll vertical (Campanhas, Top posts, etc.) */
+  /* Tabela com cabeçalho fixo + scroll vertical (Campanhas, Top posts, etc.)
+     overflow-x também auto: tabela larga (ex.: 9 colunas de Campanhas) NÃO
+     pode empurrar a card/página — gera scroll horizontal só aqui, dentro do
+     wrapper, e a página fica do tamanho do viewport. */
   .scroll-table {
     max-height: 480px;     /* ~10 linhas em densidade compacta */
-    overflow-y: auto;
+    overflow: auto;
     border: 1px solid var(--border);
     border-radius: 8px;
   }
