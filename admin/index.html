@@ -473,6 +473,7 @@
           <div>
             <div class="flex items-baseline justify-between mb-1.5">
               <label class="label mb-0" for="login-password">Senha</label>
+              <button type="button" id="forgot-link" class="text-xs font-medium text-brand-coral hover:underline">Esqueceu sua senha?</button>
             </div>
             <div class="relative">
               <input id="login-password" type="password" class="input pr-10" required autocomplete="current-password">
@@ -485,7 +486,91 @@
         </form>
 
         <p class="text-center text-xs text-brand-gray mt-6">
-          Esqueceu a senha? Peça ao admin da Usina pra redefinir.
+          Esqueceu a senha? Clique em <span class="font-medium text-brand-navy">"Esqueceu sua senha?"</span> para receber uma senha provisória por e-mail.
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     SCREEN: Forgot password (request provisional via e-mail)
+     =================================================================== -->
+<div id="forgot-screen" class="hidden fixed inset-0 auth-bg overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-md">
+      <div class="auth-hero">
+        <div class="text-center mb-8">
+          <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-11 mx-auto mb-6">
+          <h1 class="display-italic text-3xl text-brand-navy mb-1">Recuperar acesso</h1>
+          <p class="text-brand-gray text-sm leading-relaxed max-w-sm mx-auto">
+            Informe o e-mail da sua conta. Se ele estiver cadastrado, enviamos uma
+            senha provisória válida por 1 hora.
+          </p>
+        </div>
+
+        <form id="forgot-form" class="card p-7 space-y-4 shadow-navy">
+          <div>
+            <label class="label" for="forgot-email">E-mail</label>
+            <input id="forgot-email" type="email" class="input" required autocomplete="email" placeholder="voce@empresa.com">
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center mt-2">Enviar senha provisória</button>
+          <div id="forgot-done" class="hidden text-sm text-center text-brand-navy bg-[#f1f7f5] border border-[#cfe6df] rounded-lg px-4 py-3"></div>
+        </form>
+
+        <p class="text-center text-xs text-brand-gray mt-6">
+          <button type="button" id="forgot-back" class="font-medium text-brand-navy hover:underline">← Voltar ao login</button>
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================================================================
+     SCREEN: Change password (forced on first login / after reset)
+     =================================================================== -->
+<div id="change-screen" class="hidden fixed inset-0 auth-bg overflow-y-auto">
+  <div class="min-h-full flex items-center justify-center p-6">
+    <div class="w-full max-w-md">
+      <div class="auth-hero">
+        <div class="text-center mb-8">
+          <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-11 mx-auto mb-6">
+          <h1 class="display-italic text-3xl text-brand-navy mb-1">Crie sua senha</h1>
+          <p class="text-brand-gray text-sm leading-relaxed max-w-sm mx-auto">
+            Você entrou com uma senha provisória. Defina agora uma senha
+            definitiva para continuar.
+          </p>
+        </div>
+
+        <form id="change-form" class="card p-7 space-y-4 shadow-navy">
+          <div>
+            <label class="label" for="change-current">Senha provisória (a que você recebeu)</label>
+            <div class="relative">
+              <input id="change-current" type="password" class="input pr-10" required autocomplete="current-password">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 copy-btn" data-toggle-pw="change-current" aria-label="Mostrar/ocultar senha">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+          </div>
+          <div>
+            <label class="label" for="change-new">Nova senha</label>
+            <div class="relative">
+              <input id="change-new" type="password" class="input pr-10" minlength="12" required autocomplete="new-password">
+              <button type="button" class="absolute right-2 top-1/2 -translate-y-1/2 copy-btn" data-toggle-pw="change-new" aria-label="Mostrar/ocultar senha">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <p class="help">Mínimo 12 caracteres. Use uma frase longa que só você saiba.</p>
+          </div>
+          <div>
+            <label class="label" for="change-new-2">Repita a nova senha</label>
+            <input id="change-new-2" type="password" class="input" minlength="12" required autocomplete="new-password">
+          </div>
+          <button type="submit" class="btn btn-primary w-full justify-center mt-2">Salvar e entrar</button>
+        </form>
+
+        <p class="text-center text-xs text-brand-gray mt-6">
+          <button type="button" id="change-cancel" class="font-medium text-brand-navy hover:underline">Cancelar e sair</button>
         </p>
       </div>
     </div>
@@ -810,13 +895,13 @@ function drawerEsc(e) { if (e.key === 'Escape') closeDrawer(); }
 function pageHeader({ eyebrow, title, description, actions = '' }) {
   return `
     <div class="border-b border-brand-border bg-white">
-      <div class="max-w-7xl mx-auto px-6 lg:px-10 pt-8 lg:pt-10 pb-6 flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-8">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-10 pt-6 sm:pt-8 lg:pt-10 pb-5 sm:pb-6 flex flex-col lg:flex-row lg:items-end gap-4 lg:gap-8">
         <div class="flex-1 min-w-0">
           ${eyebrow ? `<div class="text-[11px] uppercase tracking-[0.2em] text-brand-gray font-semibold mb-2">${escapeHtml(eyebrow)}</div>` : ''}
-          <h1 class="display-italic text-[2.4rem] leading-[1.05] text-brand-navy">${escapeHtml(title)}</h1>
+          <h1 class="display-italic text-[1.8rem] sm:text-[2.4rem] leading-[1.05] text-brand-navy break-words">${escapeHtml(title)}</h1>
           ${description ? `<p class="mt-2 text-sm text-brand-gray max-w-xl">${escapeHtml(description)}</p>` : ''}
         </div>
-        <div class="flex items-center gap-2 lg:justify-end">${actions}</div>
+        <div class="flex flex-wrap items-center gap-2 lg:justify-end">${actions}</div>
       </div>
     </div>`;
 }
@@ -845,6 +930,14 @@ async function boot() {
     state.user = data.user;
     state.workspaces = data.workspaces || [];
 
+    // Senha provisória: trava tudo na tela de criar senha nova, ANTES do
+    // redirect por role — vale pra admin e pra viewer (a tela de troca só
+    // existe aqui no /admin/; o viewer volta pro /dash/ depois de trocar).
+    if (state.user.must_change_password) {
+      showChangeScreen();
+      return;
+    }
+
     // Tenant_viewer não acessa o admin — redireciona pro dashboard.
     // Mesmo padrão de roteamento da raiz: a URL canônica é única, e o role
     // do usuário define onde ele cai.
@@ -860,7 +953,7 @@ async function boot() {
 }
 
 function hideAllScreens() {
-  ['#splash-screen', '#setup-screen', '#login-screen', '#restricted-screen', '#app-screen'].forEach(s => $(s).classList.add('hidden'));
+  ['#splash-screen', '#setup-screen', '#login-screen', '#forgot-screen', '#change-screen', '#restricted-screen', '#app-screen'].forEach(s => $(s).classList.add('hidden'));
   // Strip the responsive flex modifier from app-screen — see HTML comment above.
   $('#app-screen').classList.remove('lg:flex');
 }
@@ -873,6 +966,22 @@ function showLoginScreen() {
   hideAllScreens();
   $('#login-screen').classList.remove('hidden');
   setTimeout(() => $('#login-email')?.focus(), 80);
+}
+function showForgotScreen() {
+  hideAllScreens();
+  $('#forgot-done').classList.add('hidden');
+  $('#forgot-done').textContent = '';
+  $('#forgot-screen').classList.remove('hidden');
+  // Pré-preenche com o e-mail já digitado no login, se houver.
+  const typed = $('#login-email')?.value.trim();
+  if (typed) $('#forgot-email').value = typed;
+  setTimeout(() => $('#forgot-email')?.focus(), 80);
+}
+function showChangeScreen() {
+  hideAllScreens();
+  $('#change-form').reset();
+  $('#change-screen').classList.remove('hidden');
+  setTimeout(() => $('#change-current')?.focus(), 80);
 }
 function showRestrictedScreen() {
   hideAllScreens();
@@ -932,6 +1041,54 @@ $('#login-form').addEventListener('submit', async (e) => {
   } catch (err) {
     toast(err.message === 'Invalid credentials' ? 'E-mail ou senha incorretos.' : (err.message || 'Falha no login.'), 'error');
     btn.disabled = false; btn.textContent = 'Entrar';
+  }
+});
+
+$('#forgot-link').addEventListener('click', () => showForgotScreen());
+$('#forgot-back').addEventListener('click', () => showLoginScreen());
+
+$('#forgot-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const email = $('#forgot-email').value.trim();
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Enviando…';
+  let msg = 'Se o e-mail estiver cadastrado, enviamos uma senha provisória válida por 1 hora. Verifique a caixa de entrada (e o spam).';
+  try {
+    const res = await api('POST', '/auth/forgot-password', { email });
+    if (res && res.message) msg = res.message;
+  } catch (_) {
+    // Resposta é neutra por design; mesmo em erro de rede mostramos o
+    // texto genérico pra não vazar se o e-mail existe.
+  }
+  const done = $('#forgot-done');
+  done.textContent = msg;
+  done.classList.remove('hidden');
+  btn.disabled = false; btn.textContent = 'Enviar novamente';
+});
+
+$('#change-cancel').addEventListener('click', async () => {
+  try { await api('POST', '/auth/logout'); } catch {}
+  state.user = null; state.workspaces = [];
+  showLoginScreen();
+});
+
+$('#change-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const current = $('#change-current').value;
+  const next    = $('#change-new').value;
+  const next2   = $('#change-new-2').value;
+  if (next.length < 12) { toast('A nova senha deve ter pelo menos 12 caracteres.', 'error'); return; }
+  if (next !== next2)   { toast('As senhas não coincidem.', 'error'); return; }
+  if (next === current) { toast('A nova senha precisa ser diferente da provisória.', 'error'); return; }
+  const btn = e.target.querySelector('button[type="submit"]');
+  btn.disabled = true; btn.textContent = 'Salvando…';
+  try {
+    await api('POST', '/auth/change-password', { current_password: current, new_password: next });
+    toast('Senha atualizada. Bem-vindo!', 'success');
+    await boot();
+  } catch (err) {
+    toast(err.message || 'Não foi possível trocar a senha.', 'error');
+    btn.disabled = false; btn.textContent = 'Salvar e entrar';
   }
 });
 
@@ -1983,14 +2140,9 @@ function openUserForm() {
         <label class="label">E-mail</label>
         <input id="us-email" class="input" type="email" required placeholder="email@cliente.com">
       </div>
-      <div>
-        <label class="label">Senha temporária</label>
-        <div class="flex gap-2">
-          <input id="us-password" class="input mono" required minlength="12">
-          <button type="button" class="btn btn-secondary" id="us-genpw">Gerar</button>
-          <button type="button" class="btn btn-secondary" id="us-copypw">Copiar</button>
-        </div>
-        <p class="help">12+ caracteres. Compartilhe pelo canal seguro com o usuário; ele pode trocar depois (versão futura).</p>
+      <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-[#f1f7f5] border border-[#cfe6df] text-[13px] text-brand-navy">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="mt-0.5 flex-shrink-0"><path d="M4 4h16v16H4z" fill="none"/><path d="M22 6 12 13 2 6"/><rect x="2" y="4" width="20" height="16" rx="2"/></svg>
+        <span>O sistema gera uma <b>senha provisória</b> e envia por e-mail para o usuário. Ela vale por 1 hora e ele precisará criar uma senha definitiva no primeiro acesso.</span>
       </div>
       <div id="us-workspaces-wrap" class="hidden">
         <label class="label">Workspaces que esse viewer pode ver</label>
@@ -2036,20 +2188,12 @@ function openUserForm() {
     }
   });
 
-  $('#us-genpw').addEventListener('click', () => {
-    const pw = genStrongPassword(18);
-    $('#us-password').value = pw;
-    $('#us-password').type = 'text';
-  });
-  $('#us-copypw').addEventListener('click', () => copyToClipboard($('#us-password').value));
-
   $('#us-save').addEventListener('click', async () => {
     const role = $('#us-role').value;
     const name = $('#us-name').value.trim() || null;
     const email = $('#us-email').value.trim().toLowerCase();
-    const password = $('#us-password').value;
-    if (password.length < 12) { toast('Senha precisa ter 12+ caracteres.', 'error'); return; }
-    const payload = { email, password, role, name };
+    if (!email) { toast('Informe o e-mail.', 'error'); return; }
+    const payload = { email, role, name };
     if (role === 'tenant_viewer') {
       const tenant_id = $('#us-tenant').value;
       if (!tenant_id) { toast('Selecione um tenant.', 'error'); return; }
@@ -2059,15 +2203,42 @@ function openUserForm() {
     }
     const btn = $('#us-save'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {
-      await api('POST', '/admin/users', payload);
-      toast('Usuário criado.', 'success');
+      const res = await api('POST', '/admin/users', payload);
       closeModal();
       loadUsers();
+      if (res && res.emailed) {
+        toast('Usuário criado. Senha provisória enviada por e-mail.', 'success');
+      } else {
+        // E-mail não saiu (Resend ausente/falhou): mostra a provisória pro
+        // admin repassar manualmente. Não fica salva em lugar nenhum visível.
+        showProvisionalFallback(email, res?.provisional_password);
+      }
     } catch (e) {
       toast(e.message, 'error');
       btn.disabled = false; btn.textContent = 'Criar usuário';
     }
   });
+}
+
+// Modal de contingência: o e-mail com a senha provisória não pôde ser
+// enviado. Mostra a senha uma única vez pro admin repassar pelo canal
+// seguro. Some ao fechar — não é re-exibível.
+function showProvisionalFallback(email, password) {
+  const body = document.createElement('div');
+  body.innerHTML = `
+    <div class="flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-[#fdf3f0] border border-[#f3c9bf] text-[13px] text-brand-navy mb-4">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="mt-0.5 flex-shrink-0"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      <span>Não foi possível <b>enviar o e-mail</b> (Resend não configurado ou falhou). Copie a senha provisória abaixo e repasse a <b>${escapeHtml(email)}</b> por um canal seguro. Ela vale por 1 hora e não será exibida de novo.</span>
+    </div>
+    <label class="label">Senha provisória</label>
+    <div class="flex gap-2">
+      <input id="fb-pw" class="input mono" readonly value="${escapeHtml(password || '')}">
+      <button type="button" class="btn btn-secondary" id="fb-copy">Copiar</button>
+    </div>`;
+  const footer = document.createElement('div');
+  footer.innerHTML = `<button class="btn btn-primary" data-modal-close>Entendi</button>`;
+  openModal({ title: 'Repasse a senha manualmente', subtitle: 'O e-mail automático não saiu', body, footer });
+  $('#fb-copy').addEventListener('click', () => copyToClipboard($('#fb-pw').value));
 }
 
 async function openUserDetail(id) {
@@ -2111,12 +2282,14 @@ async function openUserDetail(id) {
         <span class="text-[12px] text-brand-gray">${u.last_login_at ? `último acesso: ${fmtDate(u.last_login_at)}` : 'nunca acessou'}</span>
       </div>
       <div>
-        <label class="label">Trocar senha (deixe em branco para manter)</label>
-        <div class="flex gap-2">
-          <input id="ue-password" class="input mono" placeholder="min 12 chars">
-          <button type="button" class="btn btn-secondary" onclick="$('#ue-password').value=genStrongPassword(18); $('#ue-password').type='text';">Gerar</button>
+        <label class="label">Senha</label>
+        <div class="flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-brand-border">
+          <div class="text-[13px] text-brand-navy leading-snug">
+            Redefinir gera uma nova <b>senha provisória</b>, envia por e-mail e força a troca no próximo acesso.
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" id="ue-reset-pw">Redefinir senha</button>
         </div>
-        <p class="help">Trocar a senha encerra todas as sessões ativas desse usuário.</p>
+        <p class="help">Encerra todas as sessões ativas desse usuário.</p>
       </div>
       ${u.role === 'tenant_viewer' ? `
         <div>
@@ -2142,16 +2315,28 @@ async function openUserDetail(id) {
 
   openModal({ title: 'Editar usuário', subtitle: u.email, body, footer, large: true });
 
+  $('#ue-reset-pw').addEventListener('click', async () => {
+    if (!confirm(`Redefinir a senha de ${u.email}?\n\nVamos gerar uma senha provisória nova (válida por 1h), enviar por e-mail e encerrar todas as sessões ativas dele.`)) return;
+    const btn = $('#ue-reset-pw'); btn.disabled = true; btn.textContent = 'Redefinindo…';
+    try {
+      const res = await api('PATCH', `/admin/users/${u.id}`, { reset_password: true });
+      if (res && res.emailed) {
+        toast('Senha provisória enviada por e-mail.', 'success');
+      } else {
+        showProvisionalFallback(u.email, res?.provisional_password);
+      }
+    } catch (e) {
+      toast(e.message, 'error');
+    } finally {
+      btn.disabled = false; btn.textContent = 'Redefinir senha';
+    }
+  });
+
   $('#ue-save').addEventListener('click', async () => {
     const payload = {
       name: $('#ue-name').value.trim() || null,
       is_active: $('#ue-active').checked,
     };
-    const newPw = $('#ue-password').value;
-    if (newPw) {
-      if (newPw.length < 12) { toast('Senha precisa ter 12+ caracteres.', 'error'); return; }
-      payload.password = newPw;
-    }
     if (u.role === 'tenant_viewer') {
       payload.workspace_ids = $$('input[name="ue-ws"]:checked').map(i => i.value);
     }

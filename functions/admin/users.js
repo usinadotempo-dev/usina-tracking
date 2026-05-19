@@ -1,11 +1,17 @@
 // /admin/users — usina_admin only
 // GET ?tenant=<id> → list users (optionally filtered by tenant)
-// POST → create user {email, password, role, name, tenant_id?, workspace_ids?[]}
+// POST → create user {email, role, name, tenant_id?, workspace_ids?[]}
+//   - Sistema gera senha provisória, manda por e-mail (Resend) e força a
+//     troca no primeiro login. Resposta inclui {emailed, provisional_password}
+//     pra UI mostrar fallback quando o envio falhar.
 //   - usina_admin: tenant_id NULL, workspace_ids ignored (sees everything)
 //   - tenant_viewer: tenant_id required, workspace_ids[] = which of that
 //     tenant's workspaces this user can read
 
-import { requireAuth, hashPassword, jsonError, jsonOk } from '../_lib/auth.js';
+import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk } from '../_lib/auth.js';
+import { sendProvisionalPasswordEmail } from '../_lib/account-emails.js';
+
+const PROVISIONAL_TTL_SECS = 3600; // 1 hora
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
@@ -38,7 +44,6 @@ export async function onRequestPost(context) {
   catch { return jsonError('Invalid JSON', 400); }
 
   const email = (body.email || '').toString().trim().toLowerCase();
-  const password = (body.password || '').toString();
   const role = (body.role || '').toString();
   const name = (body.name || '').toString().trim() || null;
   const tenantId = body.tenant_id ? String(body.tenant_id) : null;
@@ -46,7 +51,6 @@ export async function onRequestPost(context) {
 
   if (!email) return jsonError('email is required', 400);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonError('Invalid email', 400);
-  if (password.length < 12) return jsonError('Password must be at least 12 characters', 400);
   if (!['usina_admin', 'tenant_viewer'].includes(role)) {
     return jsonError('role must be usina_admin or tenant_viewer', 400);
   }
@@ -71,11 +75,16 @@ export async function onRequestPost(context) {
 
   const id = crypto.randomUUID();
   const now = Math.floor(Date.now() / 1000);
-  const hash = await hashPassword(password);
+  // O admin não escolhe a senha: o sistema gera uma provisória, envia por
+  // e-mail e força a troca no primeiro acesso.
+  const provisional = generateProvisionalPassword();
+  const hash = await hashPassword(provisional);
   await context.env.DB.prepare(`
-    INSERT INTO app_users (id, email, password_hash, role, name, tenant_id, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-  `).bind(id, email, hash, role, name, role === 'usina_admin' ? null : tenantId, now, now).run();
+    INSERT INTO app_users (id, email, password_hash, role, name, tenant_id, is_active,
+                           must_change_password, pwd_expires_at, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
+  `).bind(id, email, hash, role, name, role === 'usina_admin' ? null : tenantId,
+          now + PROVISIONAL_TTL_SECS, now, now).run();
 
   if (role === 'tenant_viewer' && workspaceIds.length) {
     for (const wsId of workspaceIds) {
@@ -85,5 +94,19 @@ export async function onRequestPost(context) {
     }
   }
 
-  return jsonOk({ user: { id, email, role, name, tenant_id: role === 'usina_admin' ? null : tenantId } });
+  const sent = await sendProvisionalPasswordEmail(context.env, {
+    to: email,
+    name,
+    password: provisional,
+    expiresLabel: '1 hora',
+    reason: 'created',
+  });
+  if (!sent.ok) console.error('admin/users: envio Resend falhou:', sent.error);
+
+  return jsonOk({
+    user: { id, email, role, name, tenant_id: role === 'usina_admin' ? null : tenantId },
+    // Fallback pro admin repassar manualmente se o e-mail não saiu.
+    emailed: sent.ok,
+    provisional_password: provisional,
+  });
 }

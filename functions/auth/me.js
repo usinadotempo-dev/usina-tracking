@@ -11,6 +11,7 @@ export async function onRequestGet(context) {
       name: user.name,
       role: user.role,
       tenant_id: user.tenant_id,
+      must_change_password: !!user.must_change_password,
     },
     workspaces,
   });

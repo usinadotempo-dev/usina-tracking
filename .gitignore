@@ -19,6 +19,11 @@ gcal_key*.txt
 .wrangler/
 .cloudflare/
 
+# Local helper scripts (one-off, never commit)
+_*.cmd
+_*.ps1
+_*.sh
+
 # OS / editor noise
 .DS_Store
 Thumbs.db

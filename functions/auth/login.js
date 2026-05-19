@@ -23,7 +23,8 @@ export async function onRequestPost(context) {
   }
 
   const user = await env.DB.prepare(`
-    SELECT id, email, password_hash, role, name, tenant_id, is_active
+    SELECT id, email, password_hash, role, name, tenant_id, is_active,
+           must_change_password, pwd_expires_at
       FROM app_users WHERE email = ? LIMIT 1
   `).bind(email).first();
 
@@ -33,6 +34,17 @@ export async function onRequestPost(context) {
   const ok = await verifyPassword(password, user?.password_hash || dummyHash);
   if (!user || !ok || !user.is_active) {
     return jsonError('Invalid credentials', 401);
+  }
+
+  // Senha provisória que já passou da validade: recusa o login e orienta o
+  // usuário a gerar outra. (pwd_expires_at só fica setado enquanto a senha
+  // é provisória; senha definitiva tem must_change_password=0 e NULL aqui.)
+  const mustChange = !!user.must_change_password;
+  if (mustChange && user.pwd_expires_at && Math.floor(Date.now() / 1000) > user.pwd_expires_at) {
+    return jsonError(
+      'Sua senha provisória expirou. Use "Esqueceu sua senha?" para gerar outra.',
+      401,
+    );
   }
 
   const ip = request.headers.get('cf-connecting-ip') || '';
@@ -54,6 +66,7 @@ export async function onRequestPost(context) {
       role: user.role,
       name: user.name,
       tenant_id: user.tenant_id,
+      must_change_password: mustChange,
     },
   }), { status: 200, headers });
 }

@@ -1,10 +1,16 @@
 // /admin/users/:id — usina_admin only
 // GET    → user + assigned workspaces
-// PATCH  → update {name, is_active, password, workspace_ids[]}
+// PATCH  → update {name, is_active, reset_password?, password?, workspace_ids[]}
+//   reset_password: true → gera senha provisória nova, envia por e-mail,
+//     marca must_change_password=1 e mata as sessões. password explícito
+//     ainda é aceito (compat), mas vira provisória + troca obrigatória.
 //   passing workspace_ids replaces the whole set (only for tenant_viewer)
 // DELETE → delete user (and cascade their sessions + assignments)
 
-import { requireAuth, hashPassword, jsonError, jsonOk } from '../../_lib/auth.js';
+import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk } from '../../_lib/auth.js';
+import { sendProvisionalPasswordEmail } from '../../_lib/account-emails.js';
+
+const PROVISIONAL_TTL_SECS = 3600; // 1 hora
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
@@ -40,18 +46,29 @@ export async function onRequestPatch(context) {
   try { body = await context.request.json(); }
   catch { return jsonError('Invalid JSON', 400); }
 
-  const user = await context.env.DB.prepare('SELECT id, role, tenant_id FROM app_users WHERE id = ?').bind(id).first();
+  const user = await context.env.DB.prepare(
+    'SELECT id, email, name, role, tenant_id FROM app_users WHERE id = ?'
+  ).bind(id).first();
   if (!user) return jsonError('Not found', 404);
 
   const updates = [];
   const binds = [];
   if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim() || null); }
   if (body.is_active !== undefined) { updates.push('is_active = ?'); binds.push(body.is_active ? 1 : 0); }
-  if (body.password !== undefined) {
-    const pw = String(body.password);
-    if (pw.length < 12) return jsonError('Password must be at least 12 characters', 400);
-    const hash = await hashPassword(pw);
+
+  // Redefinição de senha pelo admin: o sistema gera uma provisória, força
+  // a troca no próximo acesso e envia por e-mail (mesmo padrão da criação).
+  // `reset_password: true` dispara isso; `password` explícito ainda é aceito
+  // (compat), mas também vira provisória + troca obrigatória.
+  let provisional = null;
+  if (body.reset_password === true || body.password !== undefined) {
+    provisional = body.password !== undefined && String(body.password).length >= 12
+      ? String(body.password)
+      : generateProvisionalPassword();
+    const hash = await hashPassword(provisional);
     updates.push('password_hash = ?'); binds.push(hash);
+    updates.push('must_change_password = ?'); binds.push(1);
+    updates.push('pwd_expires_at = ?'); binds.push(Math.floor(Date.now() / 1000) + PROVISIONAL_TTL_SECS);
     // Kill all sessions when password changes.
     await context.env.DB.prepare('DELETE FROM app_sessions WHERE user_id = ?').bind(id).run();
   }
@@ -85,7 +102,23 @@ export async function onRequestPatch(context) {
     }
   }
 
-  return jsonOk({ ok: true });
+  let emailed = null;
+  if (provisional) {
+    const sent = await sendProvisionalPasswordEmail(context.env, {
+      to: user.email,
+      name: user.name,
+      password: provisional,
+      expiresLabel: '1 hora',
+      reason: 'reset',
+    });
+    if (!sent.ok) console.error('admin/users/[id]: envio Resend falhou:', sent.error);
+    emailed = sent.ok;
+  }
+
+  return jsonOk({
+    ok: true,
+    ...(provisional ? { emailed, provisional_password: provisional } : {}),
+  });
 }
 
 export async function onRequestDelete(context) {

@@ -17,6 +17,27 @@ export async function hashPassword(plain) {
   return `pbkdf2$${PBKDF2_ITERATIONS}$${b64u(salt)}$${b64u(hash)}`;
 }
 
+// Senha provisória legível: 16 chars, sem caracteres ambíguos (0/O, 1/l/I),
+// embaralhada, garantindo ao menos um de cada classe. Usada pelo fluxo
+// "esqueci a senha" e pela criação/redefinição de usuário pelo admin.
+// 16 chars passa folgado no mínimo de 12 exigido no resto do sistema.
+export function generateProvisionalPassword(len = 16) {
+  const lower = 'abcdefghijkmnpqrstuvwxyz';
+  const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const digit = '23456789';
+  const symbol = '!@#$%&*?-_=+';
+  const all = lower + upper + digit + symbol;
+  const pick = (set) => set[crypto.getRandomValues(new Uint32Array(1))[0] % set.length];
+  const chars = [pick(lower), pick(upper), pick(digit), pick(symbol)];
+  while (chars.length < len) chars.push(pick(all));
+  // Fisher–Yates com aleatoriedade do Web Crypto (não Math.random).
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars.join('');
+}
+
 export async function verifyPassword(plain, stored) {
   if (!stored || typeof stored !== 'string') return false;
   const parts = stored.split('$');
@@ -85,7 +106,8 @@ export async function lookupSession(env, token) {
   const now = Math.floor(Date.now() / 1000);
   const row = await env.DB.prepare(`
     SELECT s.user_id, s.expires_at,
-           u.email, u.role, u.name, u.tenant_id, u.is_active
+           u.email, u.role, u.name, u.tenant_id, u.is_active,
+           u.must_change_password
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?
@@ -99,6 +121,7 @@ export async function lookupSession(env, token) {
     name: row.name,
     tenant_id: row.tenant_id,
     expires_at: row.expires_at,
+    must_change_password: !!row.must_change_password,
   };
 }
 

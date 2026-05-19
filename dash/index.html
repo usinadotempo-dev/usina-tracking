@@ -147,6 +147,17 @@
     padding: 14px;
     z-index: 50;
     min-width: 280px;
+    max-width: calc(100vw - 2rem);
+  }
+
+  /* ---- Mobile (<640px) ---- ajustes finos do cabeçalho/cards */
+  @media (max-width: 639px) {
+    .range-btn { padding: 0.3rem 0.55rem; font-size: 0.75rem; }
+    /* Tooltips do info-tip ficam grandes demais; encurta no celular. */
+    .info-tip::after { max-width: 220px; }
+    /* Tabelas largas ganham overflow horizontal (já tem .scroll-table p/ as
+       que precisam de scroll vertical; aqui é o caso geral pras outras). */
+    .table-mobile-x { overflow-x: auto; -webkit-overflow-scrolling: touch; }
   }
 </style>
 </head>
@@ -156,20 +167,19 @@
 <div id="app" class="hidden min-h-screen">
 
   <header class="border-b border-[color:var(--border)] bg-white sticky top-0 z-30">
-    <div class="max-w-7xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center gap-y-2 gap-x-3 sm:gap-x-4">
       <a href="#" class="flex items-center gap-3 flex-shrink-0" aria-label="Usina do Tempo Tracking">
         <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" class="h-7">
       </a>
 
-      <div class="flex items-center gap-3 flex-1 justify-end min-w-0">
+      <div class="flex flex-wrap items-center gap-2 sm:gap-3 flex-1 justify-end min-w-0 w-full sm:w-auto">
         <select id="workspace-selector"
-                class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm font-medium bg-white text-[color:var(--text)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-100 truncate"
-                style="max-width: 260px;"
+                class="border border-[color:var(--border)] rounded-lg px-3 py-1.5 text-sm font-medium bg-white text-[color:var(--text)] cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-100 truncate w-full sm:w-auto sm:max-w-[260px] order-1 sm:order-none"
                 aria-label="Selecionar workspace">
           <option>Carregando…</option>
         </select>
 
-        <div class="relative flex items-center gap-1" id="range-picker">
+        <div class="relative flex flex-wrap items-center gap-1 order-2 sm:order-none" id="range-picker">
           <button class="range-btn" data-days="7">7d</button>
           <button class="range-btn active" data-days="30">30d</button>
           <button class="range-btn" data-days="90">90d</button>
@@ -221,7 +231,7 @@
     </div>
   </header>
 
-  <main class="max-w-7xl mx-auto px-6 py-6 space-y-6">
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-5 sm:py-6 space-y-5 sm:space-y-6">
 
     <!-- KPI Strip — variantes (full | lead_focus | roas_focus | ecommerce) -->
     <section class="fade-in" data-module="kpi_strip">
@@ -853,6 +863,13 @@
 
     currentUser = me.user;
     workspaces = me.workspaces || [];
+
+    // Senha provisória: a tela de troca mora no /admin/ (válido pros dois
+    // papéis). Manda pra lá pra concluir a troca antes de ver o dash.
+    if (currentUser?.must_change_password) {
+      window.location.href = '/admin/';
+      return;
+    }
 
     // Populate user pill
     const display = currentUser.name || currentUser.email;
