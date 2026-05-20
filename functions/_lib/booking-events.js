@@ -18,6 +18,9 @@
 // click conversion por gclid — gancho documentado no fim deste arquivo.
 
 import { meetingValue } from './booking-actions.js';
+import { uploadGoogleAdsConversion } from './google-ads-upload.js';
+import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId } from './event-catalog.js';
+import { logEventRow } from './event-log.js';
 
 const USINA_WS = 'usina-vendas';
 
@@ -149,8 +152,41 @@ async function sendGa4Held(b, cfg, ev) {
   return { ok: r.ok, status: r.status };
 }
 
-// Dispara MeetingHeld. Retorna { attempted, anyOk, meta, ga4 } — nunca lança
-// (best-effort, igual aos avisos de Telegram/e-mail).
+// Envia o MeetingHeld ao Google Ads (uploadClickConversions). Como o evento
+// nasce no /admin (sem browser), não há tag client-side → sem risco de dedup.
+async function sendGoogleAdsHeld(booking, cfg, ev, env) {
+  const catalog = parseEventCatalog(cfg);
+  const entry = getEventEntry(catalog, ev.name);
+  if (!entry) return { skipped: 'evento fora do catálogo' };
+  if (entry.channels && entry.channels.google_ads === false) {
+    return { skipped: 'canal google_ads off' };
+  }
+  const conversionActionId = resolveGoogleAdsActionId(catalog, ev.name, null);
+  const hashedEmail = await sha256(booking.email);
+  return uploadGoogleAdsConversion(env, {
+    wsCfg: cfg,
+    conversionActionId,
+    clickIds: { gclid: booking.gclid || '', wbraid: '', gbraid: '' },
+    value: ev.value,
+    currency: 'BRL',
+    orderId: ev.id,
+    eventTime: ev.time,
+    timezoneOffset: cfg.timezone_offset,
+    hashedEmail,
+  });
+}
+
+// Descreve o resultado de um canal para o event_log (string curta).
+function resultBody(r) {
+  if (!r) return '';
+  if (r.skipped) return `skipped: ${r.skipped}`;
+  if (r.error) return `error: ${r.error}`;
+  return String(r.body || r.responseBody || '');
+}
+
+// Dispara MeetingHeld para Meta + GA4 + Google Ads e grava a linha no
+// event_log (livro-razão). Retorna { attempted, anyOk, meta, ga4, googleAds }
+// — nunca lança (best-effort, igual aos avisos de Telegram/e-mail).
 export async function fireMeetingHeld(env, booking) {
   const ev = {
     name: env.BOOKING_HELD_EVENT_NAME || 'MeetingHeld',
@@ -159,25 +195,46 @@ export async function fireMeetingHeld(env, booking) {
     value: meetingValue(booking),
   };
 
-  let meta, ga4;
+  let meta, ga4, googleAds, workspaceId = null;
   try {
-    const { cfg } = await resolveWsConfig(env, booking);
-    [meta, ga4] = await Promise.all([
+    const resolved = await resolveWsConfig(env, booking);
+    workspaceId = resolved.workspaceId;
+    const cfg = resolved.cfg;
+    [meta, ga4, googleAds] = await Promise.all([
       sendMetaHeld(booking, cfg, ev).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
       sendGa4Held(booking, cfg, ev).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
+      sendGoogleAdsHeld(booking, cfg, ev, env).catch((e) => ({ error: String(e && e.message || e) })),
     ]);
   } catch (e) {
     const err = String(e && e.message || e);
-    return { attempted: true, anyOk: false, error: err, meta: { error: err }, ga4: { error: err } };
+    return { attempted: true, anyOk: false, error: err, meta: { error: err }, ga4: { error: err }, googleAds: { error: err } };
   }
-  const anyOk = !!(meta && meta.ok) || !!(ga4 && ga4.ok);
-  return { attempted: true, anyOk, meta, ga4 };
-}
+  const anyOk = !!(meta && meta.ok) || !!(ga4 && ga4.ok) || !!(googleAds && googleAds.ok);
 
-// ---------------------------------------------------------------------------
-// GANCHO Google Ads (NÃO ativo) — quando o developer token destravar:
-// reusar resolveGoogleAdsCreds + uploadClickConversions (webhook/_core.js),
-// enviando offline click conversion por booking.gclid, com a conversionAction
-// "MeetingHeld" do workspace e o mesmo `ev.value`. Deferido de propósito:
-// ver memória project_google_ads_multitenant.
-// ---------------------------------------------------------------------------
+  // Livro-razão: registra o MeetingHeld no event_log (best-effort).
+  await logEventRow(env, {
+    workspace_id: workspaceId,
+    event_name: ev.name,
+    event_id: ev.id,
+    timestamp: ev.time,
+    value: ev.value,
+    consent_status: 'server',
+    gclid: booking.gclid || null,
+    has_email: booking.email ? 1 : 0,
+    sent_to_meta: meta && !meta.skipped ? 1 : 0,
+    meta_status_code: (meta && meta.status) || 0,
+    meta_response_ok: meta && meta.ok ? 1 : 0,
+    meta_response_body: resultBody(meta),
+    sent_to_ga4: ga4 && !ga4.skipped ? 1 : 0,
+    ga4_status_code: (ga4 && ga4.status) || 0,
+    ga4_response_ok: ga4 && ga4.ok ? 1 : 0,
+    ga4_response_body: resultBody(ga4),
+    sent_to_google_ads: googleAds && !googleAds.skipped ? 1 : 0,
+    google_ads_status_code: (googleAds && googleAds.statusCode) || 0,
+    google_ads_response_ok: googleAds && googleAds.ok ? 1 : 0,
+    google_ads_response_body: resultBody(googleAds),
+    google_ads_payload_sent: (googleAds && googleAds.payload) || null,
+  });
+
+  return { attempted: true, anyOk, meta, ga4, googleAds };
+}

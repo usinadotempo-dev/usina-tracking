@@ -36,16 +36,14 @@
           ↓  + GA4 + Google Ads fire with the original session attribution)
 
     WHAT TO EDIT:
-      - META_PIXEL_ID      → your Meta Pixel numeric ID
-      - GA4_MEASUREMENT_ID → your GA4 Measurement ID (G-XXXXXXXXXX).
-                             If you don't run GA4, delete the two GA4
-                             <script> blocks below — the stack will skip
-                             GA4 cleanly when env vars are unset.
       - CHECKOUT_URL       → your sales platform's real checkout URL
       - CHECKOUT_PLATFORM  → 'eduzz' | 'hotmart' | 'kiwify' (determines
                              which URL param carries `trk`)
       - The <h1> / copy / price / modules / testimonials / FAQ — make
         the page yours.
+
+    NO tracking IDs to edit — Meta Pixel / GA4 / Google Ads come from the
+    workspace config, loaded by /track.js.
       - assets/hero.webp   → replace with your own hero image (same
                              filename, or edit the two `assets/hero.webp`
                              references below).
@@ -54,46 +52,8 @@
 
   <link rel="preload" as="image" href="assets/hero.webp">
 
-  <!-- GA4 (first-party via /scripts/gtag.js which proxies googletagmanager) -->
-  <script async src="/scripts/gtag.js?id=G-XXXXXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){ dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-XXXXXXXXXX'); // ← your GA4 measurement ID
-  </script>
-
-  <!-- Meta Pixel -->
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-    document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', 'YOUR_META_PIXEL_ID'); // ← your Meta Pixel numeric ID
-
-    // PageView — dual fire (pixel + CAPI) with shared event_id for dedup.
-    // /tracker skips event_log inserts for PageView, so D1 stays lean;
-    // only the Meta CAPI call happens server-side. GA4 is pixel-only
-    // for PageView (GA4 MP is conversion-only in this stack).
-    (function () {
-      var pvEventId = (crypto.randomUUID && crypto.randomUUID()) ||
-        (Date.now() + '-' + Math.random().toString(36).slice(2));
-      fbq('track', 'PageView', {}, { eventID: pvEventId });
-      fetch('/tracker', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          event_name: 'PageView',
-          event_id: pvEventId,
-          event_time: Math.floor(Date.now() / 1000),
-          event_source_url: window.location.href,
-          user_data: {},
-        }),
-      }).catch(function () {});
-    })();
-  </script>
+  <!-- Shared client-side tracking. One file for every LP — see /track.js. -->
+  <script src="/track.js" async></script>
 
   <style>
     *,*::before,*::after { box-sizing: border-box; }
@@ -855,29 +815,13 @@
     const utmContent  = urlParams.get('utm_content')  || '';
     const utmTerm     = urlParams.get('utm_term')     || '';
 
-    // Fire the InitiateCheckout event to both browser (pixel) and
-    // server-side (/tracker) with the same event_id so Meta dedupes them.
+    // Fire the InitiateCheckout event in every channel — Meta pixel +
+    // server-side /tracker — deduped by a shared event_id. track() posts
+    // with keepalive, so the request survives the navigation to the
+    // checkout URL. Destinations come from the workspace config.
     function fireInitiateCheckout() {
-      const eventId = crypto.randomUUID();
-      const eventTime = Math.floor(Date.now() / 1000);
-
       try {
-        if (window.fbq) {
-          fbq('track', 'InitiateCheckout', {}, { eventID: eventId });
-        }
-      } catch (_) {}
-
-      // Server-side fire — uses sendBeacon so the request survives the
-      // navigation to the checkout URL.
-      try {
-        const payload = JSON.stringify({
-          event_name: 'InitiateCheckout',
-          event_id: eventId,
-          event_time: eventTime,
-          event_source_url: window.location.href,
-          user_data: {},
-        });
-        navigator.sendBeacon('/tracker', new Blob([payload], { type: 'application/json' }));
+        if (window.USINATRK) USINATRK.track('InitiateCheckout', {});
       } catch (_) {}
     }
 

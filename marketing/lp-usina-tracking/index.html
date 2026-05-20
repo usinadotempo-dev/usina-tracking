@@ -850,76 +850,10 @@
   </div>
 </footer>
 
-<!-- Self-tracking da Usina: Pixel + GA4 + Google Ads (IDs vêm do
-     workspace interno via /api/booking/tracking-config) + /tracker
-     server-side com o mesmo event_id (dedup pixel↔CAPI). -->
-<script>
-window.USINATRK=(function(){
-  var EVID=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():(Date.now()+'.'+Math.random());
-  var CFG={};
-  function ck(n){var m=document.cookie.match(new RegExp('(?:^|; )'+n+'=([^;]+)'));return m?decodeURIComponent(m[1]):'';}
-  function loadScript(src){var s=document.createElement('script');s.async=true;s.src=src;document.head.appendChild(s);}
-  function initMeta(id){
-    if(!id)return;
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};
-      if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init',id);fbq('track','PageView');
-  }
-  function initGoogle(gid,awid){
-    if(!gid&&!awid)return;
-    window.dataLayer=window.dataLayer||[];window.gtag=window.gtag||function(){dataLayer.push(arguments)};
-    gtag('js',new Date());
-    loadScript('https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(gid||awid));
-    if(gid)gtag('config',gid);
-    if(awid)gtag('config',awid);
-  }
-  function init(){
-    fetch('/api/booking/tracking-config').then(function(r){return r.json();}).then(function(c){
-      CFG=c||{};
-      initMeta(CFG.meta_pixel_id);
-      initGoogle(CFG.ga4_measurement_id,CFG.google_ads_aw_id);
-    }).catch(function(){});
-  }
-  // Dispara a conversão do Google Ads p/ um evento do mapa evento→label.
-  // Fallback retrocompat: evento 'schedule' usa o label único legado se o
-  // mapa não tiver entrada. Reutilizável por páginas futuras (lead/purchase).
-  function gAdsConversion(eventKey){
-    try{
-      if(!window.gtag || !CFG.google_ads_aw_id) return;
-      var map=CFG.google_ads_conversions||{};
-      var label=map[eventKey] || (eventKey==='schedule' ? CFG.google_ads_conversion_label : null);
-      if(label) gtag('event','conversion',{send_to:CFG.google_ads_aw_id+'/'+label});
-    }catch(e){}
-  }
-  function fireSchedule(d){
-    d=d||{};
-    try{ if(window.fbq) fbq('track','Schedule',{},{eventID:EVID}); }catch(e){}
-    try{ if(window.gtag && CFG.ga4_measurement_id) gtag('event','generate_lead',{currency:'BRL',value:0}); }catch(e){}
-    gAdsConversion('schedule');
-    // Servidor: Meta CAPI + GA4 MP pelo próprio /tracker do stack. Mesmo
-    // event_id → Meta deduplica pixel↔CAPI. Workspace resolvido pelo Host.
-    try{
-      fetch('/tracker',{method:'POST',headers:{'Content-Type':'application/json'},keepalive:true,
-        body:JSON.stringify({
-          event_name:'Schedule',
-          event_time:Math.floor(Date.now()/1000),
-          event_id:EVID,
-          event_source_url:location.href,
-          consent_status:'granted',
-          user_data:{
-            em:d.email||'', ph:d.phone||'',
-            fbp:ck('_fbp'), fbc:ck('_fbc'),
-            ga_client_id:(ck('_ga')||'').split('.').slice(-2).join('.')
-          }
-        })
-      }).catch(function(){});
-    }catch(e){}
-  }
-  init();
-  return { fireSchedule:fireSchedule, gAdsConversion:gAdsConversion, eid:function(){return EVID;} };
-})();
-</script>
+<!-- Tracking client-side unificado: Pixel + GA4 + Google Ads + /tracker
+     server-side. Script central servido pela stack — um só arquivo para
+     todas as LPs. Expõe window.USINATRK. Ver /track.js. -->
+<script src="/track.js" async></script>
 <script>
 (function(){
   "use strict";

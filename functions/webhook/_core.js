@@ -39,6 +39,7 @@ import PRODUCTS_CONFIG from '../../config/products.js';
 import { loadWorkspaceConfig } from '../_lib/workspace-config.js';
 import { uploadGoogleAdsConversion } from '../_lib/google-ads-upload.js';
 import { parseEventCatalog, resolveGoogleAdsActionId } from '../_lib/event-catalog.js';
+import { logEventRow } from '../_lib/event-log.js';
 
 // -----------------------------------------------------------------------------
 // Main entry point — each platform adapter calls this with a normalized object.
@@ -338,6 +339,39 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
 
   const createdAt = Math.floor(Date.now() / 1000);
   let purchaseId = null;
+
+  // Livro-razão: registra a compra no event_log (além do purchase_log, que
+  // guarda o detalhe rico do e-commerce). Best-effort, não bloqueia o resto.
+  await logEventRow(env, {
+    workspace_id: workspaceId || null,
+    event_name: 'Purchase',
+    event_id: eventId,
+    timestamp: eventTime,
+    value: parseFloat(value) || 0,
+    consent_status: 'server',
+    raw_email: email || '',
+    has_email: email ? 1 : 0,
+    has_phone: phone ? 1 : 0,
+    has_name: name ? 1 : 0,
+    gclid: checkoutData.gclid || null,
+    gbraid: checkoutData.gbraid || null,
+    wbraid: checkoutData.wbraid || null,
+    sent_to_meta: tracking.metaPayloadSent ? 1 : 0,
+    meta_status_code: tracking.metaStatusCode || 0,
+    meta_response_ok: tracking.metaResponseOk || 0,
+    meta_response_body: tracking.metaResponseBody || '',
+    meta_payload_sent: tracking.metaPayloadSent ?? null,
+    sent_to_ga4: tracking.ga4PayloadSent ? 1 : 0,
+    ga4_status_code: tracking.ga4StatusCode || 0,
+    ga4_response_ok: tracking.ga4ResponseOk || 0,
+    ga4_response_body: tracking.ga4ResponseBody || '',
+    ga4_payload_sent: tracking.ga4PayloadSent ?? null,
+    sent_to_google_ads: tracking.googleAdsPayloadSent ? 1 : 0,
+    google_ads_status_code: tracking.googleAdsStatusCode || 0,
+    google_ads_response_ok: tracking.googleAdsResponseOk || 0,
+    google_ads_response_body: tracking.googleAdsResponseBody || '',
+    google_ads_payload_sent: tracking.googleAdsPayloadSent ?? null,
+  });
 
   try {
     const result = await env.DB.prepare(`

@@ -97,8 +97,13 @@ export async function onRequestGet(context) {
       : `${meta.status}${meta.ok ? ' ok' : ' ✗ ' + esc(String(meta.body || '').slice(0, 220))}`;
     const ga4Desc = ga4.skipped ? 'skip' : ga4.error ? 'erro'
       : ga4.ok ? 'ok' : `http ${ga4.status}`;
-    console.log('MeetingHeld', id, 'meta=', JSON.stringify(meta).slice(0, 300), 'ga4=', JSON.stringify(ga4).slice(0, 120));
-    extra = `<br><br><span class="m">Meta: ${metaDesc} · GA4: ${ga4Desc} · delivered=${delivered}</span>`;
+    const gAds = (r && r.googleAds) || {};
+    const gAdsDesc = gAds.skipped ? `skip(${esc(gAds.skipped)})`
+      : gAds.error ? 'erro'
+      : gAds.statusCode === undefined ? 'sem resposta'
+      : `${gAds.statusCode}${gAds.ok ? ' ok' : ' ✗'}`;
+    console.log('MeetingHeld', id, 'meta=', JSON.stringify(meta).slice(0, 300), 'ga4=', JSON.stringify(ga4).slice(0, 120), 'gads=', JSON.stringify(gAds).slice(0, 200));
+    extra = `<br><br><span class="m">Meta: ${metaDesc} · GA4: ${ga4Desc} · GAds: ${gAdsDesc} · delivered=${delivered}</span>`;
   }
 
   const note = b.status === 'realizada' ? 'Já estava como realizada' : 'Marcado como realizada';

@@ -1,6 +1,8 @@
 import { resolveHost } from './_lib/workspace.js';
 import { loadWorkspaceConfig } from './_lib/workspace-config.js';
 import { createKommoLead } from './_lib/kommo.js';
+import { uploadGoogleAdsConversion } from './_lib/google-ads-upload.js';
+import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId } from './_lib/event-catalog.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -125,15 +127,24 @@ export async function onRequestPost(context) {
     // --- Bot detection ---
     const { isBot, botReason } = detectBot(userAgent);
 
+    // --- Event catalog: resolve a entrada deste event_name + o valor.
+    // Sem entrada no catálogo, o evento não vai ao Google Ads (opt-in).
+    const catalog = parseEventCatalog(cfg);
+    const eventEntry = getEventEntry(catalog, body.event_name);
+    const eventValue = (eventEntry && eventEntry.value !== null && eventEntry.value !== undefined)
+      ? eventEntry.value
+      : (parseFloat(body.value) || 0);
+
     // --- Fan out to ad platforms (skipped for bot UAs) ---
     // Bots still get logged to event_log so the dashboard's bot-filter
     // tracking-health metric stays accurate; only the outbound CAPI /
-    // GA4 fires are suppressed. Without this gate, every link-unfurl
-    // crawl (WhatsApp preview, Slackbot, facebookexternalhit, etc.)
-    // would burn a Meta CAPI event and pollute the Pixel.
+    // GA4 / Google Ads fires are suppressed. Without this gate, every
+    // link-unfurl crawl (WhatsApp preview, Slackbot, facebookexternalhit,
+    // etc.) would burn an event and pollute the platforms.
     const results = isBot ? [] : await Promise.allSettled([
       sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg }),
       sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }),
+      sendToGoogleAds({ body, sessionData, hashedEm, cfg, env, catalog, eventEntry, eventValue }),
     ]);
 
     // --- Parse Meta result ---
@@ -166,6 +177,23 @@ export async function onRequestPost(context) {
       }
     } else if (results[1]?.status === 'rejected') {
       ga4ResponseBody = `Fetch error: ${results[1].reason?.message || 'unknown'}`;
+    }
+
+    // --- Parse Google Ads result ---
+    let googleAdsStatusCode = 0, googleAdsResponseOk = 0, googleAdsResponseBody = '', googleAdsPayloadSent = null, sentToGoogleAds = 0;
+    if (results[2]?.status === 'fulfilled' && results[2].value) {
+      const v = results[2].value;
+      if (v.skipped) {
+        googleAdsResponseBody = `skipped: ${v.skipped}`;
+      } else {
+        sentToGoogleAds = 1;
+        googleAdsPayloadSent = v.payload;
+        googleAdsStatusCode = v.statusCode;
+        googleAdsResponseOk = v.ok ? 1 : 0;
+        googleAdsResponseBody = v.responseBody;
+      }
+    } else if (results[2]?.status === 'rejected') {
+      googleAdsResponseBody = `Fetch error: ${results[2].reason?.message || 'unknown'}`;
     }
 
     // --- Kommo: cria Contact + Lead na CRM (Fase 1 da integração).
@@ -233,8 +261,11 @@ export async function onRequestPost(context) {
                 sent_to_kommo, kommo_status_code, kommo_response_ok, kommo_response_body, kommo_payload_sent,
                 kommo_lead_id, kommo_contact_id,
                 has_email, has_phone, has_name,
-                raw_email
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                raw_email,
+                sent_to_google_ads, google_ads_status_code, google_ads_response_ok,
+                google_ads_response_body, google_ads_payload_sent,
+                gclid, gbraid, wbraid, value
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `).bind(
               sessionId, workspaceId, body.event_name, body.event_id, body.event_time,
               browserInfo.browser, browserInfo.version, browserInfo.os, browserInfo.isMobile ? 1 : 0,
@@ -246,7 +277,10 @@ export async function onRequestPost(context) {
               sentToKommo, kommoStatusCode, kommoResponseOk, kommoResponseBody, kommoPayloadSent,
               kommoLeadId, kommoContactId,
               hashedEm ? 1 : 0, hashedPh ? 1 : 0, (hashedFn || hashedLn) ? 1 : 0,
-              rawEmail
+              rawEmail,
+              isBot ? 0 : sentToGoogleAds, googleAdsStatusCode, googleAdsResponseOk,
+              googleAdsResponseBody, googleAdsPayloadSent ?? null,
+              sessionData.gclid || null, sessionData.gbraid || null, sessionData.wbraid || null, eventValue
             ).run();
           }
         } catch (e) {
@@ -354,6 +388,37 @@ async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }) {
     body: payloadJson,
   });
   return { payload: payloadJson, response };
+}
+
+// -------------------------------------------------------
+// GOOGLE ADS — uploadClickConversions via uploader genérico
+// -------------------------------------------------------
+// Só dispara para eventos presentes no event_catalog do workspace com um
+// conversion action ID. orderId = event_id → a tag do browser envia o mesmo
+// valor como transaction_id e o Google Ads deduplica browser×server.
+async function sendToGoogleAds({ body, sessionData, hashedEm, cfg, env, catalog, eventEntry, eventValue }) {
+  if (!eventEntry) {
+    return { skipped: 'event not in catalog' };
+  }
+  if (eventEntry.channels && eventEntry.channels.google_ads === false) {
+    return { skipped: 'google_ads channel off for event' };
+  }
+  const conversionActionId = resolveGoogleAdsActionId(catalog, body.event_name, null);
+  return uploadGoogleAdsConversion(env, {
+    wsCfg: cfg,
+    conversionActionId,
+    clickIds: {
+      gclid: sessionData.gclid || '',
+      wbraid: sessionData.wbraid || '',
+      gbraid: sessionData.gbraid || '',
+    },
+    value: eventValue,
+    currency: 'BRL',
+    orderId: body.event_id,
+    eventTime: body.event_time,
+    timezoneOffset: cfg.timezone_offset,
+    hashedEmail: hashedEm,
+  });
 }
 
 // -------------------------------------------------------

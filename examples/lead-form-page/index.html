@@ -15,74 +15,26 @@
     ========================================================================
     Lead-capture starter (email only).
 
-    This is a copy-pasteable starter. Edit the two placeholder values
-    below, drop the file inside your Cloudflare Pages project at any
-    URL path, and it will immediately:
+    Copy-pasteable starter. Drop the file into your Cloudflare Pages project
+    at any URL path and it immediately:
 
-      1. Capture visit attribution (fbp/fbc/UTMs/gclid) into D1 via the
-         edge middleware — automatic, no code needed.
-      2. Load GA4 as a first-party script via /scripts/gtag.js.
-      3. Fire a PageView to Meta (dual pixel + CAPI, deduped by event_id).
-      4. POST a Lead event to /tracker on form submit, which fires Meta
-         CAPI + GA4 Measurement Protocol server-side with the collected
-         email hashed per Meta's PII spec.
-      5. Swap the form for an inline success state.
+      1. Captures visit attribution (fbp/fbc/UTMs/gclid) into D1 via the edge
+         middleware — automatic, no code needed.
+      2. Loads /track.js — the shared client-side tracking script. It resolves
+         the workspace by Host, initializes Meta Pixel + GA4 + Google Ads with
+         that workspace's IDs, and fires a PageView.
+      3. On form submit, calls USINATRK.track('Lead', { em }) — which fires
+         the Meta pixel + server-side /tracker (Meta CAPI + GA4 + Google Ads),
+         all deduped by a shared event_id.
+      4. Swaps the form for an inline success state.
 
-    WHAT TO EDIT:
-      - META_PIXEL_ID      → your Meta Pixel numeric ID
-      - GA4_MEASUREMENT_ID → your GA4 Measurement ID (G-XXXXXXXXXX).
-                             If you don't run GA4, delete the two GA4
-                             <script> blocks below — the stack will
-                             skip GA4 cleanly when env vars are unset.
-      - The <h1> / offer copy — make the page yours.
-
-    What NOT to change unless you know why:
-      - /tracker endpoint path
-      - event_id generation (crypto.randomUUID)
-      - The PII field names (em) — Meta expects this exact key
+    NO tracking IDs to edit here — they come from the workspace config.
+    Just make the <h1> / offer copy yours.
     ========================================================================
   -->
 
-  <!-- GA4 (first-party via /scripts/gtag.js which proxies googletagmanager) -->
-  <script async src="/scripts/gtag.js?id=G-XXXXXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){ dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-XXXXXXXXXX'); // ← your GA4 measurement ID
-  </script>
-
-  <!-- Meta Pixel -->
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,
-    document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init', 'YOUR_META_PIXEL_ID'); // ← your Meta Pixel numeric ID
-
-    // PageView — dual fire (pixel + CAPI) with shared event_id for dedup.
-    // /tracker skips event_log inserts for PageView, so D1 stays lean;
-    // only the Meta CAPI call happens server-side. GA4 is pixel-only for
-    // PageView (GA4 MP is conversion-only in this stack).
-    (function () {
-      var pvEventId = (crypto.randomUUID && crypto.randomUUID()) ||
-        (Date.now() + '-' + Math.random().toString(36).slice(2));
-      fbq('track', 'PageView', {}, { eventID: pvEventId });
-      fetch('/tracker', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        keepalive: true,
-        body: JSON.stringify({
-          event_name: 'PageView',
-          event_id: pvEventId,
-          event_time: Math.floor(Date.now() / 1000),
-          event_source_url: window.location.href,
-          user_data: {},
-        }),
-      }).catch(function () {});
-    })();
-  </script>
+  <!-- Shared client-side tracking. One file for every LP — see /track.js. -->
+  <script src="/track.js" async></script>
 
   <style>
     *,*::before,*::after { box-sizing: border-box; }
@@ -377,34 +329,12 @@
       const originalLabel = submitBtn.innerHTML;
       submitBtn.textContent = 'Enviando…';
 
-      // Every event gets its own ID so the Meta pixel fire (below) and the
-      // server-side CAPI fire (from /tracker) can be deduped by Meta.
-      const eventId = crypto.randomUUID();
-      const eventTime = Math.floor(Date.now() / 1000);
-
-      // Browser-side Meta fire (will be deduped against the server-side fire
-      // when Meta sees the same event_id).
+      // Fire the Lead in every channel — Meta pixel + server-side /tracker
+      // (Meta CAPI + GA4 + Google Ads), deduped by a shared event_id.
+      // track() resolves all destinations from the workspace config.
       try {
-        if (window.fbq) {
-          fbq('track', 'Lead', {}, { eventID: eventId });
-        }
-      } catch (_) {}
-
-      // Server-side fire — this is the authoritative one. /tracker hashes
-      // PII, enriches with captured fbp/fbc/UTMs, and relays to Meta CAPI
-      // + GA4 MP.
-      try {
-        const response = await fetch('/tracker', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            event_name: 'Lead',
-            event_id: eventId,
-            event_time: eventTime,
-            event_source_url: window.location.href,
-            user_data: { em: email },
-          }),
-        });
+        if (!window.USINATRK) throw new Error('track.js not loaded');
+        const response = await USINATRK.track('Lead', { em: email });
 
         if (!response.ok) {
           const errBody = await response.json().catch(() => ({}));
