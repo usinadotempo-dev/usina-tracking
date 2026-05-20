@@ -1594,7 +1594,7 @@ function eventCatalogCardHtml(cfg) {
     <div class="card p-6 mb-5">
       <div class="mb-5">
         <h3 class="display text-[15px] text-brand-navy">Catálogo de eventos</h3>
-        <p class="text-[13px] text-brand-gray mt-0.5">Os eventos de conversão deste workspace. Cada entrada define o destino no Google Ads — Action ID (server-side) e Conversion Label (tag do browser) — o valor, o passo do funil e se entra na métrica de recuperação. Adicione eventos personalizados livremente.</p>
+        <p class="text-[13px] text-brand-gray mt-0.5">O registro central dos eventos de conversão deste workspace — usado pelo pipeline (Meta, GA4 e Google Ads) e pelo dashboard. Cada entrada define rótulo, posição no funil, valor e os destinos do Google Ads. Adicione eventos personalizados livremente.</p>
       </div>
       <div id="event-catalog-list" class="space-y-3">${rows || '<p class="text-[13px] text-brand-gray">Nenhum evento cadastrado. Use “+ Adicionar evento”.</p>'}</div>
       <button type="button" id="event-catalog-add" class="btn btn-secondary btn-sm mt-3">+ Adicionar evento</button>
@@ -1612,36 +1612,42 @@ function eventCatalogRowHtml(name, entry) {
          data-ev-ch-meta="${ch.meta === false ? '0' : '1'}"
          data-ev-ch-ga4="${ch.ga4 === false ? '0' : '1'}"
          data-ev-ch-gads="${ch.google_ads === false ? '0' : '1'}">
-      <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))">
+      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
         <div>
           <label class="label">Evento (event_name)</label>
           <input data-ev-field="name" class="input mono" value="${escAttr(name || '')}" placeholder="Lead">
+          <p class="help">Nome técnico que a página dispara. Os nativos devem ser exatos: Lead, Schedule, MeetingHeld, Purchase. Para um evento personalizado, use um nome sem espaços que você mesmo dispara na página.</p>
         </div>
         <div>
           <label class="label">Rótulo</label>
           <input data-ev-field="label" class="input" value="${escAttr(e.label || '')}" placeholder="Lead">
+          <p class="help">Como o evento aparece no dashboard. Texto livre — você escolhe.</p>
         </div>
         <div>
           <label class="label">Passo do funil</label>
           <input data-ev-field="funnel_step" class="input" type="number" value="${escAttr(num(e.funnel_step))}" placeholder="2">
+          <p class="help">Ordem no funil do dashboard (ex.: 2=Lead, 3=Agendou, 4=Compareceu, 5=Comprou). Você define a sequência.</p>
         </div>
         <div>
           <label class="label">Valor padrão</label>
           <input data-ev-field="value" class="input" type="number" step="0.01" value="${escAttr(num(e.value))}" placeholder="vazio = valor real">
+          <p class="help">Valor R$ da conversão. Deixe vazio para usar o valor real do evento (compra, faixa de verba). Lead/Schedule: 0 ou um valor estimado de negócio.</p>
         </div>
         <div>
           <label class="label">Google Ads — Action ID</label>
           <input data-ev-field="google_ads_action_id" class="input mono" value="${escAttr(e.google_ads_action_id || '')}" placeholder="6837905451">
+          <p class="help">ID numérico da conversion action (envio server-side). Em Google Ads → Metas → Conversões, abra a conversão — é um número longo. Deixe vazio para não enviar este evento ao Google Ads.</p>
         </div>
         <div>
           <label class="label">Google Ads — Label (browser)</label>
           <input data-ev-field="google_ads_label" class="input mono" value="${escAttr(e.google_ads_label || '')}" placeholder="AbC-D_efGhi">
+          <p class="help">Conversion label da MESMA conversão (tag do browser). Google Ads → a conversão → “Configurar tag”: no snippet gtag, é a parte depois da barra em send_to:'AW-…/LABEL'.</p>
         </div>
       </div>
       <div class="flex items-center justify-between mt-2 gap-3 flex-wrap">
-        <label class="flex items-center gap-2 text-[13px] cursor-pointer">
-          <input type="checkbox" data-ev-field="recovery_tracked" ${e.recovery_tracked ? 'checked' : ''}>
-          <span>Conta na métrica de recuperação</span>
+        <label class="flex items-start gap-2 text-[13px] cursor-pointer max-w-2xl">
+          <input type="checkbox" data-ev-field="recovery_tracked" class="mt-0.5" ${e.recovery_tracked ? 'checked' : ''}>
+          <span>Conta na métrica de recuperação — marque para eventos disparados no browser (Lead, Schedule), em que o dashboard compara a captação browser × servidor. Desmarque para eventos só-servidor (MeetingHeld, Purchase).</span>
         </label>
         <button type="button" class="btn btn-ghost btn-sm event-catalog-remove">Remover</button>
       </div>
