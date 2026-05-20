@@ -15,7 +15,8 @@ const CONFIG_FIELDS = [
   'google_ads_developer_token', 'google_ads_customer_id', 'google_ads_login_customer_id',
   // IDs públicos da tag do browser (LP/agendamento) — não são segredo
   'google_ads_aw_id', 'google_ads_conversion_label',
-  'google_ads_conversions', // JSON evento→label (multi-conversão)
+  'google_ads_conversions', // JSON evento→label legado (mig 0033) — fallback retrocompat
+  'event_catalog',          // JSON catálogo de eventos do workspace (data-driven)
   'encharge_api_key', 'manychat_key',
   'default_country_code', 'timezone_offset',
   'meta_ads_access_token', 'meta_ads_account_id',

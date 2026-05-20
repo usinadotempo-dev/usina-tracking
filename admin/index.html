@@ -1576,6 +1576,104 @@ function configCard(title, description, fields) {
     </div>`;
 }
 
+// ---- Catálogo de eventos do workspace (data-driven) ----------------------
+// Renderiza o JSON workspace_config.event_catalog como blocos editáveis e o
+// serializa de volta no submit. Cada evento — nativo ou personalizado — é uma
+// entrada igual.
+function eventCatalogCardHtml(cfg) {
+  let catalog = {};
+  try {
+    const parsed = JSON.parse(cfg.event_catalog || '{}');
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) catalog = parsed;
+  } catch (_) { /* JSON inválido → começa vazio */ }
+  const names = Object.keys(catalog).sort(
+    (a, b) => (catalog[a]?.funnel_step ?? 99) - (catalog[b]?.funnel_step ?? 99)
+  );
+  const rows = names.map((n) => eventCatalogRowHtml(n, catalog[n])).join('');
+  return `
+    <div class="card p-6 mb-5">
+      <div class="mb-5">
+        <h3 class="display text-[15px] text-brand-navy">Catálogo de eventos</h3>
+        <p class="text-[13px] text-brand-gray mt-0.5">Os eventos de conversão deste workspace. Cada entrada define o destino no Google Ads — Action ID (server-side) e Conversion Label (tag do browser) — o valor, o passo do funil e se entra na métrica de recuperação. Adicione eventos personalizados livremente.</p>
+      </div>
+      <div id="event-catalog-list" class="space-y-3">${rows || '<p class="text-[13px] text-brand-gray">Nenhum evento cadastrado. Use “+ Adicionar evento”.</p>'}</div>
+      <button type="button" id="event-catalog-add" class="btn btn-secondary btn-sm mt-3">+ Adicionar evento</button>
+    </div>`;
+}
+
+function eventCatalogRowHtml(name, entry) {
+  const e = entry || {};
+  const ch = e.channels || {};
+  const num = (v) => (v === null || v === undefined || v === '' ? '' : String(v));
+  return `
+    <div class="event-catalog-row border border-brand-border rounded-lg p-3 bg-[#fafbfd]"
+         data-ev-row
+         data-ev-source="${escAttr(e.source || 'browser')}"
+         data-ev-ch-meta="${ch.meta === false ? '0' : '1'}"
+         data-ev-ch-ga4="${ch.ga4 === false ? '0' : '1'}"
+         data-ev-ch-gads="${ch.google_ads === false ? '0' : '1'}">
+      <div class="grid gap-2" style="grid-template-columns: repeat(auto-fit, minmax(150px, 1fr))">
+        <div>
+          <label class="label">Evento (event_name)</label>
+          <input data-ev-field="name" class="input mono" value="${escAttr(name || '')}" placeholder="Lead">
+        </div>
+        <div>
+          <label class="label">Rótulo</label>
+          <input data-ev-field="label" class="input" value="${escAttr(e.label || '')}" placeholder="Lead">
+        </div>
+        <div>
+          <label class="label">Passo do funil</label>
+          <input data-ev-field="funnel_step" class="input" type="number" value="${escAttr(num(e.funnel_step))}" placeholder="2">
+        </div>
+        <div>
+          <label class="label">Valor padrão</label>
+          <input data-ev-field="value" class="input" type="number" step="0.01" value="${escAttr(num(e.value))}" placeholder="vazio = valor real">
+        </div>
+        <div>
+          <label class="label">Google Ads — Action ID</label>
+          <input data-ev-field="google_ads_action_id" class="input mono" value="${escAttr(e.google_ads_action_id || '')}" placeholder="6837905451">
+        </div>
+        <div>
+          <label class="label">Google Ads — Label (browser)</label>
+          <input data-ev-field="google_ads_label" class="input mono" value="${escAttr(e.google_ads_label || '')}" placeholder="AbC-D_efGhi">
+        </div>
+      </div>
+      <div class="flex items-center justify-between mt-2 gap-3 flex-wrap">
+        <label class="flex items-center gap-2 text-[13px] cursor-pointer">
+          <input type="checkbox" data-ev-field="recovery_tracked" ${e.recovery_tracked ? 'checked' : ''}>
+          <span>Conta na métrica de recuperação</span>
+        </label>
+        <button type="button" class="btn btn-ghost btn-sm event-catalog-remove">Remover</button>
+      </div>
+    </div>`;
+}
+
+function serializeEventCatalog() {
+  const catalog = {};
+  $$('#event-catalog-list [data-ev-row]').forEach((row) => {
+    const get = (f) => row.querySelector(`[data-ev-field="${f}"]`);
+    const name = (get('name').value || '').trim();
+    if (!name) return; // linha sem event_name é descartada
+    const stepRaw = get('funnel_step').value.trim();
+    const valRaw = get('value').value.trim();
+    catalog[name] = {
+      label: get('label').value.trim() || name,
+      funnel_step: stepRaw === '' ? null : Number(stepRaw),
+      value: valRaw === '' ? null : Number(valRaw),
+      google_ads_action_id: get('google_ads_action_id').value.trim(),
+      google_ads_label: get('google_ads_label').value.trim(),
+      recovery_tracked: get('recovery_tracked').checked,
+      source: row.dataset.evSource || 'browser',
+      channels: {
+        meta: row.dataset.evChMeta !== '0',
+        ga4: row.dataset.evChGa4 !== '0',
+        google_ads: row.dataset.evChGads !== '0',
+      },
+    };
+  });
+  return Object.keys(catalog).length ? JSON.stringify(catalog) : null;
+}
+
 function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, moduleLabels) {
   // Visualização do dashboard — preset + overrides
   const businessTypeOptions = Object.entries(presets || {})
@@ -1707,15 +1805,15 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
 
       ${configCard('Google Ads', 'Normalmente preencha só o Customer ID + (LP) AW-ID e Conversion Label. As 5 credenciais OAuth são compartilhadas em Configurações (plataforma) — preencha-as aqui SÓ para cliente com conta independente fora da MCC (override).', [
         { label: 'Customer ID',        key: 'google_ads_customer_id',        value: cfg.google_ads_customer_id,        mono: true, full: true, placeholder: '1234567890', help: 'A conta de anúncio deste cliente, sem hífens. (Único campo obrigatório p/ cliente sob a MCC.)' },
-        { label: 'AW-ID (tag do browser)',   key: 'google_ads_aw_id',             value: cfg.google_ads_aw_id,             mono: true, full: true, placeholder: 'AW-123456789', help: 'Um por conta Google Ads. Compartilhado por todas as conversões da conta.' },
-        { label: 'Conversões (mapa evento→label)', key: 'google_ads_conversions',  value: cfg.google_ads_conversions,       mono: true, full: true, placeholder: '{"schedule":"AbC-D_efGhi","lead":"XyZ...","purchase":"..."}', help: 'JSON evento→label. A LP de venda usa “schedule”. Páginas de cliente podem usar lead/purchase. 1 AW-ID, N labels.' },
-        { label: 'Conversion Label (legado/fallback do schedule)', key: 'google_ads_conversion_label', value: cfg.google_ads_conversion_label, mono: true, placeholder: 'AbC-D_efGhi', help: 'Opcional. Usado só se o mapa acima não tiver “schedule”. Retrocompat — pode deixar vazio se usar o mapa.' },
+        { label: 'AW-ID (tag do browser)',   key: 'google_ads_aw_id',             value: cfg.google_ads_aw_id,             mono: true, full: true, placeholder: 'AW-123456789', help: 'Um por conta Google Ads. As conversões por evento (Action ID + Label) ficam no Catálogo de eventos abaixo.' },
         { label: 'Client ID (override)',     key: 'google_ads_client_id',          value: cfg.google_ads_client_id,          mono: true },
         { label: 'Client Secret (override)', key: 'google_ads_client_secret',      value: cfg.google_ads_client_secret,      mono: true, secret: true },
         { label: 'Refresh Token (override)', key: 'google_ads_refresh_token',      value: cfg.google_ads_refresh_token,      mono: true, secret: true, help: 'Só p/ conta independente fora da MCC.' },
         { label: 'Developer Token (override)', key: 'google_ads_developer_token',  value: cfg.google_ads_developer_token,    mono: true, secret: true },
         { label: 'Login Customer ID (override)', key: 'google_ads_login_customer_id', value: cfg.google_ads_login_customer_id, mono: true, placeholder: 'só p/ conta independente' },
       ])}
+
+      ${eventCatalogCardHtml(cfg)}
 
       ${configCard('Defaults & integrações', 'Configurações regionais e chaves de automação opcionais.', [
         { label: 'Default Country Code', key: 'default_country_code', value: cfg.default_country_code || '55', mono: true, placeholder: '55', help: 'Prepended em telefones de lead form para hash CAPI.' },
@@ -1841,10 +1939,25 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
   $('#kommo-reload-btn')?.addEventListener('click', loadKommoMeta);
   loadKommoMeta();
 
+  // ---- Catálogo de eventos: adicionar / remover entradas ----
+  $('#event-catalog-add')?.addEventListener('click', () => {
+    const list = $('#event-catalog-list');
+    if (!list.querySelector('[data-ev-row]')) list.innerHTML = ''; // limpa o placeholder
+    const tmp = document.createElement('div');
+    tmp.innerHTML = eventCatalogRowHtml('', {});
+    const row = tmp.firstElementChild;
+    if (row) list.appendChild(row);
+  });
+  $('#event-catalog-list')?.addEventListener('click', (ev) => {
+    const rm = ev.target.closest('.event-catalog-remove');
+    if (rm) rm.closest('[data-ev-row]')?.remove();
+  });
+
   $('#ws-cfg-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const config = {};
     $$('[data-cfg]', body).forEach(inp => { config[inp.dataset.cfg] = inp.value.trim() || null; });
+    config.event_catalog = serializeEventCatalog();
 
     // Append visibility config
     const businessType = businessTypeEl?.value || 'education_hybrid';

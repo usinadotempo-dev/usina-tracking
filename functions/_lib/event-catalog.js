@@ -40,3 +40,32 @@ export function resolveGoogleAdsActionId(catalog, eventName, productConfig) {
   if (entry && entry.google_ads_action_id) return String(entry.google_ads_action_id);
   return '';
 }
+
+// Catálogo inicial semeado em todo workspace novo. São apenas defaults — o
+// admin edita livremente (inclusive adiciona eventos custom). Os IDs/labels
+// do Google Ads ficam vazios: cada workspace preenche os seus.
+export function seedEventCatalog() {
+  const channels = { meta: true, ga4: true, google_ads: true };
+  return {
+    Lead: {
+      label: 'Lead', funnel_step: 2, value: 0,
+      google_ads_action_id: '', google_ads_label: '',
+      channels, source: 'browser', recovery_tracked: true,
+    },
+    Schedule: {
+      label: 'Reunião agendada', funnel_step: 3, value: 0,
+      google_ads_action_id: '', google_ads_label: '',
+      channels, source: 'browser', recovery_tracked: true,
+    },
+    MeetingHeld: {
+      label: 'Reunião realizada', funnel_step: 4, value: null,
+      google_ads_action_id: '', google_ads_label: '',
+      channels, source: 'server', recovery_tracked: false,
+    },
+    Purchase: {
+      label: 'Compra', funnel_step: 5, value: null,
+      google_ads_action_id: '', google_ads_label: '',
+      channels, source: 'server', recovery_tracked: false,
+    },
+  };
+}

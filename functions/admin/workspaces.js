@@ -3,6 +3,7 @@
 // POST              → create workspace under a tenant
 
 import { requireAuth, jsonError, jsonOk } from '../_lib/auth.js';
+import { seedEventCatalog } from '../_lib/event-catalog.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -57,10 +58,11 @@ export async function onRequestPost(context) {
     INSERT INTO workspaces (id, tenant_id, slug, name, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)
   `).bind(id, tenantId, slug, name, now, now).run();
 
-  // Initialize an empty config row so the UI's PATCH /workspaces/<id>/config has a target.
+  // Initialize the config row (target for the UI's PATCH) já com o catálogo
+  // de eventos semeado — Lead/Schedule/MeetingHeld/Purchase como defaults.
   await context.env.DB.prepare(`
-    INSERT INTO workspace_config (workspace_id, updated_at) VALUES (?, ?)
-  `).bind(id, now).run();
+    INSERT INTO workspace_config (workspace_id, event_catalog, updated_at) VALUES (?, ?, ?)
+  `).bind(id, JSON.stringify(seedEventCatalog()), now).run();
 
   return jsonOk({ workspace: { id, tenant_id: tenantId, slug, name, created_at: now } });
 }
