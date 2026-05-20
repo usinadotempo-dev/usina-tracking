@@ -37,14 +37,8 @@
 
 import PRODUCTS_CONFIG from '../../config/products.js';
 import { loadWorkspaceConfig } from '../_lib/workspace-config.js';
-import { resolveGoogleAdsCreds } from '../_lib/google-ads-creds.js';
-
-// Module-scope OAuth2 access token cache for Google Ads API.
-// Keyed by credential IDENTITY (client_id|login_customer_id|refresh_token),
-// not by workspace — no modelo multi-tenant a credencial-gerente da MCC é
-// compartilhada entre vários workspaces, então 1 token serve todos eles.
-// Map<credKey, { token, expiresAt }>
-const googleAdsTokenCache = new Map();
+import { uploadGoogleAdsConversion } from '../_lib/google-ads-upload.js';
+import { parseEventCatalog, resolveGoogleAdsActionId } from '../_lib/event-catalog.js';
 
 // -----------------------------------------------------------------------------
 // Main entry point — each platform adapter calls this with a normalized object.
@@ -157,7 +151,7 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
   const [metaResult, ga4Result, googleAdsResult] = await Promise.allSettled([
     sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }),
     sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }),
-    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId, env }),
+    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env }),
   ]);
 
   // Parse Meta response
@@ -192,25 +186,18 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
     ga4ResponseBody = `Fetch error: ${ga4Result.reason?.message || 'unknown'}`;
   }
 
-  // Parse Google Ads response. HTTP 200 is not enough — partialFailureError
-  // can hold per-row rejections, so inspect the body on success.
+  // Parse Google Ads response. O uploader já consumiu a Response e checou
+  // partialFailureError — aqui só transcrevemos os campos processados.
   let googleAdsStatusCode = 0, googleAdsResponseOk = 0, googleAdsResponseBody = '', googleAdsPayloadSent = null;
   if (googleAdsResult?.status === 'fulfilled' && googleAdsResult.value) {
     const v = googleAdsResult.value;
-    googleAdsPayloadSent = v.payload;
     if (v.skipped) {
       googleAdsResponseBody = `skipped: ${v.skipped}`;
-    } else if (v.response) {
-      googleAdsStatusCode = v.response.status;
-      try { googleAdsResponseBody = await v.response.text(); } catch (e) { googleAdsResponseBody = `Read error: ${e.message}`; }
-      if (v.response.ok) {
-        let partialErr = null;
-        try {
-          const parsedBody = JSON.parse(googleAdsResponseBody);
-          partialErr = parsedBody?.partialFailureError || null;
-        } catch (_) { /* non-JSON body, leave partialErr null */ }
-        googleAdsResponseOk = partialErr ? 0 : 1;
-      }
+    } else {
+      googleAdsPayloadSent = v.payload;
+      googleAdsStatusCode = v.statusCode;
+      googleAdsResponseOk = v.ok ? 1 : 0;
+      googleAdsResponseBody = v.responseBody;
     }
   } else if (googleAdsResult?.status === 'rejected') {
     googleAdsResponseBody = `Fetch error: ${googleAdsResult.reason?.message || 'unknown'}`;
@@ -566,140 +553,27 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
 }
 
 // -----------------------------------------------------------------------------
-// GOOGLE ADS API — uploadClickConversions (v21 REST)
+// GOOGLE ADS — wrapper de compra sobre o uploader genérico
 // -----------------------------------------------------------------------------
-// Pinning v21 in the URL: Google Ads SDKs (google-ads-api, google-ads-node) lag
-// the REST API and break with "API version not found" — call REST directly.
-async function getGoogleAdsAccessToken(cfg) {
-  const now = Math.floor(Date.now() / 1000);
-  // Cache pela identidade da credencial (não pelo workspace): a mesma
-  // credencial-gerente da MCC atende N workspaces com 1 token só.
-  const cacheKey = `${cfg.google_ads_client_id || ''}|${cfg.google_ads_login_customer_id || ''}|${cfg.google_ads_refresh_token || ''}`;
-  const cached = googleAdsTokenCache.get(cacheKey);
-  if (cached && cached.token && cached.expiresAt > now + 30) {
-    return cached.token;
-  }
+// A chamada REST (uploadClickConversions v21) vive em _lib/google-ads-upload.js,
+// reutilizada por todos os eventos. Aqui só resolvemos o conversion action.
+async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env }) {
+  // Compra: o conversion action vem do productConfig (override por produto)
+  // e cai no event_catalog do workspace ('Purchase') quando não há override.
+  const catalog = parseEventCatalog(cfg);
+  const conversionActionId = resolveGoogleAdsActionId(catalog, 'Purchase', productConfig);
 
-  const resp = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'refresh_token',
-      client_id: cfg.google_ads_client_id,
-      client_secret: cfg.google_ads_client_secret,
-      refresh_token: cfg.google_ads_refresh_token,
-    }),
+  return uploadGoogleAdsConversion(env, {
+    wsCfg: cfg,
+    conversionActionId,
+    clickIds: { gclid: checkoutData.gclid, wbraid: checkoutData.wbraid, gbraid: checkoutData.gbraid },
+    value,
+    currency,
+    orderId: transactionId,
+    eventTime,
+    timezoneOffset: cfg.timezone_offset,
+    hashedEmail: hashedEm,
   });
-
-  if (!resp.ok) {
-    const errBody = await resp.text().catch(() => '');
-    console.error('Google Ads token refresh failed:', resp.status, errBody);
-    return null;
-  }
-
-  const data = await resp.json();
-  if (!data.access_token) {
-    console.error('Google Ads token refresh: no access_token in response', data);
-    return null;
-  }
-
-  googleAdsTokenCache.set(cacheKey, {
-    token: data.access_token,
-    expiresAt: now + (data.expires_in || 3600) - 60,
-  });
-  return data.access_token;
-}
-
-// Format unix seconds → "YYYY-MM-DD HH:MM:SS±HH:MM" in the recipient's
-// configured timezone. Default is -03:00 (São Paulo, DST-free since 2019).
-// Google Ads rejects conversions whose timestamp precedes the click with
-// CONVERSION_PRECEDES_GCLID, so the offset must match the ad account's TZ.
-function formatConversionDateTime(unixSeconds, offsetString) {
-  const tz = offsetString || '-03:00';
-  const match = /^([+-])(\d{2}):(\d{2})$/.exec(tz);
-  if (!match) {
-    const d = new Date(unixSeconds * 1000);
-    const pad = n => String(n).padStart(2, '0');
-    return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())} ` +
-      `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}:${pad(d.getUTCSeconds())}+00:00`;
-  }
-  const sign = match[1] === '-' ? -1 : 1;
-  const offsetSeconds = sign * (parseInt(match[2], 10) * 3600 + parseInt(match[3], 10) * 60);
-  const shifted = new Date((unixSeconds + offsetSeconds) * 1000);
-  const pad = n => String(n).padStart(2, '0');
-  return `${shifted.getUTCFullYear()}-${pad(shifted.getUTCMonth() + 1)}-${pad(shifted.getUTCDate())} ` +
-    `${pad(shifted.getUTCHours())}:${pad(shifted.getUTCMinutes())}:${pad(shifted.getUTCSeconds())}${tz}`;
-}
-
-async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, workspaceId, env }) {
-  // Resolve credenciais efetivas: 5 compartilhadas (platform_config) +
-  // customer_id por workspace + override legado/independente. cfg ainda é
-  // usado para timezone_offset (config por workspace).
-  const g = await resolveGoogleAdsCreds(env, cfg);
-
-  if (!g.google_ads_customer_id || !g.google_ads_login_customer_id ||
-      !g.google_ads_developer_token || !g.google_ads_client_id ||
-      !g.google_ads_client_secret || !g.google_ads_refresh_token) {
-    return { skipped: 'missing google ads config (platform/workspace)', payload: null, response: null };
-  }
-
-  if (!productConfig?.googleAdsConversionActionId) {
-    return { skipped: 'no conversion action configured', payload: null, response: null };
-  }
-
-  // Click identifier required (gclid > wbraid > gbraid). Enhanced Conversions
-  // for Leads is a different API surface and not handled here.
-  const gclid = checkoutData.gclid || '';
-  const wbraid = checkoutData.wbraid || '';
-  const gbraid = checkoutData.gbraid || '';
-  if (!gclid && !wbraid && !gbraid) {
-    return { skipped: 'no click id', payload: null, response: null };
-  }
-
-  const accessToken = await getGoogleAdsAccessToken(g);
-  if (!accessToken) {
-    return { skipped: 'oauth token unavailable', payload: null, response: null };
-  }
-
-  const customerId = String(g.google_ads_customer_id).replace(/-/g, '');
-  const loginCustomerId = String(g.google_ads_login_customer_id).replace(/-/g, '');
-
-  const conversion = {
-    conversionAction: `customers/${customerId}/conversionActions/${productConfig.googleAdsConversionActionId}`,
-    conversionDateTime: formatConversionDateTime(eventTime, cfg.timezone_offset),
-    conversionValue: parseFloat(value) || 0,
-    currencyCode: currency || 'BRL',
-    orderId: String(transactionId || ''),
-  };
-  if (gclid) conversion.gclid = gclid;
-  else if (wbraid) conversion.wbraid = wbraid;
-  else if (gbraid) conversion.gbraid = gbraid;
-
-  if (hashedEm) {
-    conversion.userIdentifiers = [{ hashedEmail: hashedEm }];
-  }
-
-  const body = {
-    conversions: [conversion],
-    partialFailure: true,
-    validateOnly: false,
-  };
-
-  const payloadJson = JSON.stringify(body);
-  const response = await fetch(
-    `https://googleads.googleapis.com/v21/customers/${customerId}:uploadClickConversions`,
-    {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'developer-token': g.google_ads_developer_token,
-        'login-customer-id': loginCustomerId,
-        'Content-Type': 'application/json',
-      },
-      body: payloadJson,
-    }
-  );
-  return { payload: payloadJson, response };
 }
 
 // -----------------------------------------------------------------------------
