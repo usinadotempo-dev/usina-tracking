@@ -2,7 +2,7 @@ import { resolveHost } from './_lib/workspace.js';
 import { loadWorkspaceConfig } from './_lib/workspace-config.js';
 import { createKommoLead } from './_lib/kommo.js';
 import { uploadGoogleAdsConversion } from './_lib/google-ads-upload.js';
-import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId } from './_lib/event-catalog.js';
+import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from './_lib/event-catalog.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -142,8 +142,8 @@ export async function onRequestPost(context) {
     // link-unfurl crawl (WhatsApp preview, Slackbot, facebookexternalhit,
     // etc.) would burn an event and pollute the platforms.
     const results = isBot ? [] : await Promise.allSettled([
-      sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg }),
-      sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }),
+      sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg, catalog }),
+      sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg, catalog }),
       sendToGoogleAds({ body, sessionData, hashedEm, cfg, env, catalog, eventEntry, eventValue }),
     ]);
 
@@ -305,7 +305,7 @@ export async function onRequestPost(context) {
 // -------------------------------------------------------
 // META CAPI
 // -------------------------------------------------------
-async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg }) {
+async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, sessionData, cfg, catalog }) {
   if (!cfg.meta_pixel_id || !cfg.meta_access_token) {
     return { skipped: 'missing meta config for workspace', payload: null, response: null };
   }
@@ -325,7 +325,7 @@ async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashe
 
   const payload = {
     data: [{
-      event_name: body.event_name,
+      event_name: resolveMetaEventName(catalog, body.event_name, body.event_name),
       event_time: body.event_time,
       event_id: body.event_id,
       event_source_url: body.event_source_url || '',
@@ -350,7 +350,7 @@ async function sendToMeta({ body, clientIp, userAgent, fbp, fbc, hashedEm, hashe
 // -------------------------------------------------------
 // GA4 MEASUREMENT PROTOCOL — CONVERSIONS ONLY
 // -------------------------------------------------------
-async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }) {
+async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg, catalog }) {
   if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) {
     return { skipped: 'missing ga4 config for workspace', payload: null, response: null };
   }
@@ -360,10 +360,14 @@ async function sendToGA4({ body, gaClientId, gaSessionId, hashedEm, cfg }) {
     return { skipped: 'pageview', payload: null, response: null };
   }
 
-  const ga4EventName = eventName === 'lead' ? 'generate_lead'
+  // Nome no GA4: vem do event_catalog do workspace. Fallback (catálogo
+  // ausente ou sem ga4_event_name): mapa para os recommended events do GA4,
+  // senão o nome cru.
+  const ga4Fallback = eventName === 'lead' ? 'generate_lead'
     : eventName === 'purchase' ? 'purchase'
     : eventName === 'initiatecheckout' ? 'begin_checkout'
     : eventName;
+  const ga4EventName = resolveGa4EventName(catalog, body.event_name, ga4Fallback);
 
   const payload = {
     client_id: gaClientId,

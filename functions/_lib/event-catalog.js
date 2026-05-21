@@ -43,31 +43,52 @@ export function resolveGoogleAdsActionId(catalog, eventName, productConfig) {
 
 // Catálogo inicial semeado em todo workspace novo. São apenas defaults — o
 // admin edita livremente (inclusive adiciona eventos custom). Os IDs/labels
-// do Google Ads ficam vazios: cada workspace preenche os seus.
+// do Google Ads ficam vazios: cada workspace preenche os seus. Os
+// meta/ga4_event_name trazem os nomes padrão das plataformas e reproduzem
+// o comportamento histórico — cada workspace pode trocá-los.
 export function seedEventCatalog() {
   const channels = { meta: true, ga4: true, google_ads: true };
   return {
     Lead: {
       label: 'Lead', funnel_step: 2, value: 0,
+      meta_event_name: 'Lead', ga4_event_name: 'generate_lead',
       google_ads_action_id: '', google_ads_label: '',
       channels, source: 'browser', recovery_tracked: true,
     },
     Schedule: {
       label: 'Reunião agendada', funnel_step: 3, value: 0,
+      meta_event_name: 'Schedule', ga4_event_name: 'schedule',
       google_ads_action_id: '', google_ads_label: '',
       channels, source: 'browser', recovery_tracked: true,
     },
     MeetingHeld: {
       label: 'Reunião realizada', funnel_step: 4, value: null,
+      meta_event_name: 'MeetingHeld', ga4_event_name: 'meeting_held',
       google_ads_action_id: '', google_ads_label: '',
       channels, source: 'server', recovery_tracked: false,
     },
     Purchase: {
       label: 'Compra', funnel_step: 5, value: null,
+      meta_event_name: 'Purchase', ga4_event_name: 'purchase',
       google_ads_action_id: '', google_ads_label: '',
       channels, source: 'server', recovery_tracked: false,
     },
   };
+}
+
+// Nome do evento num canal específico, a partir do catálogo. Quando o
+// workspace não tem catálogo, ou a entrada não tem o campo, usa o fallback
+// (que reproduz o comportamento anterior à Fase 5).
+export function resolveMetaEventName(catalog, eventName, fallback) {
+  const entry = getEventEntry(catalog, eventName);
+  const v = entry && entry.meta_event_name;
+  return (typeof v === 'string' && v.trim()) ? v.trim() : (fallback || eventName);
+}
+
+export function resolveGa4EventName(catalog, eventName, fallback) {
+  const entry = getEventEntry(catalog, eventName);
+  const v = entry && entry.ga4_event_name;
+  return (typeof v === 'string' && v.trim()) ? v.trim() : (fallback || eventName);
 }
 
 // Carrega e parseia o event_catalog de um workspace direto do D1. Retorna {}

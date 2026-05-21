@@ -80,56 +80,66 @@ If the recipient uses a platform NOT in Eduzz/Hotmart/Kiwify, pause and
 tell them to run the `add-sales-platform` skill first — then come back
 to this one.
 
-## Step 5 — Apply the minimum per-page configuration
+## Step 5 — Per-page configuration
 
-Open `<path>/index.html` and edit the values the recipient must set
-(search the file for `YOUR_` and `XXXXXXXXXX`):
+**There are no tracking IDs to edit in the page.** Every starter loads the
+shared `/track.js`, which resolves the workspace from the request Host and
+pulls the Meta Pixel / GA4 / Google Ads IDs from that workspace's config.
+The old `YOUR_META_PIXEL_ID` / `G-XXXXXXXXXX` placeholders no longer exist.
 
-**Lead form** — ask the recipient for:
-- Meta Pixel ID (numeric) → replace `YOUR_META_PIXEL_ID`
-- GA4 Measurement ID (`G-XXXXXXXXXX`) → replace both occurrences. If the
-  recipient isn't using GA4, tell them to delete the two GA4 `<script>`
-  blocks in the `<head>` entirely — leaving the placeholder `G-XXXXXXXXXX`
-  will 404 the /scripts/gtag.js proxy and spam the browser console.
+Two things this depends on — confirm both before going live:
 
-**Sales page** — ask for the lead-form values PLUS:
-- Checkout URL (from the sales platform's product settings) → replace
-  `CHECKOUT_URL` near the top of the `<script>` block at the bottom
-- Which platform drives checkout → set `CHECKOUT_PLATFORM` to `'eduzz'`,
-  `'hotmart'`, or `'kiwify'`
-- The placeholder `assets/hero.webp` image — tell the recipient to
-  swap in their own image at the same filename, or edit the two
-  `assets/hero.webp` references (the `<link rel="preload">` and the
-  `<img src>`) if they want a different filename.
+- **The page's domain must be mapped to the right workspace.** `track.js`
+  resolves the workspace by Host; if the domain isn't in `workspace_domains`
+  tracking lands on the wrong workspace (or the Usina fallback). Check
+  admin → workspace → Domínios.
+- **The workspace owns the tracking config**, not the page — Meta Pixel,
+  GA4, Google Ads credentials and the event catalog are all set per
+  workspace in `/admin`. If they're missing, the page loads but fires
+  nothing: fix the workspace, not the page.
 
-Do NOT change any other code unless the recipient explicitly asks and
-you've re-read the recipe doc to confirm it's safe. The scripts in the
-starters are deliberately minimal and tested.
+**Lead form** — nothing tracking-related to edit. Just the offer content
+(`<h1>`, copy). On submit the page calls `USINATRK.track('Lead', { em: email })`.
+
+**Sales page** — edit only the checkout values in the `<script>` block at
+the bottom:
+- `CHECKOUT_URL` → the sales platform's real checkout URL
+- `CHECKOUT_PLATFORM` → `'eduzz'` | `'hotmart'` | `'kiwify'`
+- Swap the `assets/hero.webp` placeholder image (same filename, or edit the
+  two references — `<link rel="preload">` and `<img src>`).
+
+Do NOT change any other code unless the recipient explicitly asks and you've
+re-read the recipe doc. The starter scripts are deliberately minimal.
+
+### Custom events
+
+If the page fires an event beyond the seeded Lead / Schedule / MeetingHeld /
+Purchase — e.g. `USINATRK.track('ContactWhatsApp', {...})` — that event name
+must exist in the workspace's **event catalog** (admin → workspace → Catálogo
+de eventos). Without a catalog entry the event still reaches Meta, but won't
+fan out to Google Ads and won't carry a value / funnel position.
 
 ### Lead form: optionally collect phone and/or name
 
-The starter is **email-only by default** — one input, `user_data: { em: email }`
-on submit. That's the lowest-friction option.
+The starter is **email-only by default** — `USINATRK.track('Lead', { em: email })`
+on submit. Lowest friction.
 
-Ask whether the recipient wants to also collect phone and/or name (both
-boost Meta Advanced Matching coverage at the cost of a longer form):
+Ask whether the recipient wants to also collect phone and/or name (both boost
+Meta Advanced Matching at the cost of a longer form):
 
-- **Email + phone** (WhatsApp funnels): add a `<input type="tel" id="phone">`
-  inside the form, read it on submit, and extend `user_data` to
-  `{ em: email, ph: phone }`.
-- **Email + phone + name**: also add a `<input type="text" id="name">`,
-  split the value on whitespace, and extend `user_data` to
+- **Email + phone** (WhatsApp funnels): add `<input type="tel" id="phone">`,
+  read it on submit, and pass `{ em: email, ph: phone }`.
+- **Email + phone + name**: also add `<input type="text" id="name">`, split
+  the value on whitespace, and pass
   `{ em: email, fn: firstName, ln: lastName, ph: phone }`.
 
-Keep the Meta key names exact: `em`, `fn`, `ln`, `ph`. Never invent new
-keys — see the recipe doc.
+Keep the key names exact: `em`, `fn`, `ln`, `ph`. Never invent new keys.
 
 ### Sales page: edit the offer content
 
-The recipient will almost certainly want to edit the headline, subhead,
-price display, and bullet points. These are marked with obvious
-placeholder copy in the starter — let them do it, don't do it for them
-unless they ask.
+The recipient will want to edit the headline, subhead, price display and
+bullet points — marked with placeholder copy in the starter. Let them do it;
+don't do it for them unless they ask.
 
 ## Step 6 — Deploy and verify
 
@@ -151,7 +161,8 @@ Then run the smoke test that matches the page type.
 ### Lead form smoke test
 
 1. Open `https://<pages-domain>/<path>?utm_source=test_claude` in a browser.
-2. Open DevTools → Application → Cookies and confirm `_krob_sid` is set.
+2. DevTools → Network: confirm `/track.js` loaded (200). DevTools →
+   Application → Cookies: confirm `_krob_sid` is set.
 3. Submit the form with a test email (`claude-test@example.com` is fine).
 4. DevTools → Network: `/tracker` should return 200 with `{"ok": true}`.
 5. Query D1:

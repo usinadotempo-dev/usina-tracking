@@ -1634,6 +1634,16 @@ function eventCatalogRowHtml(name, entry) {
           <p class="help">Valor R$ da conversão. Deixe vazio para usar o valor real do evento (compra, faixa de verba). Lead/Schedule: 0 ou um valor estimado de negócio.</p>
         </div>
         <div>
+          <label class="label">Meta — nome do evento</label>
+          <input data-ev-field="meta_event_name" class="input mono" value="${escAttr(e.meta_event_name || '')}" placeholder="Lead">
+          <p class="help">Nome enviado ao Meta (Pixel + CAPI). Havendo um standard event equivalente, use o nome exato dele (Lead, Purchase, Schedule…); senão, um nome custom.</p>
+        </div>
+        <div>
+          <label class="label">GA4 — nome do evento</label>
+          <input data-ev-field="ga4_event_name" class="input mono" value="${escAttr(e.ga4_event_name || '')}" placeholder="generate_lead">
+          <p class="help">Nome enviado ao GA4, em snake_case. Use um recommended event quando houver (generate_lead, purchase…) e marque-o como evento-chave no GA4.</p>
+        </div>
+        <div>
           <label class="label">Google Ads — Action ID</label>
           <input data-ev-field="google_ads_action_id" class="input mono" value="${escAttr(e.google_ads_action_id || '')}" placeholder="6837905451">
           <p class="help">ID numérico da conversion action (envio server-side). Em Google Ads → Metas → Conversões, abra a conversão — é um número longo. Deixe vazio para não enviar este evento ao Google Ads.</p>
@@ -1666,6 +1676,8 @@ function serializeEventCatalog() {
       label: get('label').value.trim() || name,
       funnel_step: stepRaw === '' ? null : Number(stepRaw),
       value: valRaw === '' ? null : Number(valRaw),
+      meta_event_name: get('meta_event_name').value.trim(),
+      ga4_event_name: get('ga4_event_name').value.trim(),
       google_ads_action_id: get('google_ads_action_id').value.trim(),
       google_ads_label: get('google_ads_label').value.trim(),
       recovery_tracked: get('recovery_tracked').checked,

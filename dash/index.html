@@ -1755,11 +1755,15 @@
       grid.innerHTML = `<div class="col-span-full text-center py-6 text-sm text-[color:var(--muted)]">Nenhuma publicação sincronizada ainda.</div>`;
     } else {
       grid.innerHTML = posts.map(p => {
-        const img = p.thumbnail_url || p.media_url || '';
+        // Instagram CDN URLs expire fast, so we never render them directly —
+        // /api/ig-image proxies a fresh URL and edge-caches the bytes.
+        const img = p.media_id
+          ? `/api/ig-image?workspace=${encodeURIComponent(currentWorkspaceId)}&media_id=${encodeURIComponent(p.media_id)}`
+          : '';
         const caption = (p.caption || '').slice(0, 80);
         return `
           <a href="${escAttr(p.permalink || '#')}" target="_blank" rel="noopener" class="block aspect-square rounded-lg border border-[color:var(--border)] overflow-hidden relative group" title="${escAttr(caption)}">
-            ${img ? `<img src="${escAttr(img)}" alt="" class="w-full h-full object-cover" loading="lazy" referrerpolicy="no-referrer">` : `<div class="w-full h-full bg-gray-100"></div>`}
+            ${img ? `<img src="${escAttr(img)}" alt="" class="w-full h-full object-cover bg-[color:var(--border)]" loading="lazy" onerror="this.style.visibility='hidden'">` : `<div class="w-full h-full bg-[color:var(--border)]"></div>`}
             <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition flex items-end p-1 text-white opacity-0 group-hover:opacity-100">
               <div class="text-[10px] mono leading-tight">
                 ❤ ${compactNum(p.like_count)} · 💬 ${compactNum(p.comments_count)}

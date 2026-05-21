@@ -38,7 +38,7 @@
 import PRODUCTS_CONFIG from '../../config/products.js';
 import { loadWorkspaceConfig } from '../_lib/workspace-config.js';
 import { uploadGoogleAdsConversion } from '../_lib/google-ads-upload.js';
-import { parseEventCatalog, resolveGoogleAdsActionId } from '../_lib/event-catalog.js';
+import { parseEventCatalog, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from '../_lib/event-catalog.js';
 import { logEventRow } from '../_lib/event-log.js';
 
 // -----------------------------------------------------------------------------
@@ -121,6 +121,7 @@ export async function processPurchase({ parsed, env, context }) {
 // -----------------------------------------------------------------------------
 async function handleTracking({ parsed, eventId, eventTime, env }) {
   const { email, name, phone, value, currency, transactionId, productId, productName, items, checkoutData, productConfig, cfg, workspaceId } = parsed;
+  const catalog = parseEventCatalog(cfg);
 
   const hashedEm = await sha256(email);
   const nameParts = splitName(name);
@@ -150,9 +151,9 @@ async function handleTracking({ parsed, eventId, eventTime, env }) {
   }));
 
   const [metaResult, ga4Result, googleAdsResult] = await Promise.allSettled([
-    sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }),
-    sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }),
-    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env }),
+    sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg, catalog }),
+    sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg, catalog }),
+    sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env, catalog }),
   ]);
 
   // Parse Meta response
@@ -481,7 +482,7 @@ async function handlePurchaseLog({ parsed, eventId, eventTime, resultMap, env })
 // -----------------------------------------------------------------------------
 // META CAPI — Purchase with full navigation data from D1
 // -----------------------------------------------------------------------------
-async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg }) {
+async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh, hashedExternalId, eventId, eventTime, value, currency, productName, contents, cfg, catalog }) {
   if (!cfg.meta_pixel_id || !cfg.meta_access_token) {
     return { skipped: 'missing meta config for workspace', payload: null, response: null };
   }
@@ -518,7 +519,7 @@ async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh
 
   const metaPayload = {
     data: [{
-      event_name: 'Purchase',
+      event_name: resolveMetaEventName(catalog, 'Purchase', 'Purchase'),
       event_time: eventTime,
       event_id: eventId,
       event_source_url: checkoutData.event_source_url || '',
@@ -547,7 +548,7 @@ async function sendToMeta({ checkoutData, hashedEm, hashedFn, hashedLn, hashedPh
 // -----------------------------------------------------------------------------
 // GA4 Measurement Protocol — Purchase
 // -----------------------------------------------------------------------------
-async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg }) {
+async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currency, ga4Items, cfg, catalog }) {
   if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) {
     return { skipped: 'missing ga4 config for workspace', payload: null, response: null };
   }
@@ -565,7 +566,7 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
   const ga4Payload = {
     client_id: gaClientId,
     events: [{
-      name: 'purchase',
+      name: resolveGa4EventName(catalog, 'Purchase', 'purchase'),
       params: purchaseParams,
     }],
   };
@@ -591,10 +592,9 @@ async function sendToGA4({ checkoutData, hashedEm, transactionId, value, currenc
 // -----------------------------------------------------------------------------
 // A chamada REST (uploadClickConversions v21) vive em _lib/google-ads-upload.js,
 // reutilizada por todos os eventos. Aqui só resolvemos o conversion action.
-async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env }) {
+async function sendToGoogleAds({ checkoutData, productConfig, hashedEm, transactionId, value, currency, eventTime, cfg, env, catalog }) {
   // Compra: o conversion action vem do productConfig (override por produto)
   // e cai no event_catalog do workspace ('Purchase') quando não há override.
-  const catalog = parseEventCatalog(cfg);
   const conversionActionId = resolveGoogleAdsActionId(catalog, 'Purchase', productConfig);
 
   return uploadGoogleAdsConversion(env, {

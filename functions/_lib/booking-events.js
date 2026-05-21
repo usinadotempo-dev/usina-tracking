@@ -19,7 +19,7 @@
 
 import { meetingValue } from './booking-actions.js';
 import { uploadGoogleAdsConversion } from './google-ads-upload.js';
-import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId } from './event-catalog.js';
+import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from './event-catalog.js';
 import { logEventRow } from './event-log.js';
 
 const USINA_WS = 'usina-vendas';
@@ -88,7 +88,7 @@ function gaClientId(b) {
   return `${parseInt(n, 10)}.${b.created_at || Math.floor(Date.now() / 1000)}`;
 }
 
-async function sendMetaHeld(b, cfg, ev) {
+async function sendMetaHeld(b, cfg, ev, catalog) {
   if (!cfg.meta_pixel_id || !cfg.meta_access_token) return { skipped: 'sem meta config' };
 
   const user = {};
@@ -104,7 +104,7 @@ async function sendMetaHeld(b, cfg, ev) {
 
   const payload = {
     data: [{
-      event_name: ev.name,
+      event_name: resolveMetaEventName(catalog, ev.name, ev.name),
       event_time: ev.time,
       event_id: ev.id,
       event_source_url: b.landing_url || '',
@@ -124,13 +124,13 @@ async function sendMetaHeld(b, cfg, ev) {
   return { ok: r.ok, status: r.status, body: (await r.text().catch(() => '')).slice(0, 500) };
 }
 
-async function sendGa4Held(b, cfg, ev) {
+async function sendGa4Held(b, cfg, ev, catalog) {
   if (!cfg.ga4_measurement_id || !cfg.ga4_api_secret) return { skipped: 'sem ga4 config' };
 
   const payload = {
     client_id: gaClientId(b),
     events: [{
-      name: 'meeting_held',
+      name: resolveGa4EventName(catalog, ev.name, 'meeting_held'),
       params: {
         // session_id é obrigatório p/ o GA4 atribuir sessão e exibir o
         // evento em Tempo real / relatórios (sem ele, MP responde 200 mas
@@ -154,8 +154,7 @@ async function sendGa4Held(b, cfg, ev) {
 
 // Envia o MeetingHeld ao Google Ads (uploadClickConversions). Como o evento
 // nasce no /admin (sem browser), não há tag client-side → sem risco de dedup.
-async function sendGoogleAdsHeld(booking, cfg, ev, env) {
-  const catalog = parseEventCatalog(cfg);
+async function sendGoogleAdsHeld(booking, cfg, ev, env, catalog) {
   const entry = getEventEntry(catalog, ev.name);
   if (!entry) return { skipped: 'evento fora do catálogo' };
   if (entry.channels && entry.channels.google_ads === false) {
@@ -200,10 +199,11 @@ export async function fireMeetingHeld(env, booking) {
     const resolved = await resolveWsConfig(env, booking);
     workspaceId = resolved.workspaceId;
     const cfg = resolved.cfg;
+    const catalog = parseEventCatalog(cfg);
     [meta, ga4, googleAds] = await Promise.all([
-      sendMetaHeld(booking, cfg, ev).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
-      sendGa4Held(booking, cfg, ev).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
-      sendGoogleAdsHeld(booking, cfg, ev, env).catch((e) => ({ error: String(e && e.message || e) })),
+      sendMetaHeld(booking, cfg, ev, catalog).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
+      sendGa4Held(booking, cfg, ev, catalog).catch((e) => ({ ok: false, error: String(e && e.message || e) })),
+      sendGoogleAdsHeld(booking, cfg, ev, env, catalog).catch((e) => ({ error: String(e && e.message || e) })),
     ]);
   } catch (e) {
     const err = String(e && e.message || e);
