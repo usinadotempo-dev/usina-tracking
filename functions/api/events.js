@@ -1,4 +1,12 @@
+// GET /api/events — tracking-health do workspace.
+//
+// As métricas de recuperação (ITP / adblock / fonte do fbp) são calculadas
+// sobre os eventos que o workspace marcou com `recovery_tracked` no
+// event_catalog — eventos de origem browser, em que comparar captação
+// browser×servidor faz sentido. Sem catálogo, cai em 'Lead'.
+
 import { requireAuth, resolveScope } from '../_lib/auth.js';
+import { loadEventCatalog } from '../_lib/event-catalog.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -17,6 +25,13 @@ export async function onRequestGet(context) {
   const eventFilter = url.searchParams.get('event') || '';
   const limit = Math.min(parseInt(url.searchParams.get('limit') || '100', 10), 500);
   const offset = parseInt(url.searchParams.get('offset') || '0', 10);
+
+  // Eventos que entram na métrica de recuperação = catálogo com
+  // recovery_tracked. Sem catálogo, cai no histórico 'Lead'.
+  const catalog = scope.workspace ? await loadEventCatalog(env, scope.workspace.id) : {};
+  const recoveryEvents = Object.keys(catalog).filter((k) => catalog[k] && catalog[k].recovery_tracked);
+  const recNames = recoveryEvents.length ? recoveryEvents : ['Lead'];
+  const recPh = recNames.map(() => '?').join(', ');
 
   try {
     let query = `
@@ -43,7 +58,7 @@ export async function onRequestGet(context) {
 
     const { results } = await env.DB.prepare(query).bind(...bindings).all();
 
-    // Also get summary counts
+    // Summary counts — por event_name dos eventos de recuperação.
     const summary = await env.DB.prepare(`
       SELECT
         event_name,
@@ -52,12 +67,12 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN meta_response_ok = 0 THEN 1 ELSE 0 END) as meta_fail,
         SUM(CASE WHEN is_bot = 1 THEN 1 ELSE 0 END) as bots
       FROM event_log
-      WHERE event_name = 'Lead'
+      WHERE event_name IN (${recPh})
         ${scope.clause('')}
       GROUP BY event_name
-    `).bind(...scope.binds()).all();
+    `).bind(...recNames, ...scope.binds()).all();
 
-    // Recovery stats — what WOULD have been lost without server-side
+    // Recovery stats — o que TERIA sido perdido sem o server-side.
     const recovery = await env.DB.prepare(`
       SELECT
         COUNT(*) as total_events,
@@ -71,9 +86,9 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN fbc_source = 'middleware_http' AND is_bot = 0 THEN 1 ELSE 0 END) as fbc_from_middleware,
         SUM(CASE WHEN fbclid_source = 'server_middleware' AND is_bot = 0 THEN 1 ELSE 0 END) as fbclid_from_server
       FROM event_log
-      WHERE event_name = 'Lead'
+      WHERE event_name IN (${recPh})
         ${scope.clause('')}
-    `).bind(...scope.binds()).first();
+    `).bind(...recNames, ...scope.binds()).first();
 
     // Per-browser breakdown for ITP insight
     const browserBreakdown = await env.DB.prepare(`
@@ -83,11 +98,11 @@ export async function onRequestGet(context) {
         SUM(CASE WHEN pixel_was_blocked = 1 THEN 1 ELSE 0 END) as blocked,
         SUM(CASE WHEN fbp_source = 'middleware_http' THEN 1 ELSE 0 END) as itp_recovered
       FROM event_log
-      WHERE event_name = 'Lead' AND is_bot = 0
+      WHERE event_name IN (${recPh}) AND is_bot = 0
         ${scope.clause('')}
       GROUP BY browser
       ORDER BY total DESC
-    `).bind(...scope.binds()).all();
+    `).bind(...recNames, ...scope.binds()).all();
 
     return new Response(JSON.stringify({
       workspace: scope.workspace,

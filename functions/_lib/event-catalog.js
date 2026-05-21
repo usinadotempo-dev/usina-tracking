@@ -69,3 +69,17 @@ export function seedEventCatalog() {
     },
   };
 }
+
+// Carrega e parseia o event_catalog de um workspace direto do D1. Retorna {}
+// se o workspace não existe, não tem catálogo, ou em qualquer erro.
+export async function loadEventCatalog(env, workspaceId) {
+  if (!env || !env.DB || !workspaceId) return {};
+  try {
+    const row = await env.DB.prepare(
+      'SELECT event_catalog FROM workspace_config WHERE workspace_id = ?'
+    ).bind(workspaceId).first();
+    return parseEventCatalog(row || {});
+  } catch (_) {
+    return {};
+  }
+}

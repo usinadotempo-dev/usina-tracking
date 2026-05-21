@@ -1,17 +1,18 @@
 // GET /api/leads?key=...&days=30&limit=100
 //   ou /api/leads?since=YYYY-MM-DD&until=YYYY-MM-DD&limit=100
 //
-// Returns Lead + Schedule events joined to their originating session so each
-// row carries its UTMs / fbclid / gclid. This is the "where did my leads come
-// from" view — the whole reason the tracking stack persists anything at all.
-// Schedule (reunião agendada na LP de venda) conta como lead aqui; o Meta CAPI
-// segue recebendo o evento com o nome correto (Schedule), só o dash agrega.
+// Retorna os eventos de "captação" do workspace — as entradas do event_catalog
+// com origem browser (Lead, Schedule e qualquer evento custom client-side) —
+// joinados à sessão de origem para cada linha carregar UTMs / fbclid / gclid.
+// Purchase / MeetingHeld (origem server) ficam de fora: têm suas próprias
+// visões. Sem catálogo (workspace novo/legado), cai no par Lead+Schedule.
 //
-// Source: event_log (Lead + Schedule events) LEFT JOIN sessions via session_id.
-// Bots are excluded by default; pass include_bots=1 to see them.
+// Source: event_log LEFT JOIN sessions via session_id.
+// Bots são excluídos por padrão; passe include_bots=1 para vê-los.
 
 import { requireAuth, resolveScope } from '../_lib/auth.js';
 import { resolveWindow } from '../_lib/window.js';
+import { loadEventCatalog } from '../_lib/event-catalog.js';
 
 export async function onRequestGet(context) {
   const { request, env } = context;
@@ -26,13 +27,20 @@ export async function onRequestGet(context) {
   const win = resolveWindow(url);
   const limit = clampInt(url.searchParams.get('limit'), 100, 1, 500);
   const includeBots = url.searchParams.get('include_bots') === '1';
-
   const botClause = includeBots ? '' : 'AND e.is_bot = 0';
+
+  // Eventos de captação = entradas do catálogo de origem browser. Sem
+  // catálogo, cai no par histórico Lead+Schedule.
+  const catalog = scope.workspace ? await loadEventCatalog(env, scope.workspace.id) : {};
+  const fromCatalog = Object.keys(catalog).filter((k) => catalog[k] && catalog[k].source !== 'server');
+  const eventNames = fromCatalog.length ? fromCatalog : ['Lead', 'Schedule'];
+  const ph = eventNames.map(() => '?').join(', ');
 
   try {
     const rows = await env.DB.prepare(`
       SELECT
         e.event_id,
+        e.event_name,
         e.timestamp,
         e.session_id,
         e.raw_email,
@@ -49,6 +57,10 @@ export async function onRequestGet(context) {
         e.ga4_response_ok,
         e.ga4_response_body,
         e.ga4_payload_sent,
+        e.google_ads_status_code,
+        e.google_ads_response_ok,
+        e.google_ads_response_body,
+        e.google_ads_payload_sent,
         e.fbp_source,
         e.fbc_source,
         e.fbclid_source,
@@ -63,13 +75,13 @@ export async function onRequestGet(context) {
         s.landing_url
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
-      WHERE e.event_name IN ('Lead', 'Schedule')
+      WHERE e.event_name IN (${ph})
         AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         ${botClause}
       ORDER BY e.timestamp DESC
       LIMIT ?
-    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds(), limit).all();
+    `).bind(...eventNames, win.sinceUnix, win.untilUnix, ...scope.binds(), limit).all();
 
     // Summary counts grouped by utm_source for the summary card above the table.
     const summary = await env.DB.prepare(`
@@ -78,13 +90,13 @@ export async function onRequestGet(context) {
         COUNT(*) as count
       FROM event_log e
       LEFT JOIN sessions s ON e.session_id = s.session_id
-      WHERE e.event_name IN ('Lead', 'Schedule')
+      WHERE e.event_name IN (${ph})
         AND e.timestamp >= ? AND e.timestamp <= ?
         ${scope.clause('e')}
         AND e.is_bot = 0
       GROUP BY utm_source
       ORDER BY count DESC
-    `).bind(win.sinceUnix, win.untilUnix, ...scope.binds()).all();
+    `).bind(...eventNames, win.sinceUnix, win.untilUnix, ...scope.binds()).all();
 
     return json({
       days: win.days,
