@@ -13,6 +13,8 @@
 
 const PLATFORM_ROOT = 'tracking.usinadotempo.com.br';
 const ADMIN_HOST = `admin.${PLATFORM_ROOT}`;
+// Domínio único da plataforma unificada (D15) — mesmo comportamento do admin.
+const APP_HOST = 'app.usinadotempo.com.br';
 const DEV_HOSTS = new Set(['usina-tracking.pages.dev', 'localhost', '127.0.0.1']);
 
 export async function resolveHost(context) {
@@ -30,7 +32,7 @@ async function resolveHostInner(host, env) {
   // 1. Admin platform host — highest priority, never overrideable.
   // Aceita tanto a URL canônica (tracking.usinadotempo.com.br) quanto o
   // subdomínio admin.tracking... (legado, mesmo comportamento).
-  if (host === ADMIN_HOST || host === PLATFORM_ROOT) {
+  if (host === ADMIN_HOST || host === PLATFORM_ROOT || host === APP_HOST) {
     return { kind: 'admin', host, tenant: null, workspace: null };
   }
 
@@ -84,5 +86,5 @@ async function resolveHostInner(host, env) {
 
 export function isPlatformHost(host) {
   const h = (host || '').split(':')[0].toLowerCase();
-  return h === ADMIN_HOST || h === PLATFORM_ROOT || h.endsWith(`.${PLATFORM_ROOT}`) || DEV_HOSTS.has(h) || h.endsWith('.usina-tracking.pages.dev');
+  return h === ADMIN_HOST || h === PLATFORM_ROOT || h === APP_HOST || h.endsWith(`.${PLATFORM_ROOT}`) || DEV_HOSTS.has(h) || h.endsWith('.usina-tracking.pages.dev');
 }

@@ -1,0 +1,31 @@
+@import "tailwindcss";
+
+/* Identidade da Usina — mesmas cores do admin legado. */
+@theme {
+  --color-navy: #293556;
+  --color-coral: #dc4a30;
+  --color-amber: #f5a82a;
+  --color-teal: #7fc7b8;
+  --color-paper: #faf9f7;
+  --color-line: #e6e8ee;
+  --color-muted: #6b7489;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer components {
+  .input {
+    @apply w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-navy outline-none transition focus:border-amber focus:ring-2 focus:ring-amber/30;
+  }
+  .label {
+    @apply mb-1.5 block text-xs font-medium text-muted;
+  }
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-lg bg-coral px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-60;
+  }
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-lg border border-line bg-white px-4 py-2.5 text-sm font-medium text-navy transition hover:bg-paper;
+  }
+  .card {
+    @apply rounded-2xl border border-line bg-white;
+  }
+}

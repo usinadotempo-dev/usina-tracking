@@ -47,17 +47,38 @@ const SEC_HEADERS = {
   'Content-Security-Policy': CSP,
 };
 
+// CSP estrita para o app React compilado (/app/*): sem script inline, sem
+// eval, sem CDN — tudo sai do próprio domínio (Fase 1, sprint 1.1).
+const APP_CSP = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  "upgrade-insecure-requests",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "font-src 'self' data:",
+  "img-src 'self' data: https:",
+  "connect-src 'self'",
+].join('; ');
+
+// Domínio único da plataforma unificada (D15).
+const APP_HOST = 'app.usinadotempo.com.br';
+
 // Devolve a mesma resposta com os cabeçalhos de segurança adicionados.
 // Não sobrescreve Set-Cookie nem nada que a resposta já definiu.
-function withSec(resp) {
+function withSec(resp, strictApp = false) {
   const h = new Headers(resp.headers);
   for (const [k, v] of Object.entries(SEC_HEADERS)) h.set(k, v);
+  if (strictApp) h.set('Content-Security-Policy', APP_CSP);
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
 }
 
-// O Pages publica a raiz do repositório inteira como estático. Até o build
-// para dist/ (Fase 1, sprint 1.1), bloqueia o que é interno: documentação,
-// schema do banco, config, instruções do Claude, scripts de build.
+// Defesa em profundidade: desde o sprint 1.1 o Pages publica só dist/ (ver
+// build/copy-static.mjs), mas se a config do build voltar a publicar a raiz,
+// isto continua bloqueando o que é interno: documentação, schema do banco,
+// config, instruções do Claude, fontes do app e scripts de build.
 const PRIVATE_PATHS = [
   /^\/docs(\/|$)/i,
   /^\/migrations(\/|$)/i,
@@ -107,6 +128,11 @@ export async function onRequest(context) {
 
   // Marketing host: split por Host antes de qualquer lógica de tracking.
   const reqHost = (request.headers.get('host') || '').split(':')[0].toLowerCase();
+
+  // app.usinadotempo.com.br: a raiz abre o app novo.
+  if (reqHost === APP_HOST && url.pathname === '/') {
+    return withSec(new Response(null, { status: 302, headers: { Location: '/app/' } }));
+  }
   if (MARKETING_HOSTS.has(reqHost)) {
     // Normaliza: "" → "/", remove barra final ("/termos/" → "/termos").
     let p = url.pathname || '/';
@@ -140,12 +166,22 @@ export async function onRequest(context) {
     && !url.pathname.startsWith('/auth/')
     && !url.pathname.startsWith('/admin')
     && !url.pathname.startsWith('/dash')
+    && !url.pathname.startsWith('/app')
     && !url.pathname.startsWith('/setup');
 
   // Don't set first-party tracking cookies on platform hosts (admin/tenant dashboards).
   // Those cookies belong to landing pages on workspace custom domains.
   if (!isPageRequest || hostInfo.kind === 'admin' || hostInfo.kind === 'tenant' || hostInfo.kind === 'dev') {
-    return withSec(await next());
+    const isApp = url.pathname === '/app' || url.pathname.startsWith('/app/');
+    // SPA: rotas do app sem extensão (/app/entrar, /app/usuarios…) servem o
+    // index.html do app; arquivos (/app/assets/x.js) seguem direto.
+    // (Pede o diretório /app/ — pedir /app/index.html faria o Pages devolver
+    // um redirect para /app/.)
+    if (isApp && url.pathname !== '/app/' && !/\.[a-z0-9]+$/i.test(url.pathname) && env.ASSETS?.fetch) {
+      const indexReq = new Request(new URL('/app/', url), request);
+      return withSec(await env.ASSETS.fetch(indexReq), true);
+    }
+    return withSec(await next(), isApp);
   }
 
   // --- Extract tracking parameters from URL ---

@@ -4,6 +4,23 @@
 > conversation in this repo. Keep it under ~200 lines. Put detailed reference
 > in `docs/` and procedural walkthroughs in `.claude/skills/`.
 
+## Estado atual (leia primeiro)
+
+Este repositório virou a **plataforma unificada da Usina do Tempo** (multi-tenant,
+`app.usinadotempo.com.br`). O texto abaixo descreve o template original e está
+parcialmente desatualizado — o plano vivo é `docs/plano-unificacao.md`.
+
+- **Build (desde a Fase 1):** `npm run build` = Vite compila o app React de `web/`
+  para `dist/app/` e `build/copy-static.mjs` copia para `dist/` só o que é público.
+  O Pages publica **apenas `dist/`**; as Functions continuam em `functions/`.
+  Arquivo estático novo precisa entrar na lista de `build/copy-static.mjs`.
+- **Segredos:** credenciais em D1 são cifradas (`functions/_lib/secrets.js`,
+  `env.SECRETS_KEY`); nunca devolver segredo ao navegador.
+- **Migrations D1:** aplicadas pelo Console do dashboard (sem comentários `--` no
+  início) + `INSERT INTO d1_migrations (name) VALUES ('<arquivo>')`.
+- **Commits:** autor `suporte@usinadotempo.com.br`; o Claude não tem shell nesta
+  máquina — o usuário roda git no cmd (Git portátil em `C:\Portatil\PortableGit`).
+
 ## What this repo is
 
 A Cloudflare Pages + D1 tracking stack that captures first-party attribution

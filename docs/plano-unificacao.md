@@ -110,7 +110,7 @@ Pages Functions não rodam cron, consumidores de fila, Workflows nem Containers 
 ### Sprints
 | Sprint | Entrega |
 |---|---|
-| 1.1 | Build do front-end (Vite + Tailwind compilado) com deploy no Pages; CSP sem `unsafe-eval`; domínio `app.usinadotempo.com.br` |
+| 1.1 | Build do front-end (Vite + Tailwind compilado) com deploy no Pages; CSP sem `unsafe-eval`; domínio `app.usinadotempo.com.br` — **código escrito**: `package.json`, `vite.config.js`, `build/copy-static.mjs`, app React em `web/` (login, esqueci a senha, troca de senha, início), CSP estrita em `/app/*`, host `app.` reconhecido |
 | 1.2 | Papéis `tenant_owner` / `tenant_manager` / `tenant_viewer` + `requirePermission`; portal do cliente (usuários e integrações dos próprios workspaces, segredos redigidos) |
 | 1.3 | R2: logo e cor por cliente, avatar por usuário |
 | 1.4 | Planos + módulos contratados + cobrança Asaas (ativa só com pagamento confirmado; trial; limites) |
