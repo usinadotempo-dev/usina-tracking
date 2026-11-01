@@ -6,6 +6,8 @@ import ChangePassword from './pages/ChangePassword.jsx';
 import Home from './pages/Home.jsx';
 import Team from './pages/Team.jsx';
 import Integrations from './pages/Integrations.jsx';
+import Company from './pages/Company.jsx';
+import Profile from './pages/Profile.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -42,6 +44,8 @@ export default function App() {
       <Route path="/" element={<Protected><Home /></Protected>} />
       <Route path="/equipe" element={<Protected permission="tenant.users.manage"><Team /></Protected>} />
       <Route path="/integracoes" element={<Protected permission="tenant.integrations.manage"><Integrations /></Protected>} />
+      <Route path="/empresa" element={<Protected permission="tenant.branding.manage"><Company /></Protected>} />
+      <Route path="/perfil" element={<Protected><Profile /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

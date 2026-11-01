@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { Link, NavLink } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 
 const ROLE_LABEL = {
@@ -8,42 +8,68 @@ const ROLE_LABEL = {
   tenant_viewer: 'Leitura',
 };
 
+const USINA_COLOR = '#dc4a30';
+
 // Itens do menu do cliente, filtrados pelas permissões que o servidor
 // informou em /auth/me (o servidor checa de novo em cada rota).
 const PORTAL_NAV = [
   { to: '/', label: 'Início', end: true },
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },
   { to: '/integracoes', label: 'Integrações', permission: 'tenant.integrations.manage' },
+  { to: '/empresa', label: 'Empresa', permission: 'tenant.branding.manage' },
 ];
 
+function initials(text) {
+  return String(text || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
+}
+
 export default function Shell({ children }) {
-  const { user, logout } = useAuth();
+  const { user, tenant, logout } = useAuth();
   const isAdmin = user.role === 'usina_admin';
   const perms = new Set(user.permissions || []);
   const nav = isAdmin ? [] : PORTAL_NAV.filter((i) => !i.permission || perms.has(i.permission));
+  const brand = (!isAdmin && tenant?.brand_color) || USINA_COLOR;
 
   return (
     <div className="min-h-screen bg-paper">
+      <div className="h-1" style={{ backgroundColor: brand }} />
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
           <div className="flex items-center gap-8">
-            <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" className="h-8" />
+            {!isAdmin && tenant?.logo_url ? (
+              <div className="flex items-center gap-3">
+                <img src={tenant.logo_url} alt={tenant.name} className="h-9 max-w-[160px] object-contain" />
+                <span className="hidden text-[10px] uppercase tracking-wide text-muted sm:block">por Usina do Tempo</span>
+              </div>
+            ) : (
+              <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" className="h-8" />
+            )}
             {nav.length > 1 && (
               <nav className="flex gap-1 text-sm">
                 {nav.map((i) => (
                   <NavLink key={i.to} to={i.to} end={i.end}
-                    className={({ isActive }) => `rounded-lg px-3 py-1.5 transition ${isActive ? 'bg-paper font-medium text-navy' : 'text-muted hover:text-navy'}`}>
+                    style={({ isActive }) => (isActive ? { boxShadow: `inset 0 -2px 0 ${brand}` } : undefined)}
+                    className={({ isActive }) => `px-3 py-1.5 transition ${isActive ? 'font-medium text-navy' : 'text-muted hover:text-navy'}`}>
                     {i.label}
                   </NavLink>
                 ))}
               </nav>
             )}
           </div>
-          <div className="flex items-center gap-4 text-sm">
-            <div className="text-right leading-tight">
-              <div className="font-medium text-navy">{user.name || user.email}</div>
-              <div className="text-xs text-muted">{ROLE_LABEL[user.effective_role] || user.role}</div>
-            </div>
+          <div className="flex items-center gap-3 text-sm">
+            <Link to="/perfil" className="flex items-center gap-3 rounded-lg px-2 py-1 hover:bg-paper" title="Meu perfil">
+              <div className="hidden text-right leading-tight sm:block">
+                <div className="font-medium text-navy">{user.name || user.email}</div>
+                <div className="text-xs text-muted">{ROLE_LABEL[user.effective_role] || user.role}</div>
+              </div>
+              {user.avatar_url ? (
+                <img src={user.avatar_url} alt="" className="h-9 w-9 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-9 w-9 items-center justify-center rounded-full bg-navy text-xs font-semibold text-white">
+                  {initials(user.name || user.email)}
+                </span>
+              )}
+            </Link>
             <button type="button" onClick={logout} className="btn-secondary px-3 py-1.5">Sair</button>
           </div>
         </div>

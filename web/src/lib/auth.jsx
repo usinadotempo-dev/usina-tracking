@@ -5,15 +5,15 @@ import { api, ApiError } from './api.js';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [state, setState] = useState({ loading: true, user: null, workspaces: [] });
+  const [state, setState] = useState({ loading: true, user: null, tenant: null, workspaces: [] });
 
   const refresh = useCallback(async () => {
     try {
       const me = await api('GET', '/auth/me');
-      setState({ loading: false, user: me.user, workspaces: me.workspaces || [] });
+      setState({ loading: false, user: me.user, tenant: me.tenant || null, workspaces: me.workspaces || [] });
     } catch (e) {
       if (!(e instanceof ApiError) || e.status !== 401) console.error(e);
-      setState({ loading: false, user: null, workspaces: [] });
+      setState({ loading: false, user: null, tenant: null, workspaces: [] });
     }
   }, []);
 
@@ -26,7 +26,7 @@ export function AuthProvider({ children }) {
 
   const logout = useCallback(async () => {
     try { await api('POST', '/auth/logout'); } catch { /* sessão já pode ter caído */ }
-    setState({ loading: false, user: null, workspaces: [] });
+    setState({ loading: false, user: null, tenant: null, workspaces: [] });
   }, []);
 
   return (

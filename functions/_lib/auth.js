@@ -107,8 +107,9 @@ export async function lookupSession(env, token) {
   const row = await env.DB.prepare(`
     SELECT s.user_id, s.expires_at,
            u.email, u.role, u.name, u.tenant_id, u.is_active,
-           u.must_change_password, u.tenant_role,
-           t.is_active AS tenant_active
+           u.must_change_password, u.tenant_role, u.avatar_key,
+           t.is_active AS tenant_active, t.name AS tenant_name,
+           t.brand_color AS tenant_brand_color, t.logo_key AS tenant_logo_key
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
       LEFT JOIN tenants t ON t.id = u.tenant_id
@@ -125,6 +126,10 @@ export async function lookupSession(env, token) {
     name: row.name,
     tenant_id: row.tenant_id,
     tenant_role: row.role === 'usina_admin' ? null : (row.tenant_role || 'viewer'),
+    avatar_key: row.avatar_key || null,
+    tenant_name: row.tenant_name || null,
+    tenant_brand_color: row.tenant_brand_color || null,
+    tenant_logo_key: row.tenant_logo_key || null,
     expires_at: row.expires_at,
     must_change_password: !!row.must_change_password,
   };
@@ -144,6 +149,7 @@ export function effectiveRole(user) {
 export const PERMISSIONS = {
   'tenant.users.manage': ['tenant_owner'],
   'tenant.integrations.manage': ['tenant_owner', 'tenant_manager'],
+  'tenant.branding.manage': ['tenant_owner'],
 };
 
 // Papéis que o owner pode atribuir no portal. 'owner' só a Usina define.

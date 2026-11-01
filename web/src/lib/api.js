@@ -8,6 +8,20 @@ export class ApiError extends Error {
   }
 }
 
+// Envia um arquivo como corpo cru da requisição (o servidor valida o conteúdo).
+export async function upload(path, file) {
+  const res = await fetch(path, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { 'Content-Type': file.type || 'application/octet-stream' },
+    body: file,
+  });
+  let data = null;
+  try { data = await res.json(); } catch { /* resposta sem corpo */ }
+  if (!res.ok) throw new ApiError(data?.error || `Erro ${res.status}`, res.status);
+  return data;
+}
+
 export async function api(method, path, body) {
   const res = await fetch(path, {
     method,
