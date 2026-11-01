@@ -25,6 +25,7 @@ export async function onRequestGet(context) {
       name: user.tenant_name,
       brand_color: user.tenant_brand_color,
       logo_url: mediaUrl(user.tenant_logo_key),
+      entitlements: user.entitlements,
     } : null,
     workspaces,
   });

@@ -75,6 +75,17 @@ export async function onRequestPost(context) {
   const dup = await env.DB.prepare('SELECT id FROM app_users WHERE email = ?').bind(email).first();
   if (dup) return jsonError('Este e-mail já está cadastrado.', 409);
 
+  // Limite de usuários do plano (Fase 1, 1.4) — conta só os ativos.
+  const maxUsers = auth.user.entitlements?.max_users;
+  if (maxUsers) {
+    const count = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM app_users WHERE tenant_id = ? AND role = 'tenant_viewer' AND is_active = 1"
+    ).bind(tenantId).first();
+    if ((count?.n || 0) >= maxUsers) {
+      return jsonError(`Seu plano permite até ${maxUsers} usuários ativos. Desative alguém ou mude de plano.`, 402);
+    }
+  }
+
   const id = crypto.randomUUID();
   const now = Math.floor(Date.now() / 1000);
   const provisional = generateProvisionalPassword();

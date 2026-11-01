@@ -1723,7 +1723,10 @@
     const acc = data.account || {};
     qs('#ig-username').textContent = acc.username ? '@' + acc.username : '—';
     qs('#ig-name').textContent = acc.name || '';
-    qs('#ig-avatar').src = acc.profile_picture_url || '/assets/usina-brand/logo-white.png';
+    // A URL da Meta expira em poucos dias — passa pelo proxy que renova.
+    qs('#ig-avatar').src = acc.ig_id
+      ? `/api/ig-avatar?workspace=${encodeURIComponent(currentWorkspaceId)}&ig_id=${encodeURIComponent(acc.ig_id)}`
+      : '/assets/usina-brand/logo-white.png';
     qs('#ig-account-pill').classList.remove('hidden');
     qs('#ig-account-pill').classList.add('flex');
 

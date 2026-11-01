@@ -1230,6 +1230,21 @@ function renderTenantsTable(tenants) {
     </table>`;
 }
 
+// Cobrança do tenant (Fase 1, 1.4) — espelha functions/_lib/plans.js.
+const BILLING_PLANS = { starter: 'Starter (R$97)', pro: 'Pro (R$297)', enterprise: 'Enterprise' };
+const BILLING_MODES = { manual: 'Contrato (manual)', asaas: 'Assinatura Asaas', internal: 'Interno (Usina)' };
+const BILLING_MODULES = {
+  tracking: 'Tracking e atribuição', funis: 'Funis', crm: 'CRM', conteudo: 'Conteúdo (IA)',
+  trafego: 'Gestão de tráfego', produtos: 'Produtos digitais', estudio: 'Estúdio de Vídeo',
+  relatorios: 'Relatórios', benchmark: 'Benchmark',
+};
+function tenantModuleChecked(t, key) {
+  try {
+    const mods = t.active_modules ? JSON.parse(t.active_modules) : null;
+    return mods ? mods.includes(key) : true; // sem lista própria = tudo marcado
+  } catch { return true; }
+}
+
 function openTenantForm(id = null) {
   const editing = !!id;
   const t = editing ? state.tenantsById[id] : { name: '', slug: '' };
@@ -1254,7 +1269,32 @@ function openTenantForm(id = null) {
         <label class="flex items-center gap-2 text-[13px] cursor-pointer">
           <input type="checkbox" id="tn-active" ${t.is_active === 0 ? '' : 'checked'}>
           <span><b>Ativo</b> — desmarcado, todos os usuários deste tenant perdem o acesso na hora.</span>
-        </label>` : ''}
+        </label>
+        <div class="grid grid-cols-2 gap-3 pt-2 border-t border-brand-border">
+          <div>
+            <label class="label">Plano</label>
+            <select id="tn-plan" class="select">
+              ${Object.entries(BILLING_PLANS).map(([k, v]) => `<option value="${k}" ${k === (t.plan_slug || 'enterprise') ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label class="label">Cobrança</label>
+            <select id="tn-billing" class="select">
+              ${Object.entries(BILLING_MODES).map(([k, v]) => `<option value="${k}" ${k === (t.billing_mode || 'manual') ? 'selected' : ''}>${v}</option>`).join('')}
+            </select>
+          </div>
+        </div>
+        <p class="help">${t.billing_mode === 'asaas' ? `Assinatura: <b>${escapeHtml(t.subscription_status || 'sem assinatura')}</b>${t.trial_ends_at ? ` · trial até ${fmtDate(t.trial_ends_at)}` : ''}` : 'Ao mudar para "Asaas", começa um trial de 14 dias.'}</p>
+        <div id="tn-modules-wrap">
+          <label class="label">Módulos liberados (contrato)</label>
+          <div class="grid grid-cols-2 gap-1.5 text-sm">
+            ${Object.entries(BILLING_MODULES).map(([k, v]) => `
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" name="tn-mod" value="${k}" ${tenantModuleChecked(t, k) ? 'checked' : ''}> ${v}
+              </label>`).join('')}
+          </div>
+          <p class="help">Vale só no modo "Contrato". Nos outros modos, os módulos vêm do plano.</p>
+        </div>` : ''}
       ${editing ? `
         <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#fff7ec] border border-[#f7c87a] text-[13px] text-[#8a6019]">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -1283,7 +1323,16 @@ function openTenantForm(id = null) {
     try {
       let response;
       if (editing) {
-        await api('PATCH', `/admin/tenants/${id}`, { name, slug, is_active: $('#tn-active').checked });
+        const billing_mode = $('#tn-billing').value;
+        await api('PATCH', `/admin/tenants/${id}`, {
+          name, slug,
+          is_active: $('#tn-active').checked,
+          plan_slug: $('#tn-plan').value,
+          billing_mode,
+          ...(billing_mode === 'manual'
+            ? { active_modules: $$('input[name="tn-mod"]:checked').map(i => i.value) }
+            : {}),
+        });
         toast('Tenant atualizado.', 'success');
       } else {
         response = await api('POST', '/admin/tenants', { name, slug });

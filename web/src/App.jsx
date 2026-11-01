@@ -8,6 +8,7 @@ import Team from './pages/Team.jsx';
 import Integrations from './pages/Integrations.jsx';
 import Company from './pages/Company.jsx';
 import Profile from './pages/Profile.jsx';
+import Billing from './pages/Billing.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -46,6 +47,7 @@ export default function App() {
       <Route path="/integracoes" element={<Protected permission="tenant.integrations.manage"><Integrations /></Protected>} />
       <Route path="/empresa" element={<Protected permission="tenant.branding.manage"><Company /></Protected>} />
       <Route path="/perfil" element={<Protected><Profile /></Protected>} />
+      <Route path="/assinatura" element={<Protected permission="tenant.billing.manage"><Billing /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

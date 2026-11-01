@@ -6,6 +6,7 @@
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
 import { deprovisionTenantSubdomain } from '../../_lib/domain-provisioning.js';
+import { PLANS, ALL_MODULES, TRIAL_DAYS } from '../../_lib/plans.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -15,7 +16,9 @@ export async function onRequestGet(context) {
   const id = context.params.id;
 
   const tenant = await context.env.DB.prepare(
-    'SELECT id, slug, name, is_active, created_at, updated_at FROM tenants WHERE id = ?'
+    `SELECT id, slug, name, is_active, plan_slug, billing_mode, active_modules,
+            subscription_status, trial_ends_at, current_period_end, created_at, updated_at
+       FROM tenants WHERE id = ?`
   ).bind(id).first();
   if (!tenant) return jsonError('Not found', 404);
 
@@ -54,6 +57,25 @@ export async function onRequestPatch(context) {
   }
   if (body.is_active !== undefined) {
     updates.push('is_active = ?'); binds.push(body.is_active ? 1 : 0);
+  }
+  // Cobrança (Fase 1, 1.4): plano, modo e módulos manuais.
+  if (body.plan_slug !== undefined) {
+    if (!PLANS[body.plan_slug]) return jsonError('Invalid plan', 400);
+    updates.push('plan_slug = ?'); binds.push(body.plan_slug);
+  }
+  if (body.billing_mode !== undefined) {
+    if (!['internal', 'manual', 'asaas'].includes(body.billing_mode)) return jsonError('Invalid billing_mode', 400);
+    updates.push('billing_mode = ?'); binds.push(body.billing_mode);
+    // Passou para cobrança pelo Asaas sem assinatura: começa o trial.
+    const cur = await context.env.DB.prepare('SELECT billing_mode, subscription_status FROM tenants WHERE id = ?').bind(id).first();
+    if (body.billing_mode === 'asaas' && cur?.billing_mode !== 'asaas' && !cur?.subscription_status) {
+      updates.push("subscription_status = 'trial'");
+      updates.push('trial_ends_at = ?'); binds.push(Math.floor(Date.now() / 1000) + TRIAL_DAYS * 86400);
+    }
+  }
+  if (body.active_modules !== undefined) {
+    const mods = Array.isArray(body.active_modules) ? body.active_modules.filter((m) => ALL_MODULES.includes(m)) : null;
+    updates.push('active_modules = ?'); binds.push(mods ? JSON.stringify(mods) : null);
   }
   if (!updates.length) return jsonError('Nothing to update', 400);
 

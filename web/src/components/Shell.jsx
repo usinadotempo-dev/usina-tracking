@@ -17,7 +17,27 @@ const PORTAL_NAV = [
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },
   { to: '/integracoes', label: 'Integrações', permission: 'tenant.integrations.manage' },
   { to: '/empresa', label: 'Empresa', permission: 'tenant.branding.manage' },
+  { to: '/assinatura', label: 'Assinatura', permission: 'tenant.billing.manage' },
 ];
+
+// Aviso de assinatura no topo (trial acabando, atraso, bloqueio).
+function BillingBanner({ ent, canManage }) {
+  if (!ent || ent.mode !== 'asaas') return null;
+  const now = Date.now() / 1000;
+  let text = null;
+  if (!ent.active) text = 'Sua assinatura está inativa — os recursos da plataforma estão bloqueados.';
+  else if (ent.status === 'trial' && ent.trial_ends_at) {
+    const days = Math.max(0, Math.ceil((ent.trial_ends_at - now) / 86400));
+    if (days <= 5) text = `Seu período de teste termina em ${days} dia(s).`;
+  } else if (ent.status === 'past_due') text = 'Há uma fatura em atraso.';
+  else if (ent.status === 'pending') text = 'Aguardando a confirmação do pagamento.';
+  if (!text) return null;
+  return (
+    <div className="bg-amber/15 px-6 py-2 text-center text-sm text-navy">
+      {text} {canManage && <Link to="/assinatura" className="font-semibold underline">Ver assinatura</Link>}
+    </div>
+  );
+}
 
 function initials(text) {
   return String(text || '?').trim().split(/\s+/).slice(0, 2).map((p) => p[0]).join('').toUpperCase();
@@ -33,6 +53,7 @@ export default function Shell({ children }) {
   return (
     <div className="min-h-screen bg-paper">
       <div className="h-1" style={{ backgroundColor: brand }} />
+      {!isAdmin && <BillingBanner ent={tenant?.entitlements} canManage={perms.has('tenant.billing.manage')} />}
       <header className="border-b border-line bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-6 px-6 py-3">
           <div className="flex items-center gap-8">

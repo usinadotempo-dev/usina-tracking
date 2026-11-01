@@ -152,9 +152,10 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     for (let i = 0; i < topRecent.length; i += 10) {
       const batch = topRecent.slice(i, i + 10);
       const promises = batch.map(async (m) => {
-        const metricList = m.media_type === 'VIDEO' || m.media_type === 'REELS'
-          ? 'reach,saved,video_views,plays'
-          : 'reach,saved';
+        // video_views, plays e impressions foram descontinuadas pela Meta —
+        // `views` vale para todos os tipos de mídia. Com uma métrica inválida
+        // a chamada inteira falhava e reach/saved se perdiam junto.
+        const metricList = 'reach,saved,views';
         try {
           const ins = await meta.get(`/${m.id}/insights?metric=${metricList}`);
           const map = {};
@@ -194,8 +195,8 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
         return stmt.bind(
           wsId, m.id, igId, m.media_type || null, m.caption || null, m.permalink || null, ts,
           toInt(m.like_count), toInt(m.comments_count),
-          toInt(ins.reach), toInt(ins.impressions), toInt(ins.saved),
-          toInt(ins.video_views ?? ins.plays),
+          toInt(ins.reach), toInt(ins.views), toInt(ins.saved),
+          toInt(ins.views),
           m.thumbnail_url || null, m.media_url || null,
           now
         );
@@ -237,19 +238,27 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       } catch (_) { /* skip — metric not available */ }
     }
 
+    // Totais do período: uma chamada por métrica (uma indisponível não
+    // derruba as outras) e a falha vai para o log.
     const aggRow = (dataByDay[dateTo] ||= {});
-    try {
-      const r = await meta.get(
-        `/${igId}/insights?metric=profile_views,website_clicks,accounts_engaged,total_interactions&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
-      );
-      for (const series of r.data || []) {
-        const m = series.name;
-        const total = series.total_value?.value;
-        if (total !== undefined && total !== null) {
-          aggRow[m] = toInt(total);
+    const metricErrors = [];
+    for (const m of ['profile_views', 'website_clicks', 'accounts_engaged', 'total_interactions']) {
+      try {
+        const r = await meta.get(
+          `/${igId}/insights?metric=${m}&period=day&metric_type=total_value&since=${sinceUnix}&until=${untilUnix}`
+        );
+        for (const series of r.data || []) {
+          const total = series.total_value?.value;
+          if (total !== undefined && total !== null) aggRow[series.name] = toInt(total);
         }
+      } catch (e) {
+        metricErrors.push(`${m}: ${e.message.slice(0, 80)}`);
       }
-    } catch (_) { /* metric not configured for this account */ }
+    }
+    if (metricErrors.length) {
+      errors.push(`account_insights: ${metricErrors.join(' ; ').slice(0, 300)}`);
+      if (status === 'ok') status = 'partial';
+    }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
       const stmt = env.DB.prepare(`

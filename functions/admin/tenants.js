@@ -12,7 +12,8 @@ export async function onRequestGet(context) {
   if (auth instanceof Response) return auth;
 
   const { results } = await context.env.DB.prepare(`
-    SELECT t.id, t.slug, t.name, t.is_active, t.created_at,
+    SELECT t.id, t.slug, t.name, t.is_active, t.plan_slug, t.billing_mode, t.active_modules,
+           t.subscription_status, t.trial_ends_at, t.created_at,
            (SELECT COUNT(*) FROM workspaces w WHERE w.tenant_id = t.id) AS workspace_count,
            (SELECT COUNT(*) FROM app_users u WHERE u.tenant_id = t.id) AS user_count
       FROM tenants t

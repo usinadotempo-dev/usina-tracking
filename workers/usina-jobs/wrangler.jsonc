@@ -1,0 +1,29 @@
+// Worker companheiro da plataforma: agendamentos (Fase 1, sprint 1.5).
+// Criado pelo painel do Cloudflare; este arquivo documenta a configuração e
+// permite publicar por `wrangler deploy` ou Workers Builds no futuro.
+// O SYNC_SECRET é Secret no painel — nunca neste arquivo.
+{
+  "name": "usina-jobs",
+  "main": "index.js",
+  "compatibility_date": "2026-11-01",
+  "triggers": {
+    "crons": ["5 * * * *"]
+  },
+  "vars": {
+    "PLATFORM_URL": "https://app.usinadotempo.com.br"
+  },
+  // Igual ao painel (Observabilidade → Produção).
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true
+    }
+  }
+}

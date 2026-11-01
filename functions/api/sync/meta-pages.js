@@ -125,41 +125,46 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
   }
 
   // 2. Page insights (daily)
-  // OPTIMIZATION: combine all metrics into a single call to stay under
-  // Cloudflare Pages free-tier 50-subrequest limit. If the combined call
-  // fails, fall back to per-metric (per-metric is more lenient — page might
-  // not have some metrics enabled).
+  // A Meta descontinuou page_fans, page_fan_adds/removes, page_impressions(_unique)
+  // e page_engaged_users (jun/2025 e nov/2025 — "invalid metric"). Métricas
+  // atuais abaixo, gravadas nas mesmas colunas para o dashboard não mudar:
+  //   page_follows → page_fans · page_daily_follows_unique → page_fan_adds
+  //   page_daily_unfollows_unique → page_fan_removes
+  //   page_media_view → page_impressions · page_total_media_view_unique → page_impressions_unique
+  // Uma chamada por métrica: uma inválida não derruba as outras, e a falha
+  // vai para o log em vez de virar zero silencioso.
+  const PAGE_METRICS = {
+    page_follows: 'page_fans',
+    page_daily_follows_unique: 'page_fan_adds',
+    page_daily_unfollows_unique: 'page_fan_removes',
+    page_media_view: 'page_impressions',
+    page_total_media_view_unique: 'page_impressions_unique',
+    page_post_engagements: 'page_post_engagements',
+    page_views_total: 'page_views_total',
+  };
   try {
     const sinceUnix = Math.floor(new Date(dateFrom + 'T00:00:00Z').getTime() / 1000);
     const untilUnix = Math.floor(new Date(dateTo + 'T23:59:59Z').getTime() / 1000);
-    const allMetrics = 'page_fans,page_fan_adds,page_fan_removes,page_impressions,page_impressions_unique,page_engaged_users,page_post_engagements,page_views_total';
     const dataByDay = {};
     const tokenSuffix = pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '';
-    try {
-      const r = await meta.get(`/${pageId}/insights?metric=${allMetrics}&period=day&since=${sinceUnix}&until=${untilUnix}${tokenSuffix}`);
-      for (const series of r.data || []) {
-        const m = series.name;
-        for (const v of series.values || []) {
-          const date = (v.end_time || '').slice(0, 10);
-          if (!date) continue;
-          (dataByDay[date] ||= {})[m] = toInt(v.value);
-        }
-      }
-    } catch (_) {
-      // Fallback: try a smaller safer subset (likely supported on most pages)
-      const safe = ['page_fans', 'page_impressions', 'page_engaged_users'];
-      for (const m of safe) {
-        try {
-          const r = await meta.get(`/${pageId}/insights?metric=${m}&period=day&since=${sinceUnix}&until=${untilUnix}${tokenSuffix}`);
-          for (const series of r.data || []) {
-            for (const v of series.values || []) {
-              const date = (v.end_time || '').slice(0, 10);
-              if (!date) continue;
-              (dataByDay[date] ||= {})[m] = toInt(v.value);
-            }
+    const metricErrors = [];
+    for (const [metric, column] of Object.entries(PAGE_METRICS)) {
+      try {
+        const r = await meta.get(`/${pageId}/insights?metric=${metric}&period=day&since=${sinceUnix}&until=${untilUnix}${tokenSuffix}`);
+        for (const series of r.data || []) {
+          for (const v of series.values || []) {
+            const date = (v.end_time || '').slice(0, 10);
+            if (!date) continue;
+            (dataByDay[date] ||= {})[column] = toInt(v.value);
           }
-        } catch (_) { /* skip */ }
+        }
+      } catch (e) {
+        metricErrors.push(`${metric}: ${e.message.slice(0, 80)}`);
       }
+    }
+    if (metricErrors.length) {
+      errors.push(`insights: ${metricErrors.join(' ; ').slice(0, 300)}`);
+      if (status === 'ok') status = 'partial';
     }
     const dates = Object.keys(dataByDay);
     if (dates.length) {
@@ -223,7 +228,8 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
       const batch = posts.slice(i, i + 10);
       const promises = batch.map(async (p) => {
         try {
-          const path = `/${p.id}/insights?metric=post_impressions,post_impressions_unique,post_engaged_users` +
+          // post_impressions(_unique) descontinuadas → post_media_view / post_total_media_view_unique.
+          const path = `/${p.id}/insights?metric=post_media_view,post_total_media_view_unique,post_engaged_users` +
             (pageToken ? `&access_token=${encodeURIComponent(pageToken)}` : '');
           const r = await meta.get(path);
           const map = {};
@@ -263,8 +269,8 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
           toInt(p.likes?.summary?.total_count),
           toInt(p.comments?.summary?.total_count),
           toInt(p.shares?.count),
-          toInt(ins.post_impressions_unique),
-          toInt(ins.post_impressions),
+          toInt(ins.post_total_media_view_unique),
+          toInt(ins.post_media_view),
           toInt(ins.post_engaged_users),
           now
         );

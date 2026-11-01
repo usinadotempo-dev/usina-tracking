@@ -2,6 +2,8 @@
 // cookie scope `.tracking.usinadotempo.com.br` so a session set on
 // admin.tracking… is also valid on <tenant>.tracking…
 
+import { computeEntitlements } from './plans.js';
+
 const PBKDF2_ITERATIONS = 100000;
 const PBKDF2_KEYLEN_BITS = 256;
 const COOKIE_NAME = '_uta_sess';
@@ -109,7 +111,9 @@ export async function lookupSession(env, token) {
            u.email, u.role, u.name, u.tenant_id, u.is_active,
            u.must_change_password, u.tenant_role, u.avatar_key,
            t.is_active AS tenant_active, t.name AS tenant_name,
-           t.brand_color AS tenant_brand_color, t.logo_key AS tenant_logo_key
+           t.brand_color AS tenant_brand_color, t.logo_key AS tenant_logo_key,
+           t.plan_slug, t.billing_mode, t.active_modules, t.subscription_status,
+           t.trial_ends_at, t.current_period_end
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
       LEFT JOIN tenants t ON t.id = u.tenant_id
@@ -130,6 +134,8 @@ export async function lookupSession(env, token) {
     tenant_name: row.tenant_name || null,
     tenant_brand_color: row.tenant_brand_color || null,
     tenant_logo_key: row.tenant_logo_key || null,
+    // Plano/módulos do cliente (Fase 1, 1.4). Equipe da Usina: sem restrição.
+    entitlements: row.tenant_id ? computeEntitlements(row) : null,
     expires_at: row.expires_at,
     must_change_password: !!row.must_change_password,
   };
@@ -150,7 +156,22 @@ export const PERMISSIONS = {
   'tenant.users.manage': ['tenant_owner'],
   'tenant.integrations.manage': ['tenant_owner', 'tenant_manager'],
   'tenant.branding.manage': ['tenant_owner'],
+  'tenant.billing.manage': ['tenant_owner'],
 };
+
+// O cliente tem o módulo liberado pelo plano? Equipe da Usina sempre tem.
+export function hasModule(user, moduleKey) {
+  if (!user || user.role === 'usina_admin') return true;
+  return !!user.entitlements?.modules?.includes(moduleKey);
+}
+
+export function moduleBlocked(moduleKey) {
+  return new Response(JSON.stringify({
+    error: 'Este recurso não está liberado na sua assinatura.',
+    code: 'module_unavailable',
+    module: moduleKey,
+  }), { status: 402, headers: { 'Content-Type': 'application/json' } });
+}
 
 // Papéis que o owner pode atribuir no portal. 'owner' só a Usina define.
 export const ASSIGNABLE_TENANT_ROLES = ['manager', 'viewer'];
@@ -335,6 +356,11 @@ export function pickWorkspace(workspaces, requestedId) {
 export function resolveScope(auth, url) {
   const requested = url.searchParams.get('workspace');
   const { user, workspaces } = auth;
+
+  // Dashboard = módulo 'tracking'. Assinatura inativa bloqueia (Fase 1, 1.4).
+  if (!hasModule(user, 'tracking')) {
+    return { ok: false, response: moduleBlocked('tracking') };
+  }
 
   if (requested === 'ALL') {
     if (user.role !== 'usina_admin') {
