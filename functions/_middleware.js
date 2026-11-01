@@ -55,6 +55,31 @@ function withSec(resp) {
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
 }
 
+// O Pages publica a raiz do repositório inteira como estático. Até o build
+// para dist/ (Fase 1, sprint 1.1), bloqueia o que é interno: documentação,
+// schema do banco, config, instruções do Claude, scripts de build.
+const PRIVATE_PATHS = [
+  /^\/docs(\/|$)/i,
+  /^\/migrations(\/|$)/i,
+  /^\/config(\/|$)/i,
+  /^\/\.claude(\/|$)/i,
+  /^\/\.wrangler(\/|$)/i,
+  /^\/(claude|readme)\.md$/i,
+  /^\/version$/i,
+  /^\/wrangler\.toml/i,
+  /^\/package(-lock)?\.json$/i,
+  /^\/\.(gitignore|node-version)$/i,
+  /^\/marketing\/_/i,
+  /^\/web(\/|$)/i,
+  /^\/build(\/|$)/i,
+];
+
+function isPrivatePath(pathname) {
+  let p = pathname;
+  try { p = decodeURIComponent(pathname); } catch { /* usa o cru */ }
+  return PRIVATE_PATHS.some((re) => re.test(p));
+}
+
 // Anti-CSRF (Fase 0, baixo): escrita em /admin e /auth só aceita a própria
 // origem. Navegadores sempre mandam Origin em POST/PATCH/DELETE; sem Origin
 // (curl, cron) passa — esses não carregam o cookie de sessão de ninguém.
@@ -69,6 +94,10 @@ function crossOriginWrite(request, url) {
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
+
+  if (isPrivatePath(url.pathname)) {
+    return withSec(new Response('Not Found', { status: 404, headers: { 'Content-Type': 'text/plain' } }));
+  }
 
   if (crossOriginWrite(request, url)) {
     return withSec(new Response(JSON.stringify({ error: 'Forbidden origin' }), {

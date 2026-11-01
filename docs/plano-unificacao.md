@@ -33,6 +33,10 @@
 | D11 | **TikTok entra**: anúncios (Business API, lógica do video-automation) e publicação (Content Posting API) |
 | D12 | `app.usinadotempo.com.br` está em uso hoje; o corte de DNS para o sistema unificado acontece na Fase 3 |
 | D13 | Tudo sob as contas **usinadotempo** (GitHub `usinadotempo-dev`, Cloudflare `suporte@usinadotempo.com.br`) |
+| D14 | Front-end do admin/portal: **React + Vite + Tailwind**, reescrita gradual (LPs seguem HTML estático) |
+| D15 | **Tudo em `app.usinadotempo.com.br`** (cliente identificado pelo login); `*.tracking.usinadotempo.com.br` segue como atalho |
+| D16 | Planos do video-automation: Starter R$97, Pro R$297, Enterprise sob consulta, trial 14 dias |
+| D17 | Asaas: conta e chaves (produção e sandbox) já existem — entram como Secret no Cloudflare |
 
 ---
 
@@ -77,7 +81,7 @@
 
 S1–S6 **no ar** desde 2026-11-01 (commit a875a99, migration 0041; 13 credenciais cifradas).
 
-### Rodada 2 — médios e baixos (código escrito, aguardando deploy)
+### Rodada 2 — médios e baixos (**no ar** desde 2026-11-01, commit 778063e; migration 0042; `BOOKING_HMAC_KEY` e `UNSUB_HMAC_KEY` criadas; token Meta global renovado como Usuário do Sistema)
 | Item | Implementação |
 |---|---|
 | S7 | Links do Telegram com origem fixa (`BOOKING_PUBLIC_ORIGIN`, padrão `lp.usinadotempo.com.br`); MeetingHeld sempre em `usina-vendas` |
@@ -90,6 +94,8 @@ S1–S6 **no ar** desde 2026-11-01 (commit a875a99, migration 0041; 13 credencia
 | S14 | `tenants.is_active` (migration 0042) — bloqueia login e sessões; chave "Ativo" no formulário do tenant |
 | Baixos | Escape do nome no cold e-mail; `checkout-session` não troca o workspace de um `trk`; anti-CSRF por `Origin` em `/admin` e `/auth`; erros 500 genéricos no tracker/checkout |
 
+**Achado na abertura da Fase 1 (Alto, corrigido):** o Pages publica a raiz do repositório inteira (`pages_build_output_dir = "."`) — `docs/` (inclusive este plano), `migrations/`, `config/`, `CLAUDE.md` estavam acessíveis publicamente. Hotfix: `_middleware.js` responde 404 para esses caminhos. Correção estrutural: build para `dist/` com só o que é público (sprint 1.1).
+
 **Pendente (baixo, vai para a Fase 1):** `err.message` nas respostas 500 de `api/*` (só usuários autenticados veem); `ad_spend` sem `workspace_id` na chave (tabela legada); Tailwind compilado + CSP sem `unsafe-eval` (depende do build, D2).
 
 **A confirmar com webhook real antes de preencher o segredo:** formato da assinatura Kiwify (HMAC-SHA1) e Eduzz (HMAC-SHA256 / api_key).
@@ -97,6 +103,20 @@ S1–S6 **no ar** desde 2026-11-01 (commit a875a99, migration 0041; 13 credencia
 ---
 
 ## 4. Fase 1 — Fundação da plataforma
+
+### Ponto de arquitetura (decidido na abertura da Fase 1)
+Pages Functions não rodam cron, consumidores de fila, Workflows nem Containers — e o Estúdio de Vídeo precisa de todos. Solução: manter o **Pages** para HTTP (site, admin, portal, APIs, webhooks) e criar um **Worker companheiro `usina-jobs`** ligado ao mesmo D1 e R2, que concentra Cron Triggers, consumidores de Queues, Workflows e, depois, os Containers de render. Isso também aposenta o cron-job.org (e tira o `SYNC_SECRET` de terceiros).
+
+### Sprints
+| Sprint | Entrega |
+|---|---|
+| 1.1 | Build do front-end (Vite + Tailwind compilado) com deploy no Pages; CSP sem `unsafe-eval`; domínio `app.usinadotempo.com.br` |
+| 1.2 | Papéis `tenant_owner` / `tenant_manager` / `tenant_viewer` + `requirePermission`; portal do cliente (usuários e integrações dos próprios workspaces, segredos redigidos) |
+| 1.3 | R2: logo e cor por cliente, avatar por usuário |
+| 1.4 | Planos + módulos contratados + cobrança Asaas (ativa só com pagamento confirmado; trial; limites) |
+| 1.5 | Worker `usina-jobs`: crons nativos substituem cron-job.org; base de Queues/Workflows para o Estúdio |
+
+### Itens da fundação
 
 1. **Domínio** `app.usinadotempo.com.br` (D3) — ver conflito em §8.
 2. **Build do front-end** (D2): Vite + Tailwind compilado; admin e portal do cliente quebrados em telas/componentes; CSP sem `unsafe-eval`.
