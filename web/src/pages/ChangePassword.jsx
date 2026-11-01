@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api.js';
 import { useAuth } from '../lib/auth.jsx';
 import AuthCard, { Alert } from '../components/AuthCard.jsx';
+import PasswordInput from '../components/PasswordInput.jsx';
 
 const MIN_LENGTH = 12;
 
@@ -41,17 +42,17 @@ export default function ChangePassword() {
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="label" htmlFor="current">{forced ? 'Senha provisória' : 'Senha atual'}</label>
-          <input id="current" type="password" required autoComplete="current-password" className="input"
+          <PasswordInput id="current" autoComplete="current-password"
             value={current} onChange={(e) => setCurrent(e.target.value)} />
         </div>
         <div>
           <label className="label" htmlFor="next">Nova senha (mín. {MIN_LENGTH} caracteres)</label>
-          <input id="next" type="password" required minLength={MIN_LENGTH} autoComplete="new-password" className="input"
+          <PasswordInput id="next" minLength={MIN_LENGTH} autoComplete="new-password"
             value={next} onChange={(e) => setNext(e.target.value)} />
         </div>
         <div>
           <label className="label" htmlFor="confirm">Confirmar nova senha</label>
-          <input id="confirm" type="password" required autoComplete="new-password" className="input"
+          <PasswordInput id="confirm" autoComplete="new-password"
             value={confirm} onChange={(e) => setConfirm(e.target.value)} />
         </div>
         {error && <Alert>{error}</Alert>}

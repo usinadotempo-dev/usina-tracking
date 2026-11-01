@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth.jsx';
 import AuthCard, { Alert } from '../components/AuthCard.jsx';
+import PasswordInput from '../components/PasswordInput.jsx';
 
 export default function Login() {
   const { login } = useAuth();
@@ -34,7 +35,7 @@ export default function Login() {
         </div>
         <div>
           <label className="label" htmlFor="password">Senha</label>
-          <input id="password" type="password" required autoComplete="current-password" className="input"
+          <PasswordInput id="password" autoComplete="current-password"
             value={password} onChange={(e) => setPassword(e.target.value)} />
         </div>
         {error && <Alert>{error}</Alert>}
