@@ -40,12 +40,15 @@ export default function Billing() {
   const ent = data.entitlements || {};
   const isAsaas = data.billing_mode === 'asaas';
   const needsDoc = isAsaas && !data.has_subscription && !data.cpf_cnpj_masked;
+  const docDigits = doc.replace(/\D/g, '');
+  const docOk = docDigits.length === 11 || docDigits.length === 14;
+  const blockedByDoc = needsDoc && !docOk;
 
   async function subscribe(slug) {
     setBusy(slug);
     setMsg(null);
     try {
-      const res = await api('POST', '/portal/billing/subscribe', { plan_slug: slug, cpf_cnpj: doc });
+      const res = await api('POST', '/portal/billing/subscribe', { plan_slug: slug, cpf_cnpj: docDigits });
       await Promise.all([load(), refresh()]);
       if (res.invoice_url) {
         setMsg({ kind: 'ok', text: 'Assinatura criada. Abrimos a fatura numa nova aba — o acesso é liberado assim que o pagamento for confirmado.' });
@@ -111,7 +114,12 @@ export default function Billing() {
             <section className="card p-6">
               <label className="label" htmlFor="doc">CPF ou CNPJ para as faturas</label>
               <input id="doc" className="input max-w-xs font-mono" value={doc} onChange={(e) => setDoc(e.target.value)}
-                placeholder="somente números" inputMode="numeric" />
+                placeholder="somente números" inputMode="numeric" maxLength={18} />
+              <p className={`mt-1.5 text-xs ${doc && !docOk ? 'text-coral' : 'text-muted'}`}>
+                {doc && !docOk
+                  ? `CPF tem 11 dígitos e CNPJ tem 14 (você digitou ${docDigits.length}).`
+                  : 'Obrigatório para emitir as faturas. Preencha para liberar os botões de assinatura.'}
+              </p>
             </section>
           )}
           <div className="grid gap-4 md:grid-cols-2">
@@ -130,7 +138,7 @@ export default function Billing() {
                     {current ? (
                       <p className="text-sm font-medium text-coral">Seu plano atual</p>
                     ) : (
-                      <button type="button" className="btn-primary w-full" disabled={!!busy || (needsDoc && !doc.trim())}
+                      <button type="button" className="btn-primary w-full" disabled={!!busy || blockedByDoc} title={blockedByDoc ? 'Preencha o CPF ou CNPJ acima' : undefined}
                         onClick={() => subscribe(p.slug)}>
                         {busy === p.slug ? 'Processando…' : data.has_subscription ? `Mudar para ${p.name}` : `Assinar ${p.name}`}
                       </button>
