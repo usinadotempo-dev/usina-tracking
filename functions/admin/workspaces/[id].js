@@ -4,9 +4,11 @@
 // PATCH  → update workspace (name, slug) and/or its config (any of the integration fields).
 //          Secret fields: non-empty value → encrypted and saved; empty/null → keep current;
 //          `clear_secrets: [field, ...]` → remove.
-// DELETE → only if no purchase_log / event_log / sessions reference it (otherwise 409)
+// DELETE ?confirm=<slug> → apaga o workspace com todos os dados (irreversível;
+//          o slug digitado confirma)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
+import { purgeWorkspace } from '../../_lib/purge.js';
 import { BUSINESS_TYPES, MODULE_KEYS, MODULE_LABELS, resolveDashConfig } from '../../_lib/dash-presets.js';
 import { redactWorkspaceRow } from '../../_lib/secrets.js';
 import { CONFIG_FIELDS, applyWorkspaceConfigPatch } from '../../_lib/workspace-config-write.js';
@@ -103,15 +105,12 @@ export async function onRequestDelete(context) {
   if (auth instanceof Response) return auth;
   const id = context.params.id;
 
-  for (const tbl of ['purchase_log', 'event_log', 'sessions', 'checkout_sessions', 'ad_spend']) {
-    const r = await context.env.DB.prepare(`SELECT COUNT(*) AS n FROM ${tbl} WHERE workspace_id = ?`).bind(id).first();
-    if ((r?.n || 0) > 0) {
-      return jsonError(`Cannot delete: ${tbl} still has ${r.n} rows for this workspace.`, 409);
-    }
-  }
-  await context.env.DB.prepare('DELETE FROM user_workspaces WHERE workspace_id = ?').bind(id).run();
-  await context.env.DB.prepare('DELETE FROM workspace_domains WHERE workspace_id = ?').bind(id).run();
-  await context.env.DB.prepare('DELETE FROM workspace_config WHERE workspace_id = ?').bind(id).run();
-  await context.env.DB.prepare('DELETE FROM workspaces WHERE id = ?').bind(id).run();
+  const ws = await context.env.DB.prepare('SELECT slug FROM workspaces WHERE id = ?').bind(id).first();
+  if (!ws) return jsonError('Not found', 404);
+  // Exclusão completa e irreversível: exige o slug digitado como confirmação.
+  const confirm = new URL(context.request.url).searchParams.get('confirm');
+  if (confirm !== ws.slug) return jsonError('Confirmação não confere com o slug do workspace.', 400);
+
+  await purgeWorkspace(context.env, id);
   return jsonOk({ ok: true });
 }

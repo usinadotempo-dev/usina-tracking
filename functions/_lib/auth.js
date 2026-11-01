@@ -106,23 +106,22 @@ export async function lookupSession(env, token) {
   if (!token) return null;
   const tokenHash = await hashToken(token);
   const now = Math.floor(Date.now() / 1000);
+  // `u.*` e `SELECT *` de propósito: se uma migration nova ainda não foi
+  // aplicada, a coluna só vem ausente (e cai no padrão) em vez de derrubar o
+  // login de todo mundo com "no such column" — foi o que aconteceu com a 0045.
   const row = await env.DB.prepare(`
-    SELECT s.user_id, s.expires_at,
-           u.email, u.role, u.name, u.tenant_id, u.is_active,
-           u.must_change_password, u.tenant_role, u.avatar_key,
-           t.is_active AS tenant_active, t.name AS tenant_name,
-           t.brand_color AS tenant_brand_color, t.logo_key AS tenant_logo_key,
-           t.plan_slug, t.billing_mode, t.active_modules, t.subscription_status,
-           t.trial_ends_at, t.current_period_end
+    SELECT s.user_id, s.expires_at, u.*
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
-      LEFT JOIN tenants t ON t.id = u.tenant_id
      WHERE s.token_hash = ? AND s.expires_at > ?
      LIMIT 1
   `).bind(tokenHash, now).first();
   if (!row || !row.is_active) return null;
+  const tenant = row.tenant_id
+    ? await env.DB.prepare('SELECT * FROM tenants WHERE id = ?').bind(row.tenant_id).first()
+    : null;
   // Cliente desativado (Fase 0, S14) derruba o acesso de todos os seus usuários.
-  if (row.tenant_id && row.tenant_active === 0) return null;
+  if (tenant && tenant.is_active === 0) return null;
   return {
     user_id: row.user_id,
     email: row.email,
@@ -131,11 +130,11 @@ export async function lookupSession(env, token) {
     tenant_id: row.tenant_id,
     tenant_role: row.role === 'usina_admin' ? null : (row.tenant_role || 'viewer'),
     avatar_key: row.avatar_key || null,
-    tenant_name: row.tenant_name || null,
-    tenant_brand_color: row.tenant_brand_color || null,
-    tenant_logo_key: row.tenant_logo_key || null,
+    tenant_name: tenant?.name || null,
+    tenant_brand_color: tenant?.brand_color || null,
+    tenant_logo_key: tenant?.logo_key || null,
     // Plano/módulos do cliente (Fase 1, 1.4). Equipe da Usina: sem restrição.
-    entitlements: row.tenant_id ? computeEntitlements(row) : null,
+    entitlements: tenant ? computeEntitlements(tenant) : null,
     expires_at: row.expires_at,
     must_change_password: !!row.must_change_password,
   };

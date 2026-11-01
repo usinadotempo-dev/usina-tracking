@@ -101,7 +101,8 @@ export async function onRequestGet(context) {
       ads,
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error('api/ads:', err.message);
+    return json({ error: 'Erro interno' }, 500);
   }
 }
 

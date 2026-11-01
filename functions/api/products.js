@@ -59,7 +59,8 @@ export async function onRequestGet(context) {
       time_series: series.results || [],
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error('api/products:', err.message);
+    return json({ error: 'Erro interno' }, 500);
   }
 }
 

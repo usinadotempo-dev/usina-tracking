@@ -64,7 +64,8 @@ export async function onRequestGet(context) {
       headers: corsHeaders,
     });
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('api/purchases:', err.message);
+    return new Response(JSON.stringify({ error: 'Erro interno' }), {
       status: 500,
       headers: corsHeaders,
     });

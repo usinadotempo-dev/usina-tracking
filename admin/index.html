@@ -1304,7 +1304,7 @@ function openTenantForm(id = null) {
 
   const footer = document.createElement('div');
   footer.innerHTML = `
-    ${editing ? `<button class="btn btn-danger mr-auto" onclick="deleteTenant('${id}')">Excluir tenant</button>` : ''}
+    ${editing ? `<button class="btn btn-danger mr-auto" onclick="deleteTenant('${id}', '${escapeHtml(t.slug)}')">Excluir tenant</button>` : ''}
     <button class="btn btn-secondary" data-modal-close>Cancelar</button>
     <button class="btn btn-primary" id="tn-save">${editing ? 'Salvar' : 'Criar tenant'}</button>`;
 
@@ -1359,11 +1359,13 @@ function openTenantForm(id = null) {
   });
 }
 
-async function deleteTenant(id) {
-  if (!confirm('Excluir este tenant? Ele precisa estar sem workspaces e sem usuários.')) return;
+async function deleteTenant(id, slug) {
+  const typed = prompt(`Isto apaga o cliente com TODOS os workspaces, dados, usuários e faturas, sem volta.\n\nPara confirmar, digite o slug: ${slug}`);
+  if (typed === null) return;
+  if (typed.trim() !== slug) { toast('O slug digitado não confere. Nada foi excluído.', 'error'); return; }
   try {
-    await api('DELETE', `/admin/tenants/${id}`);
-    toast('Tenant excluído.', 'success');
+    const r = await api('DELETE', `/admin/tenants/${id}?confirm=${encodeURIComponent(slug)}`);
+    toast(`Cliente excluído (${r.removed?.workspaces ?? 0} workspaces, ${r.removed?.users ?? 0} usuários).`, 'success');
     closeModal();
     loadTenants();
   } catch (e) {
@@ -2249,17 +2251,19 @@ function renderWsDanger(body, w) {
     <div class="card p-6 border-2 border-[rgba(220,74,48,0.25)]">
       <h3 class="display text-[15px] text-brand-coral mb-1.5">Excluir workspace</h3>
       <p class="text-[13px] text-brand-gray mb-5 leading-relaxed">
-        Esta ação remove o workspace, sua configuração e todos os mapeamentos de domínio.
-        Só funciona se <strong>nenhuma</strong> tabela operacional (sessions, event_log, purchase_log, ad_spend) ainda tiver dados deste workspace.
+        Esta ação remove o workspace com <strong>todos</strong> os dados: configuração, domínios, sessões, eventos,
+        vendas, campanhas, Instagram, Página e histórico do Kommo. Não dá para desfazer.
       </p>
-      <button class="btn btn-danger" onclick="deleteWorkspace('${w.id}')">Excluir definitivamente</button>
+      <button class="btn btn-danger" onclick="deleteWorkspace('${w.id}', '${escapeHtml(w.slug)}')">Excluir definitivamente</button>
     </div>`;
 }
 
-async function deleteWorkspace(id) {
-  if (!confirm('Tem certeza? Esta operação é irreversível.')) return;
+async function deleteWorkspace(id, slug) {
+  const typed = prompt(`Isto apaga o workspace e TODOS os dados dele, sem volta.\n\nPara confirmar, digite o slug: ${slug}`);
+  if (typed === null) return;
+  if (typed.trim() !== slug) { toast('O slug digitado não confere. Nada foi excluído.', 'error'); return; }
   try {
-    await api('DELETE', `/admin/workspaces/${id}`);
+    await api('DELETE', `/admin/workspaces/${id}?confirm=${encodeURIComponent(slug)}`);
     toast('Workspace excluído.', 'success');
     closeDrawer();
     location.hash = '#workspaces';
@@ -2753,7 +2757,7 @@ async function loadPlatform() {
           <div>
             <h3 class="display text-[15px] text-brand-navy">Sincronização de dados</h3>
             <p class="text-[13px] text-brand-gray mt-0.5">
-              Os dados Meta são puxados por cron externo. Use os 3 endpoints abaixo no <a href="https://console.cron-job.org/" target="_blank" rel="noopener" class="text-brand-navy underline">cronjob.org</a> (ou outro scheduler).
+              Rodam sozinhas pelo Worker <span class="mono">usina-jobs</span> do Cloudflare (horários em UTC). Os endpoints abaixo servem para disparo manual com o header de autenticação.
             </p>
           </div>
           <button type="button" class="btn btn-secondary" id="pf-sync-now" style="white-space: nowrap;">
@@ -2913,7 +2917,7 @@ async function loadPlatform() {
           <code class="mono bg-[#f3f4f8] rounded px-2 py-1">{}</code>
           <span></span>
         </div>
-        ${p.last?.last_status === 'error' && p.last?.last_error ? `
+        ${(p.last?.last_status === 'error' || p.last?.last_status === 'partial') && p.last?.last_error ? `
           <div class="mt-3 p-2 rounded bg-[#fef5f3] text-[12px]" style="color:#902715">
             <strong>Último erro:</strong> ${escapeHtml(p.last.last_error.slice(0, 200))}
           </div>` : ''}

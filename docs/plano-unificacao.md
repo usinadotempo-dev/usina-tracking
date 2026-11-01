@@ -98,7 +98,7 @@ S1–S6 **no ar** desde 2026-11-01 (commit a875a99, migration 0041; 13 credencia
 
 **Correção Meta (2026-11-01):** Instagram/Página pararam por 93 dias (token antigo invalidado por troca de senha — renovado como Usuário do Sistema). Sync de Página usava métricas descontinuadas pela Meta (page_fans, page_impressions*, page_engaged_users, post_impressions*) → trocadas por page_follows, page_daily_(un)follows_unique, page_media_view, page_total_media_view_unique, post_media_view, post_total_media_view_unique; Instagram usava video_views/plays → `views`. Falhas de métrica agora vão para o log (antes viravam zero). 3 workspaces com Página não atribuída ao Usuário do Sistema (#10).
 
-**Pendente (baixo, vai para a Fase 1):** `err.message` nas respostas 500 de `api/*` (só usuários autenticados veem); `ad_spend` sem `workspace_id` na chave (tabela legada); Tailwind compilado + CSP sem `unsafe-eval` (depende do build, D2).
+**Pendente (baixo, vai para a Fase 1):** ~~`err.message` nas respostas 500 de `api/*`~~ (feito na 1.6); `ad_spend` sem `workspace_id` na chave (tabela legada); Tailwind compilado + CSP sem `unsafe-eval` (depende do build, D2).
 
 **A confirmar com webhook real antes de preencher o segredo:** formato da assinatura Kiwify (HMAC-SHA1) e Eduzz (HMAC-SHA256 / api_key).
 
@@ -119,6 +119,8 @@ Pages Functions não rodam cron, consumidores de fila, Workflows nem Containers 
 | 1.4 | Planos + módulos contratados + cobrança Asaas (ativa só com pagamento confirmado; trial; limites) — **código escrito**: migration 0045 (`tenants.plan_slug/billing_mode/active_modules/subscription_status/trial_ends_at/current_period_end/asaas_*`, `billing_events`, `invoices`), planos em `_lib/plans.js` (Starter R$97: tracking, funis, CRM, conteúdo, 1 ws, 3 usuários; Pro R$297: tudo, 5 ws, 10 usuários; Enterprise sob consulta), `computeEntitlements` na sessão, dashboard bloqueado (402) sem o módulo `tracking`, limite de usuários no portal, `/portal/billing` + `subscribe` + `cancel`, `/webhook/asaas` (token + idempotência; libera só com PAYMENT_CONFIRMED/RECEIVED), tela Assinatura + aviso no topo, plano/cobrança/módulos no admin. Usina = `internal`; Chaves e demais existentes = `manual` + `enterprise` |
 | 1.3 ✓ | No ar em 2026-11-01 |
 | 1.5 | Worker `usina-jobs`: crons nativos substituem cron-job.org; base de Queues/Workflows para o Estúdio — **agendador escrito** (`workers/usina-jobs/`): um gatilho de hora em hora (minuto 5 UTC) roda Marketing, lembretes e prospecção toda hora, Instagram a cada 4 h e Página a cada 6 h, chamando as rotas existentes com `x-sync-secret`. Criado pelo painel. Queues/Workflows entram junto do Estúdio |
+| 1.4/1.5 ✓ | No ar em 2026-11-01. Incidente: push antes da migration 0045 → `lookupSession` com "no such column" → 500 em tudo e login em loop; resolvido aplicando a 0045 |
+| 1.6 | Fechamento da Fase 1 — **código escrito**: `lookupSession` lê `u.*` e `SELECT * FROM tenants` (migration esquecida não derruba mais o login: coluna ausente cai no padrão); exclusão completa de cliente e de workspace pelo admin (`_lib/purge.js`, um `DB.batch` transacional, confirmação digitando o slug; apaga dados, usuários, faturas, logo/avatares no R2 e subdomínio); `err.message` fora das respostas 500 de `api/*` (vai para o log); cartão de sincronização do admin aponta para o Worker `usina-jobs` e mostra erro também no status parcial |
 
 ### Itens da fundação
 

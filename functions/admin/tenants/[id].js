@@ -2,10 +2,12 @@
 // GET    → details + workspaces
 // PATCH  → update {name, slug, is_active} — is_active=false bloqueia o login
 //          de todos os usuários do tenant (Fase 0, S14)
-// DELETE → delete (only if no workspaces, no users)
+// DELETE ?confirm=<slug> → apaga o cliente com workspaces, dados, usuários e
+//          faturas (irreversível; o slug digitado confirma)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
 import { deprovisionTenantSubdomain } from '../../_lib/domain-provisioning.js';
+import { purgeTenant } from '../../_lib/purge.js';
 import { PLANS, ALL_MODULES, TRIAL_DAYS } from '../../_lib/plans.js';
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
@@ -90,25 +92,13 @@ export async function onRequestDelete(context) {
   if (auth instanceof Response) return auth;
   const id = context.params.id;
 
-  const wsCount = await context.env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM workspaces WHERE tenant_id = ?'
-  ).bind(id).first();
-  if ((wsCount?.n || 0) > 0) {
-    return jsonError('Cannot delete: tenant still has workspaces. Delete those first.', 409);
-  }
-  const userCount = await context.env.DB.prepare(
-    'SELECT COUNT(*) AS n FROM app_users WHERE tenant_id = ?'
-  ).bind(id).first();
-  if ((userCount?.n || 0) > 0) {
-    return jsonError('Cannot delete: tenant still has users.', 409);
-  }
-  // Capture slug for de-provisioning before deleting the row
   const tenantRow = await context.env.DB.prepare('SELECT slug FROM tenants WHERE id = ?').bind(id).first();
-  await context.env.DB.prepare('DELETE FROM tenants WHERE id = ?').bind(id).run();
+  if (!tenantRow) return jsonError('Not found', 404);
+  // Exclusão completa e irreversível: exige o slug digitado como confirmação.
+  const confirm = new URL(context.request.url).searchParams.get('confirm');
+  if (confirm !== tenantRow.slug) return jsonError('Confirmação não confere com o slug do cliente.', 400);
 
-  let deprovisioning = null;
-  if (tenantRow?.slug) {
-    deprovisioning = await deprovisionTenantSubdomain(context.env, tenantRow.slug);
-  }
-  return jsonOk({ ok: true, deprovisioning });
+  const removed = await purgeTenant(context.env, id);
+  const deprovisioning = await deprovisionTenantSubdomain(context.env, tenantRow.slug);
+  return jsonOk({ ok: true, removed, deprovisioning });
 }

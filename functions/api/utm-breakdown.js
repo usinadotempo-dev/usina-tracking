@@ -122,7 +122,8 @@ export async function onRequestGet(context) {
       rows,
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error('api/utm-breakdown:', err.message);
+    return json({ error: 'Erro interno' }, 500);
   }
 }
 

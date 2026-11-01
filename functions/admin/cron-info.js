@@ -1,12 +1,11 @@
 // GET /admin/cron-info
 //
-// Devolve o que o admin precisa pra cadastrar os crons no cronjob.org (ou
-// outro provider externo): URL canônica de cada endpoint de sync, SE o
+// Agenda das sincronizações (executadas pelo Worker `usina-jobs`, ver
+// workers/usina-jobs/index.js — manter os horários iguais aos de lá), SE o
 // SYNC_SECRET está configurado, e a última execução registrada em sync_log
 // de cada plataforma.
 //
-// SECURITY: o valor do SYNC_SECRET nunca sai do servidor (Fase 0, S1). Quem
-// cadastra o cron copia o valor direto das variáveis do Pages.
+// SECURITY: o valor do SYNC_SECRET nunca sai do servidor (Fase 0, S1).
 
 import { requireAuth, jsonError, jsonOk } from '../_lib/auth.js';
 
@@ -26,7 +25,7 @@ const PLATFORMS = [
     description: 'Perfil, posts, insights e audiência.',
     path: '/api/sync/meta-instagram',
     cadence_label: 'A cada 4 horas',
-    cron: '15 */4 * * *',
+    cron: '5 */4 * * *',
     timeout_seconds: 90,
   },
   {
@@ -35,7 +34,7 @@ const PLATFORMS = [
     description: 'Perfil, posts e insights da página.',
     path: '/api/sync/meta-pages',
     cadence_label: 'A cada 6 horas',
-    cron: '25 */6 * * *',
+    cron: '5 */6 * * *',
     timeout_seconds: 90,
   },
   {
@@ -44,12 +43,12 @@ const PLATFORMS = [
     description: 'Lembrete 24h/1h, no-show e follow-up das apresentações agendadas na LP. Também avisa a equipe no grupo do Telegram (agendamento, 24h, 1h, no-show).',
     path: '/api/sync/booking-reminders',
     cadence_label: 'A cada 1 hora',
-    cron: '45 * * * *',
+    cron: '5 * * * *',
     timeout_seconds: 60,
   },
 ];
 
-const PLATFORM_ROOT_URL = 'https://tracking.usinadotempo.com.br';
+const PLATFORM_ROOT_URL = 'https://app.usinadotempo.com.br';
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
@@ -91,9 +90,8 @@ export async function onRequestGet(context) {
     sync_secret_set,
     platforms,
     cron_provider: {
-      name: 'cronjob.org',
-      url: 'https://console.cron-job.org/',
-      tier_note: 'Tier grátis cobre até 50 jobs e cadência mínima de 1 minuto.',
+      name: 'Worker usina-jobs (Cloudflare Cron Triggers)',
+      tier_note: 'Horários em UTC.',
     },
   });
 }

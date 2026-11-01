@@ -66,7 +66,8 @@ export async function onRequestGet(context) {
       steps,
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error('api/funnel:', err.message);
+    return json({ error: 'Erro interno' }, 500);
   }
 }
 

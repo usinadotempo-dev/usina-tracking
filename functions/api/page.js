@@ -88,7 +88,8 @@ export async function onRequestGet(context) {
       last_synced_at: sync?.last_synced_at || null,
     });
   } catch (err) {
-    return json({ error: err.message }, 500);
+    console.error('api/page:', err.message);
+    return json({ error: 'Erro interno' }, 500);
   }
 }
 

@@ -18,6 +18,11 @@ parcialmente desatualizado — o plano vivo é `docs/plano-unificacao.md`.
   `env.SECRETS_KEY`); nunca devolver segredo ao navegador.
 - **Migrations D1:** aplicadas pelo Console do dashboard (sem comentários `--` no
   início) + `INSERT INTO d1_migrations (name) VALUES ('<arquivo>')`.
+  **Sempre aplicar a migration ANTES do push** do código que usa as colunas novas
+  (em 2026-11-01 a ordem invertida da 0045 derrubou o app inteiro). Ao entregar
+  instruções de deploy, a migration vem como passo 1, separado.
+- **Tabela nova com `workspace_id`:** incluir em `WORKSPACE_TABLES`
+  (`functions/_lib/purge.js`), senão a exclusão de cliente deixa dados órfãos.
 - **Commits:** autor `suporte@usinadotempo.com.br`; o Claude não tem shell nesta
   máquina — o usuário roda git no cmd (Git portátil em `C:\Portatil\PortableGit`).
 
