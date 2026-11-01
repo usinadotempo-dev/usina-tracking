@@ -5,6 +5,13 @@ import {
   shouldUseDomainAttribute,
   jsonError,
 } from '../_lib/auth.js';
+import { lockedFor, hit, reset, tooManyRequests } from '../_lib/rate-limit.js';
+
+// Limites (Fase 0, S5): por IP e por e-mail+IP. O bucket por e-mail inclui o
+// IP de propósito — um atacante não consegue bloquear a conta de outra pessoa
+// errando a senha dela de outro lugar.
+const IP_LIMIT = { max: 30, windowSecs: 900, lockSecs: 900 };
+const EMAIL_LIMIT = { max: 5, windowSecs: 900, lockSecs: 900 };
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -22,37 +29,79 @@ export async function onRequestPost(context) {
     return jsonError('Email and password are required', 400);
   }
 
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  const ipBucket = `login:ip:${ip}`;
+  const emailBucket = `login:em:${email}|${ip}`;
+  const locked = Math.max(await lockedFor(env, ipBucket), await lockedFor(env, emailBucket));
+  if (locked) return tooManyRequests(locked);
+
   const user = await env.DB.prepare(`
     SELECT id, email, password_hash, role, name, tenant_id, is_active,
-           must_change_password, pwd_expires_at
+           must_change_password, pwd_expires_at,
+           pending_password_hash, pending_expires_at
       FROM app_users WHERE email = ? LIMIT 1
   `).bind(email).first();
 
   // Always run verifyPassword to avoid leaking via timing whether the email
   // exists. Pass a dummy hash if user not found.
   const dummyHash = 'pbkdf2$100000$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+  const now = Math.floor(Date.now() / 1000);
   const ok = await verifyPassword(password, user?.password_hash || dummyHash);
-  if (!user || !ok || !user.is_active) {
+
+  // Senha provisória do "esqueci a senha" (pendente — ver forgot-password.js).
+  let usedPending = false;
+  if (!ok && user?.pending_password_hash && user.pending_expires_at > now) {
+    usedPending = await verifyPassword(password, user.pending_password_hash);
+  }
+
+  if (!user || !(ok || usedPending) || !user.is_active) {
+    await hit(env, ipBucket, IP_LIMIT);
+    await hit(env, emailBucket, EMAIL_LIMIT);
     return jsonError('Invalid credentials', 401);
   }
 
-  // Senha provisória que já passou da validade: recusa o login e orienta o
-  // usuário a gerar outra. (pwd_expires_at só fica setado enquanto a senha
-  // é provisória; senha definitiva tem must_change_password=0 e NULL aqui.)
-  const mustChange = !!user.must_change_password;
-  if (mustChange && user.pwd_expires_at && Math.floor(Date.now() / 1000) > user.pwd_expires_at) {
+  // Senha provisória (criada/redefinida pelo admin) que já passou da validade:
+  // recusa o login e orienta o usuário a gerar outra. (pwd_expires_at só fica
+  // setado enquanto a senha é provisória; senha definitiva tem
+  // must_change_password=0 e NULL aqui.)
+  let mustChange = !!user.must_change_password;
+  if (!usedPending && mustChange && user.pwd_expires_at && now > user.pwd_expires_at) {
     return jsonError(
       'Sua senha provisória expirou. Use "Esqueceu sua senha?" para gerar outra.',
       401,
     );
   }
 
-  const ip = request.headers.get('cf-connecting-ip') || '';
+  if (usedPending) {
+    // Promove a provisória: vira a senha da conta, com troca obrigatória, e
+    // derruba as sessões antigas (quem pediu a recuperação perdeu o acesso).
+    await env.DB.prepare(`
+      UPDATE app_users
+         SET password_hash = pending_password_hash,
+             must_change_password = 1,
+             pwd_expires_at = pending_expires_at,
+             pending_password_hash = NULL, pending_expires_at = NULL, pending_issued_at = NULL,
+             updated_at = ?
+       WHERE id = ?
+    `).bind(now, user.id).run();
+    await env.DB.prepare('DELETE FROM app_sessions WHERE user_id = ?').bind(user.id).run();
+    mustChange = true;
+  } else if (user.pending_password_hash) {
+    // Lembrou a senha atual: a provisória pendente deixa de valer.
+    await env.DB.prepare(`
+      UPDATE app_users
+         SET pending_password_hash = NULL, pending_expires_at = NULL, pending_issued_at = NULL
+       WHERE id = ?
+    `).bind(user.id).run();
+  }
+
+  await reset(env, emailBucket);
+
   const ua = request.headers.get('user-agent') || '';
   const { token } = await createSession(env, user.id, ip, ua);
 
   await env.DB.prepare('UPDATE app_users SET last_login_at = ? WHERE id = ?')
-    .bind(Math.floor(Date.now() / 1000), user.id).run();
+    .bind(now, user.id).run();
 
   const useDomain = shouldUseDomainAttribute(request.headers.get('host'));
   const headers = new Headers({ 'Content-Type': 'application/json' });

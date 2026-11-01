@@ -1,15 +1,19 @@
 // -----------------------------------------------------------------------------
 // Shared helpers for webhook adapters.
 //
-// The webhook URL shape is `/webhook/<platform>/<slug>`, where `<slug>` is a
-// 36-character UUID v4 (122 bits of entropy) generated per recipient during
-// `deploy-stack` and stored as a Cloudflare secret. The adapter receives the
-// slug via `context.params.slug` and compares it to the env var.
+// URL shape: `/webhook/<platform>/<slug>`, where `<slug>` is a UUID v4.
 //
-// This is obscure-URL authentication: unguessable to scanners, simple for
-// non-dev recipients (no signing-secret pastes per platform). Platform-native
-// signature verification (HMAC/hottok) is deliberately deferred to a
-// post-launch `harden-tracking` Level 2 skill.
+// Since Fase 0 (S3) each WORKSPACE has its own slug per sales platform
+// (workspace_config.<platform>_webhook_slug), so the slug identifies the
+// workspace and one client can no longer post purchases into another's.
+// On top of that, when the workspace has the platform's verification secret
+// configured (hotmart_hottok / kiwify_webhook_token / eduzz_webhook_secret),
+// the request signature is verified.
+//
+// LEGACY: the old per-instance slug in env.<PLATFORM>_WEBHOOK_SLUG keeps
+// working during the transition (workspace resolved from the trk, as before).
+// Delete those env vars once every client points to its per-workspace URL —
+// that switches the legacy path off.
 // -----------------------------------------------------------------------------
 
 export function timingSafeEqual(a, b) {
@@ -22,27 +26,90 @@ export function timingSafeEqual(a, b) {
   return result === 0;
 }
 
-// Guards a webhook adapter on the per-platform URL slug.
-//
-// Returns a Response on failure (caller should return it directly):
-//   - 500 if the env var is unset — a misconfigured deploy that should NOT
-//     silently accept traffic
-//   - 404 if the slug is missing or wrong — indistinguishable from the
-//     route not existing, so scanners learn nothing
-//
-// Returns null on success (caller proceeds to read body + parse payload).
-export function guardSlug(paramSlug, expectedSlug) {
-  if (!expectedSlug) {
-    return new Response(
-      JSON.stringify({ error: 'webhook not configured on this instance' }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+const SLUG_COLUMNS = {
+  hotmart: 'hotmart_webhook_slug',
+  kiwify: 'kiwify_webhook_slug',
+  eduzz: 'eduzz_webhook_slug',
+};
+
+const LEGACY_ENV = {
+  hotmart: 'HOTMART_WEBHOOK_SLUG',
+  kiwify: 'KIWIFY_WEBHOOK_SLUG',
+  eduzz: 'EDUZZ_WEBHOOK_SLUG',
+};
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function jsonResponse(body, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+// Resolves which workspace a sales webhook belongs to.
+// Returns { workspaceId, legacy } on success or { response } (404) on failure —
+// a wrong slug is indistinguishable from a missing route.
+export async function resolveSalesWebhook(env, platform, slug) {
+  const notFound = { response: jsonResponse({ error: 'not found' }, 404) };
+  const col = SLUG_COLUMNS[platform];
+  if (!col || !slug || !UUID_RE.test(slug)) return notFound;
+
+  const row = await env.DB.prepare(
+    `SELECT workspace_id FROM workspace_config WHERE ${col} = ? LIMIT 1`
+  ).bind(slug).first();
+  if (row?.workspace_id) return { workspaceId: row.workspace_id, legacy: false };
+
+  const legacySlug = env[LEGACY_ENV[platform]];
+  if (legacySlug && timingSafeEqual(slug, legacySlug)) {
+    return { workspaceId: null, legacy: true };
   }
-  if (!paramSlug || !timingSafeEqual(paramSlug, expectedSlug)) {
-    return new Response(
-      JSON.stringify({ error: 'not found' }),
-      { status: 404, headers: { 'Content-Type': 'application/json' } }
-    );
+  return notFound;
+}
+
+// ---- Signature verification -------------------------------------------------
+// Each returns true (valid), false (invalid) or null (workspace has no secret
+// configured → nothing to verify). Formats marked "a confirmar" in the plan
+// must be validated against a real webhook before the secret is filled in.
+
+export function verifyHotmart(request, payload, hottok) {
+  if (!hottok) return null;
+  const got = request.headers.get('x-hotmart-hottok') || payload?.hottok || '';
+  return timingSafeEqual(String(got), hottok);
+}
+
+// Kiwify: `signature` = HMAC-SHA1 (hex) with the webhook token. Comes as the
+// ?signature= query param or at the payload root; computed over the order
+// JSON. We accept the raw body and the re-serialized payload/order.
+export async function verifyKiwify(request, rawBody, payload, token) {
+  if (!token) return null;
+  const url = new URL(request.url);
+  const got = String(url.searchParams.get('signature') || payload?.signature || '').toLowerCase();
+  if (!got) return false;
+  const candidates = [rawBody, JSON.stringify(payload)];
+  if (payload?.order) candidates.push(JSON.stringify(payload.order));
+  for (const c of candidates) {
+    if (timingSafeEqual(got, await hmacHex('SHA-1', token, c))) return true;
   }
-  return null;
+  return false;
+}
+
+// Eduzz: HMAC-SHA256 (hex) of the raw body in a signature header; older
+// integrations send the account api_key inside the payload instead.
+export async function verifyEduzz(request, rawBody, payload, secret) {
+  if (!secret) return null;
+  const got = String(
+    request.headers.get('x-signature') || request.headers.get('x-eduzz-signature') || ''
+  ).toLowerCase();
+  if (got && timingSafeEqual(got, await hmacHex('SHA-256', secret, rawBody))) return true;
+  const apiKey = payload?.api_key || payload?.data?.api_key || '';
+  return !!apiKey && timingSafeEqual(String(apiKey), secret);
+}
+
+async function hmacHex(hash, secret, message) {
+  const key = await crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(secret), { name: 'HMAC', hash }, false, ['sign']
+  );
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(message));
+  return [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, '0')).join('');
 }

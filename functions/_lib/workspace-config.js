@@ -1,9 +1,12 @@
 // Loads per-workspace integration config from D1.
-// Returns the workspace_config row as a plain object, or an empty object
-// when the workspace has no config row yet.
+// Returns the workspace_config row as a plain object (secrets already
+// decrypted — see _lib/secrets.js), or an empty object when the workspace
+// has no config row yet.
 //
 // Cached on context.data per-request so callers can use it freely without
 // re-querying D1.
+
+import { decryptWorkspaceRow, decryptSecret } from './secrets.js';
 
 export async function loadWorkspaceConfig(context, workspaceId) {
   if (!workspaceId) return {};
@@ -20,7 +23,7 @@ export async function loadWorkspaceConfig(context, workspaceId) {
   } catch (e) {
     console.error('loadWorkspaceConfig:', e.message);
   }
-  const cfg = row || {};
+  const cfg = row ? await decryptWorkspaceRow(context.env, row) : {};
   context.data._wsCfgCache[workspaceId] = cfg;
   return cfg;
 }
@@ -50,5 +53,10 @@ export async function listWorkspacesWithMetaAds(env) {
      WHERE meta_ads_access_token IS NOT NULL AND meta_ads_access_token != ''
        AND meta_ads_account_id   IS NOT NULL AND meta_ads_account_id   != ''
   `).all();
-  return results || [];
+  const out = [];
+  for (const r of results || []) {
+    const token = await decryptSecret(env, r.meta_ads_access_token);
+    if (token) out.push({ ...r, meta_ads_access_token: token });
+  }
+  return out;
 }

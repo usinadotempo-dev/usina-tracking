@@ -1547,12 +1547,17 @@ async function loadWorkspaceDetail(id) {
 
 function renderWsTab(tab, w, cfg, domains, fullData) {
   const body = $('#ws-detail-body');
-  if (tab === 'config') return renderWsConfigForm(body, w, cfg, fullData?.presets, fullData?.dash, fullData?.module_keys, fullData?.module_labels);
+  // Segredos nunca chegam ao navegador: o GET devolve só {set, last4} em `secrets`.
+  if (tab === 'config') {
+    window.__wsSecrets = fullData?.secrets || {};
+    return renderWsConfigForm(body, w, cfg, fullData?.presets, fullData?.dash, fullData?.module_keys, fullData?.module_labels);
+  }
   if (tab === 'domains') return renderWsDomains(body, w, domains);
   if (tab === 'danger') return renderWsDanger(body, w);
 }
 
 function configCard(title, description, fields) {
+  const secrets = window.__wsSecrets || {};
   return `
     <div class="card p-6 mb-5">
       <div class="mb-5">
@@ -1560,19 +1565,56 @@ function configCard(title, description, fields) {
         <p class="text-[13px] text-brand-gray mt-0.5">${escapeHtml(description)}</p>
       </div>
       <div class="grid gap-4" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr))">
-        ${fields.map(f => `
+        ${fields.map(f => {
+          const saved = f.secret ? secrets[f.key] : null;
+          const placeholder = saved?.set
+            ? `••••••${saved.last4 || ''} — salvo; em branco mantém`
+            : (f.placeholder || '');
+          return `
           <div class="${f.full ? 'col-span-full' : ''}">
             <label class="label">${escapeHtml(f.label)}</label>
             <input
               data-cfg="${f.key}"
+              ${f.secret ? 'data-secret="1" autocomplete="off"' : ''}
               class="input ${f.mono ? 'mono' : ''}"
               type="${f.secret ? 'password' : 'text'}"
-              value="${escapeHtml(f.value || '')}"
-              placeholder="${escapeHtml(f.placeholder || '')}"
+              value="${f.secret ? '' : escapeHtml(f.value || '')}"
+              placeholder="${escapeHtml(placeholder)}"
             >
+            ${saved?.set ? `
+              <label class="help flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" data-clear-secret="${escAttr(f.key)}"> remover ao salvar
+              </label>` : ''}
             ${f.help ? `<p class="help">${escapeHtml(f.help)}</p>` : ''}
-          </div>`).join('')}
+          </div>`;
+        }).join('')}
       </div>
+    </div>`;
+}
+
+// URLs de webhook de venda (uma por workspace, geradas ao salvar a config).
+function salesWebhooksCardHtml(cfg) {
+  const base = 'https://tracking.usinadotempo.com.br/webhook';
+  const rows = [
+    ['Hotmart', 'hotmart', cfg.hotmart_webhook_slug, 'Hotmart → Ferramentas → Webhook (API e notificações). Evento: compra aprovada.'],
+    ['Kiwify',  'kiwify',  cfg.kiwify_webhook_slug,  'Kiwify → Apps → Webhooks. Evento: compra aprovada.'],
+    ['Eduzz',   'eduzz',   cfg.eduzz_webhook_slug,   'Eduzz → Webhooks. Evento: fatura paga.'],
+  ];
+  const anySlug = rows.some(r => r[2]);
+  return `
+    <div class="card p-6 mb-5 bg-[#fbfcfe]">
+      <h3 class="display text-[15px] text-brand-navy mb-1.5">Webhooks de venda (deste workspace)</h3>
+      <p class="text-[13px] text-brand-gray mb-3">Cada workspace tem a própria URL — cadastre a URL abaixo na plataforma de venda do cliente. As URLs antigas (globais) continuam funcionando só durante a transição.</p>
+      ${anySlug ? rows.map(([label, key, slug, help]) => slug ? `
+        <div class="mb-3">
+          <label class="label">${label}</label>
+          <div class="flex gap-2 items-center">
+            <input class="input mono flex-1" readonly value="${escAttr(`${base}/${key}/${slug}`)}">
+            <button type="button" class="btn btn-secondary" data-copy="${escAttr(`${base}/${key}/${slug}`)}">Copiar</button>
+          </div>
+          <p class="help">${escapeHtml(help)}</p>
+        </div>` : '').join('') : `
+        <p class="text-[13px] text-brand-gray">Salve as configurações uma vez para gerar as URLs.</p>`}
     </div>`;
 }
 
@@ -1804,7 +1846,7 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
       <input type="hidden" id="kommo-saved-stage" value="${escapeHtml(cfg.kommo_stage_id || '')}">
       <input type="hidden" id="kommo-saved-responsible" value="${escapeHtml(cfg.kommo_responsible_user_id || '')}">
       <input type="hidden" id="kommo-saved-won-stage" value="${escapeHtml(cfg.kommo_won_stage_id || '')}">
-      <input type="hidden" id="kommo-has-token" value="${cfg.kommo_long_lived_token ? '1' : '0'}">
+      <input type="hidden" id="kommo-has-token" value="${(window.__wsSecrets || {}).kommo_long_lived_token?.set ? '1' : '0'}">
       <input type="hidden" id="kommo-workspace-id" value="${escapeHtml(w.id)}">
 
       ${cfg.kommo_webhook_slug ? `
@@ -1839,6 +1881,14 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
         { label: 'Encharge API Key',     key: 'encharge_api_key',     value: cfg.encharge_api_key,             mono: true, secret: true },
         { label: 'ManyChat Key',         key: 'manychat_key',         value: cfg.manychat_key,                 mono: true, secret: true },
         { label: 'Meta Ads Token (override opcional)', key: 'meta_ads_access_token', value: cfg.meta_ads_access_token, mono: true, secret: true, full: true, help: 'Em branco usa o token global da Plataforma. Preencha apenas se este workspace exige um token diferente.' },
+      ])}
+
+      ${salesWebhooksCardHtml(cfg)}
+
+      ${configCard('Plataformas de venda — verificação', 'Segredo de cada plataforma para confirmar que o webhook veio mesmo dela. Com o segredo preenchido, webhooks sem assinatura válida são recusados.', [
+        { label: 'Hotmart — Hottok',      key: 'hotmart_hottok',       mono: true, secret: true, help: 'Hotmart → Ferramentas → Webhook → Hottok.' },
+        { label: 'Kiwify — Token do webhook', key: 'kiwify_webhook_token', mono: true, secret: true, help: 'Token exibido ao criar o webhook na Kiwify.' },
+        { label: 'Eduzz — Segredo/API key', key: 'eduzz_webhook_secret', mono: true, secret: true, help: 'Chave de assinatura do webhook na Eduzz.' },
       ])}
 
       <div class="sticky bottom-0 bg-white py-4 border-t border-brand-border flex items-center justify-between gap-3 -mx-7 px-7">
@@ -1971,10 +2021,26 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
     if (rm) rm.closest('[data-ev-row]')?.remove();
   });
 
+  if (!body.dataset.copyBound) {
+    body.dataset.copyBound = '1';
+    body.addEventListener('click', (ev) => {
+      const btn = ev.target.closest('[data-copy]');
+      if (!btn) return;
+      navigator.clipboard.writeText(btn.dataset.copy);
+      toast('URL copiada', 'success');
+    });
+  }
+
   $('#ws-cfg-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const config = {};
-    $$('[data-cfg]', body).forEach(inp => { config[inp.dataset.cfg] = inp.value.trim() || null; });
+    $$('[data-cfg]', body).forEach(inp => {
+      const v = inp.value.trim();
+      // Segredo em branco = manter o salvo → não envia o campo.
+      if (inp.dataset.secret && !v) return;
+      config[inp.dataset.cfg] = v || null;
+    });
+    const clear_secrets = $$('[data-clear-secret]', body).filter(cb => cb.checked).map(cb => cb.dataset.clearSecret);
     config.event_catalog = serializeEventCatalog();
 
     // Append visibility config
@@ -1991,8 +2057,10 @@ function renderWsConfigForm(body, w, cfg, presets, dashResolved, moduleKeys, mod
     const btn = e.target.querySelector('button[type="submit"]');
     btn.disabled = true; btn.textContent = 'Salvando…';
     try {
-      await api('PATCH', `/admin/workspaces/${w.id}`, { config });
+      await api('PATCH', `/admin/workspaces/${w.id}`, { config, clear_secrets });
       toast('Configurações salvas.', 'success');
+      // Recarrega para refletir segredos salvos (••••last4) e URLs geradas.
+      loadWorkspaceDetail(w.id);
       btn.disabled = false; btn.textContent = 'Salvar configurações';
     } catch (err) {
       toast(err.message, 'error');
@@ -2596,6 +2664,17 @@ async function loadPlatform() {
       </div>
 
       <div class="card p-6 mt-5">
+        <div class="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <h3 class="display text-[15px] text-brand-navy">Criptografia de credenciais</h3>
+            <p class="text-[13px] text-brand-gray mt-0.5">Credenciais novas já são gravadas cifradas. Use uma vez para cifrar as que foram salvas antes desta versão. Pode repetir sem risco.</p>
+          </div>
+          <button type="button" class="btn btn-secondary" id="pf-encrypt-existing" style="white-space: nowrap;">Cifrar credenciais existentes</button>
+        </div>
+        <div id="pf-encrypt-result" class="text-[13px] mt-3 hidden"></div>
+      </div>
+
+      <div class="card p-6 mt-5">
         <div class="flex items-start justify-between gap-4 flex-wrap mb-4">
           <div>
             <h3 class="display text-[15px] text-brand-navy">Sincronização de dados</h3>
@@ -2618,10 +2697,8 @@ async function loadPlatform() {
               <div class="text-[13px] font-semibold text-brand-navy">Header de autenticação dos 3 endpoints</div>
               <div class="mt-2 flex gap-2 items-center">
                 <code class="mono text-[12px] bg-white border border-brand-border rounded px-2 py-1 flex-1 min-w-0 truncate">x-sync-secret: <span id="sync-secret-display">••••••••••••••••</span></code>
-                <button type="button" id="sync-secret-toggle" class="btn btn-secondary btn-sm" style="white-space:nowrap">Mostrar</button>
-                <button type="button" id="sync-secret-copy" class="btn btn-secondary btn-sm" style="white-space:nowrap">Copiar</button>
               </div>
-              <p class="help mt-2">O mesmo valor é usado nos 3 jobs. Mantenha em segredo — quem tem ele consegue disparar sync na sua conta.</p>
+              <p class="help mt-2">Por segurança o valor não é exibido aqui: copie o <span class="mono">SYNC_SECRET</span> direto das variáveis do projeto no Cloudflare Pages. Quem tem esse valor consegue disparar sync na sua conta.</p>
             </div>
           </div>
         </div>
@@ -2686,6 +2763,23 @@ async function loadPlatform() {
     btn.innerHTML = orig;
   });
 
+  $('#pf-encrypt-existing')?.addEventListener('click', async () => {
+    const btn = $('#pf-encrypt-existing');
+    const out = $('#pf-encrypt-result');
+    btn.disabled = true;
+    try {
+      const res = await api('POST', '/admin/secrets/encrypt-existing', {});
+      out.classList.remove('hidden');
+      out.innerHTML = `<span style="color:#2e7c6c">✓ ${Number(res.workspace_values) || 0} credenciais de workspaces e ${Number(res.platform_values) || 0} da plataforma cifradas agora.</span>`;
+      toast('Credenciais cifradas.', 'success');
+    } catch (err) {
+      out.classList.remove('hidden');
+      out.innerHTML = `<span style="color:var(--brand-coral)">Erro: ${escapeHtml(err.message)}</span>`;
+      toast(err.message, 'error');
+    }
+    btn.disabled = false;
+  });
+
   // Carrega informações dos crons (URLs + secret + last_run de cada plataforma)
   // pra montar os 3 cards pré-prontos pra colar no cronjob.org.
   let cronInfo = null;
@@ -2696,26 +2790,10 @@ async function loadPlatform() {
   }
 
   if (cronInfo) {
-    // Toggle do secret (oculto por default)
-    let secretVisible = false;
-    const secretEl = $('#sync-secret-display');
-    const toggleBtn = $('#sync-secret-toggle');
-    const copyBtn = $('#sync-secret-copy');
-    const SECRET = cronInfo.sync_secret || '';
-    if (!SECRET) {
-      secretEl.textContent = '(SYNC_SECRET não configurado nas env vars do Pages)';
-      toggleBtn.disabled = true;
-      copyBtn.disabled = true;
+    // O valor do SYNC_SECRET nunca vem do servidor — só se está configurado.
+    if (!cronInfo.sync_secret_set) {
+      $('#sync-secret-display').textContent = '(SYNC_SECRET não configurado nas env vars do Pages)';
     }
-    toggleBtn.addEventListener('click', () => {
-      secretVisible = !secretVisible;
-      secretEl.textContent = secretVisible ? SECRET : '••••••••••••••••';
-      toggleBtn.textContent = secretVisible ? 'Ocultar' : 'Mostrar';
-    });
-    copyBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(SECRET);
-      toast('SYNC_SECRET copiado.', 'success');
-    });
 
     // Cards dos endpoints
     function fmtRel(unixSec) {

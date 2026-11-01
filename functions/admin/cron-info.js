@@ -1,13 +1,12 @@
 // GET /admin/cron-info
 //
 // Devolve o que o admin precisa pra cadastrar os crons no cronjob.org (ou
-// outro provider externo): URL canônica de cada endpoint de sync, o
-// SYNC_SECRET real (apenas para usina_admin), e a última execução
-// registrada em sync_log de cada plataforma.
+// outro provider externo): URL canônica de cada endpoint de sync, SE o
+// SYNC_SECRET está configurado, e a última execução registrada em sync_log
+// de cada plataforma.
 //
-// SECURITY: o SYNC_SECRET só é retornado quando o caller é usina_admin
-// autenticado por cookie. Qualquer outro role / 401 derruba a chamada antes
-// de chegar até aqui (requireAuth gate).
+// SECURITY: o valor do SYNC_SECRET nunca sai do servidor (Fase 0, S1). Quem
+// cadastra o cron copia o valor direto das variáveis do Pages.
 
 import { requireAuth, jsonError, jsonOk } from '../_lib/auth.js';
 
@@ -89,7 +88,6 @@ export async function onRequestGet(context) {
   }));
 
   return jsonOk({
-    sync_secret: context.env.SYNC_SECRET || null, // só usina_admin chega até aqui
     sync_secret_set,
     platforms,
     cron_provider: {

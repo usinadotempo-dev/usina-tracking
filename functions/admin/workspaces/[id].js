@@ -1,10 +1,18 @@
 // /admin/workspaces/:id — usina_admin only
-// GET    → workspace + config + domains
-// PATCH  → update workspace (name, slug) and/or its config (any of the integration fields)
+// GET    → workspace + config + domains. Secret fields are NEVER echoed:
+//          `config` carries them as null and `secrets` tells {set, last4}.
+// PATCH  → update workspace (name, slug) and/or its config (any of the integration fields).
+//          Secret fields: non-empty value → encrypted and saved; empty/null → keep current;
+//          `clear_secrets: [field, ...]` → remove.
 // DELETE → only if no purchase_log / event_log / sessions reference it (otherwise 409)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
 import { BUSINESS_TYPES, MODULE_KEYS, MODULE_LABELS, resolveDashConfig } from '../../_lib/dash-presets.js';
+import { WORKSPACE_SECRET_FIELDS, encryptSecret, hasSecretsKey, redactWorkspaceRow } from '../../_lib/secrets.js';
+
+const SECRET_FIELDS = new Set(WORKSPACE_SECRET_FIELDS);
+const SALES_WEBHOOK_SLUG_FIELDS = ['hotmart_webhook_slug', 'kiwify_webhook_slug', 'eduzz_webhook_slug'];
+const KOMMO_SUBDOMAIN_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
 const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/;
 
@@ -26,6 +34,8 @@ const CONFIG_FIELDS = [
   'kommo_subdomain', 'kommo_integration_id', 'kommo_secret_key', 'kommo_long_lived_token',
   'kommo_pipeline_id', 'kommo_stage_id', 'kommo_responsible_user_id',
   'kommo_tags', 'kommo_won_stage_id',
+  // Plataformas de venda — segredo de verificação do webhook (por workspace)
+  'hotmart_hottok', 'kiwify_webhook_token', 'eduzz_webhook_secret',
 ];
 
 // Campos que são INTEIROS (caem como TEXT por default no PATCH genérico — aqui
@@ -48,9 +58,11 @@ export async function onRequestGet(context) {
   `).bind(id).first();
   if (!workspace) return jsonError('Not found', 404);
 
-  const config = await context.env.DB.prepare(
+  const row = await context.env.DB.prepare(
     'SELECT * FROM workspace_config WHERE workspace_id = ?'
   ).bind(id).first() || { workspace_id: id };
+  // Nunca devolve credenciais ao navegador — só presença + últimos 4.
+  const { config, secrets } = await redactWorkspaceRow(context.env, row);
 
   const { results: domains } = await context.env.DB.prepare(
     'SELECT domain, is_default, verified_at, created_at FROM workspace_domains WHERE workspace_id = ? ORDER BY domain'
@@ -60,7 +72,7 @@ export async function onRequestGet(context) {
   const dash = resolveDashConfig(config.business_type, config.dash_modules);
 
   return jsonOk({
-    workspace, config, domains: domains || [],
+    workspace, config, secrets, domains: domains || [],
     dash,
     presets: Object.fromEntries(
       Object.entries(BUSINESS_TYPES).map(([k, v]) => [k, { label: v.label, description: v.description, modules: v.modules, variants: v.variants }])
@@ -109,34 +121,67 @@ export async function onRequestPatch(context) {
 
   // Workspace config fields (any subset)
   const cfg = body.config && typeof body.config === 'object' ? body.config : null;
-  if (cfg) {
+  const clearSecrets = Array.isArray(body.clear_secrets)
+    ? body.clear_secrets.filter((f) => SECRET_FIELDS.has(f))
+    : [];
+  if (cfg || clearSecrets.length) {
+    const input = cfg || {};
+
+    if (input.kommo_subdomain && !KOMMO_SUBDOMAIN_RE.test(String(input.kommo_subdomain).trim().toLowerCase())) {
+      return jsonError('Subdomínio Kommo inválido (use só letras, números e hífen).', 400);
+    }
+    const hasNewSecret = WORKSPACE_SECRET_FIELDS.some((f) => input[f]);
+    if (hasNewSecret && !(await hasSecretsKey(context.env))) {
+      return jsonError('SECRETS_KEY não configurada nas variáveis do Pages — credenciais não podem ser salvas.', 500);
+    }
+
+    const existing = await context.env.DB.prepare(
+      `SELECT kommo_webhook_slug, ${SALES_WEBHOOK_SLUG_FIELDS.join(', ')} FROM workspace_config WHERE workspace_id = ?`
+    ).bind(id).first();
+
     // Auto-gera webhook_slug se o admin acabou de habilitar Kommo (token presente)
     // e a coluna ainda está vazia. Slug é UUID v4 — fica numa URL secreta tipo
     // /webhook/kommo/<slug> que a Kommo precisa cadastrar pra entregar webhooks.
-    if (cfg.kommo_long_lived_token) {
-      const existingSlug = await context.env.DB.prepare(
-        'SELECT kommo_webhook_slug FROM workspace_config WHERE workspace_id = ?'
-      ).bind(id).first();
-      if (!existingSlug?.kommo_webhook_slug) {
-        cfg.kommo_webhook_slug = crypto.randomUUID();
-      }
+    const autoSlugs = {};
+    if (input.kommo_long_lived_token && !existing?.kommo_webhook_slug) {
+      autoSlugs.kommo_webhook_slug = crypto.randomUUID();
+    }
+    // Slugs de webhook de venda: um por workspace (S3), gerados uma vez.
+    for (const f of SALES_WEBHOOK_SLUG_FIELDS) {
+      if (!existing?.[f]) autoSlugs[f] = crypto.randomUUID();
     }
 
     const cols = [];
     const vals = [];
-    const allowed = new Set([...CONFIG_FIELDS, 'kommo_webhook_slug']); // slug entra via auto-gen, não via input
-    for (const f of allowed) {
-      if (cfg[f] !== undefined) {
+    for (const f of CONFIG_FIELDS) {
+      if (input[f] === undefined) continue;
+      if (SECRET_FIELDS.has(f)) {
+        // Segredo em branco = manter o atual; remoção só via clear_secrets.
+        if (input[f] === null || String(input[f]).trim() === '') continue;
         cols.push(f);
-        if (cfg[f] === null || cfg[f] === '') {
-          vals.push(null);
-        } else if (INT_CONFIG_FIELDS.has(f)) {
-          const n = parseInt(cfg[f], 10);
-          vals.push(Number.isNaN(n) ? null : n);
-        } else {
-          vals.push(String(cfg[f]));
-        }
+        vals.push(await encryptSecret(context.env, String(input[f]).trim()));
+        continue;
       }
+      cols.push(f);
+      if (input[f] === null || input[f] === '') {
+        vals.push(null);
+      } else if (INT_CONFIG_FIELDS.has(f)) {
+        const n = parseInt(input[f], 10);
+        vals.push(Number.isNaN(n) ? null : n);
+      } else if (f === 'kommo_subdomain') {
+        vals.push(String(input[f]).trim().toLowerCase());
+      } else {
+        vals.push(String(input[f]));
+      }
+    }
+    for (const f of clearSecrets) {
+      if (cols.includes(f)) continue;
+      cols.push(f);
+      vals.push(null);
+    }
+    for (const [f, v] of Object.entries(autoSlugs)) {
+      cols.push(f);
+      vals.push(v);
     }
     if (cols.length) {
       // Make sure the row exists (workspaces created via this admin always init it,

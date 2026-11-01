@@ -18,15 +18,17 @@
 
 import { requireAuth, jsonError, jsonOk } from '../../../_lib/auth.js';
 import { createKommoClient } from '../../../_lib/kommo.js';
+import { decryptWorkspaceRow } from '../../../_lib/secrets.js';
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
   if (auth instanceof Response) return auth;
   const id = context.params.id;
 
-  const cfg = await context.env.DB.prepare(
+  const row = await context.env.DB.prepare(
     'SELECT kommo_subdomain, kommo_long_lived_token FROM workspace_config WHERE workspace_id = ?'
   ).bind(id).first();
+  const cfg = row ? await decryptWorkspaceRow(context.env, row) : null;
 
   if (!cfg?.kommo_subdomain || !cfg?.kommo_long_lived_token) {
     return jsonError('Salve primeiro o subdomínio + token de longa duração da Kommo neste workspace.', 400);

@@ -21,6 +21,7 @@ import { meetingValue } from './booking-actions.js';
 import { uploadGoogleAdsConversion } from './google-ads-upload.js';
 import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from './event-catalog.js';
 import { logEventRow } from './event-log.js';
+import { decryptWorkspaceRow } from './secrets.js';
 
 const USINA_WS = 'usina-vendas';
 
@@ -47,9 +48,10 @@ async function resolveWsConfig(env, booking) {
 
   let cfg = {};
   try {
-    cfg = await env.DB.prepare(
+    const row = await env.DB.prepare(
       'SELECT * FROM workspace_config WHERE workspace_id = ? LIMIT 1'
-    ).bind(workspaceId).first() || {};
+    ).bind(workspaceId).first();
+    cfg = row ? await decryptWorkspaceRow(env, row) : {};
   } catch { cfg = {}; }
   return { workspaceId, cfg };
 }

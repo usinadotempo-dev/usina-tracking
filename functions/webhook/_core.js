@@ -44,9 +44,29 @@ import { logEventRow } from '../_lib/event-log.js';
 // -----------------------------------------------------------------------------
 // Main entry point — each platform adapter calls this with a normalized object.
 // -----------------------------------------------------------------------------
-export async function processPurchase({ parsed, env, context }) {
+//
+// slugWorkspaceId: workspace identified by the per-workspace webhook URL (null
+//   on the legacy global slug). When set, it is authoritative: a trk that
+//   belongs to ANOTHER workspace is ignored, so one client can't inject
+//   purchases into another's pixel/GA4/Google Ads.
+// verify(cfg): adapter-supplied signature check against the workspace config.
+//   Returns true / false / null (no secret configured). false → rejected.
+export async function processPurchase({ parsed, env, context, slugWorkspaceId = null, verify = null }) {
   // Per-product integration config (may be null if product isn't registered).
   const productConfig = PRODUCTS_CONFIG[parsed.platform]?.[parsed.productId] || null;
+
+  // Idempotency (S6): platforms retry webhooks; a transaction already logged
+  // must not fan out to Meta/GA4/Google Ads again.
+  if (parsed.transactionId && env.DB) {
+    try {
+      const dup = await env.DB.prepare(
+        'SELECT event_id FROM purchase_log WHERE transaction_id = ? LIMIT 1'
+      ).bind(parsed.transactionId).first();
+      if (dup) return { eventId: dup.event_id, handlers: [], duplicate: true };
+    } catch (e) {
+      console.error('D1 duplicate check error:', e.message);
+    }
+  }
 
   // Look up the originating checkout session (fbp, fbc, UTMs, ga_client_id,
   // workspace_id, etc.). The workspace_id was stamped at checkout-session
@@ -63,14 +83,29 @@ export async function processPurchase({ parsed, env, context }) {
     }
   }
 
+  if (slugWorkspaceId && checkoutData.workspace_id && checkoutData.workspace_id !== slugWorkspaceId) {
+    console.warn(`webhook ${parsed.platform}: trk of workspace ${checkoutData.workspace_id} posted to workspace ${slugWorkspaceId} — attribution ignored`);
+    checkoutData = {};
+  }
+
   // Resolve the workspace's outbound config (Meta, GA4, Google Ads, etc.).
-  // No workspace_id on the checkout row → cfg is empty → all integrations
-  // skip with "missing config" but the purchase still lands in purchase_log.
-  const workspaceId = checkoutData.workspace_id || null;
+  // No workspace → cfg is empty → all integrations skip with "missing config"
+  // but the purchase still lands in purchase_log.
+  const workspaceId = slugWorkspaceId || checkoutData.workspace_id || null;
   const cfg = await loadWorkspaceConfig(context, workspaceId);
 
+  if (verify) {
+    const ok = await verify(cfg);
+    if (ok === false) return { rejected: true };
+    if (ok === null) console.warn(`webhook ${parsed.platform}: workspace ${workspaceId || '-'} sem segredo de verificação configurado`);
+  }
+
   const enriched = { ...parsed, productConfig, checkoutData, cfg, workspaceId };
-  const eventId = crypto.randomUUID();
+  // Deterministic event_id when there's a transaction id → Meta dedups even
+  // if two retries race past the duplicate check above.
+  const eventId = parsed.transactionId
+    ? `${parsed.platform}-${parsed.transactionId}`
+    : crypto.randomUUID();
   const eventTime = Math.floor(Date.now() / 1000);
 
   // Fan out to handlers. Each wraps its own errors so one failing handler

@@ -69,6 +69,8 @@ export async function onRequestPatch(context) {
     updates.push('password_hash = ?'); binds.push(hash);
     updates.push('must_change_password = ?'); binds.push(1);
     updates.push('pwd_expires_at = ?'); binds.push(Math.floor(Date.now() / 1000) + PROVISIONAL_TTL_SECS);
+    // Descarta provisória pendente do "esqueci a senha", se houver.
+    updates.push('pending_password_hash = NULL', 'pending_expires_at = NULL', 'pending_issued_at = NULL');
     // Kill all sessions when password changes.
     await context.env.DB.prepare('DELETE FROM app_sessions WHERE user_id = ?').bind(id).run();
   }

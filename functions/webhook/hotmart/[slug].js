@@ -1,8 +1,10 @@
 // -----------------------------------------------------------------------------
 // Hotmart webhook adapter.
 //
-// URL shape: /webhook/hotmart/<HOTMART_WEBHOOK_SLUG>
-// The per-recipient UUID stored in env.HOTMART_WEBHOOK_SLUG gates the endpoint.
+// URL shape: /webhook/hotmart/<slug> — slug per workspace
+// (workspace_config.hotmart_webhook_slug); legacy env.HOTMART_WEBHOOK_SLUG
+// still accepted during the transition (see _utils.js). When the workspace
+// has hotmart_hottok set, the X-HOTMART-HOTTOK header must match.
 //
 // Platform specifics (confirmed against a real PURCHASE_APPROVED webhook):
 //   - Everything is nested under `rawPayload.data`.
@@ -30,16 +32,16 @@
 // -----------------------------------------------------------------------------
 
 import { processPurchase } from '../_core.js';
-import { guardSlug } from '../_utils.js';
+import { resolveSalesWebhook, verifyHotmart, jsonResponse } from '../_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env, params } = context;
 
-  const slugFailure = guardSlug(params.slug, env.HOTMART_WEBHOOK_SLUG);
-  if (slugFailure) return slugFailure;
+  const route = await resolveSalesWebhook(env, 'hotmart', params.slug);
+  if (route.response) return route.response;
 
   try {
-    const rawPayload = await request.json();
+    const rawPayload = JSON.parse(await request.text());
     const body = rawPayload.data || {};
     const eventName = rawPayload.event || '';
 
@@ -96,19 +98,18 @@ export async function onRequestPost(context) {
       platformUtm,
     };
 
-    const result = await processPurchase({ parsed, env, context });
+    const result = await processPurchase({
+      parsed, env, context,
+      slugWorkspaceId: route.workspaceId,
+      verify: (cfg) => verifyHotmart(request, rawPayload, cfg.hotmart_hottok),
+    });
+    if (result.rejected) return jsonResponse({ error: 'invalid signature' }, 401);
 
-    return new Response(
-      JSON.stringify({ ok: true, event_id: result.eventId }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ ok: true, event_id: result.eventId, duplicate: !!result.duplicate });
 
   } catch (err) {
     console.error('Hotmart webhook error:', err.message);
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ error: 'internal error' }, 500);
   }
 }
 

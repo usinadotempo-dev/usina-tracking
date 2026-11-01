@@ -1,16 +1,28 @@
 // Platform-level config: keys/credentials that belong to the Usina (not to a
 // tenant or workspace). Stored in the `platform_config` key/value table so
-// adding a new key never requires a migration.
+// adding a new key never requires a migration. Credential keys
+// (PLATFORM_SECRET_KEYS) are stored encrypted and decrypted here on load.
 //
 // Cached on context.data per-request.
 
-export async function loadPlatformConfig(context) {
-  if (context.data?._platformCfg) return context.data._platformCfg;
-  const { results } = await context.env.DB.prepare(
+import { PLATFORM_SECRET_KEYS, encryptSecret, decryptSecret } from './secrets.js';
+
+const SECRET_SET = new Set(PLATFORM_SECRET_KEYS);
+
+async function readAll(env) {
+  const { results } = await env.DB.prepare(
     'SELECT key, value FROM platform_config'
   ).all();
   const cfg = {};
-  for (const r of results || []) cfg[r.key] = r.value;
+  for (const r of results || []) {
+    cfg[r.key] = SECRET_SET.has(r.key) ? await decryptSecret(env, r.value) : r.value;
+  }
+  return cfg;
+}
+
+export async function loadPlatformConfig(context) {
+  if (context.data?._platformCfg) return context.data._platformCfg;
+  const cfg = await readAll(context.env);
   if (context.data) context.data._platformCfg = cfg;
   return cfg;
 }
@@ -18,12 +30,7 @@ export async function loadPlatformConfig(context) {
 // Variant for non-Pages Function callers (e.g. cron handlers) that don't have
 // a context object. Returns the same shape.
 export async function loadPlatformConfigFromEnv(env) {
-  const { results } = await env.DB.prepare(
-    'SELECT key, value FROM platform_config'
-  ).all();
-  const cfg = {};
-  for (const r of results || []) cfg[r.key] = r.value;
-  return cfg;
+  return readAll(env);
 }
 
 // UPSERT a single key. Pass null to clear it.
@@ -33,8 +40,9 @@ export async function setPlatformConfigKey(env, key, value) {
     await env.DB.prepare('DELETE FROM platform_config WHERE key = ?').bind(key).run();
     return;
   }
+  const stored = SECRET_SET.has(key) ? await encryptSecret(env, String(value)) : String(value);
   await env.DB.prepare(`
     INSERT INTO platform_config (key, value, updated_at) VALUES (?, ?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-  `).bind(key, String(value), now).run();
+  `).bind(key, stored, now).run();
 }

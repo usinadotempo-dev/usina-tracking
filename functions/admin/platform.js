@@ -4,6 +4,7 @@
 
 import { requireAuth, jsonError, jsonOk } from '../_lib/auth.js';
 import { loadPlatformConfig, setPlatformConfigKey } from '../_lib/platform-config.js';
+import { PLATFORM_SECRET_KEYS, hasSecretsKey } from '../_lib/secrets.js';
 
 const ALLOWED_KEYS = new Set([
   'meta_long_lived_token',
@@ -18,10 +19,7 @@ const ALLOWED_KEYS = new Set([
   'google_ads_login_customer_id',
 ]);
 
-const SECRET_KEYS = new Set([
-  'meta_long_lived_token', 'meta_app_secret',
-  'google_ads_developer_token', 'google_ads_client_secret', 'google_ads_refresh_token',
-]);
+const SECRET_KEYS = new Set(PLATFORM_SECRET_KEYS);
 
 export async function onRequestGet(context) {
   const auth = await requireAuth(context, ['usina_admin']);
@@ -53,6 +51,10 @@ export async function onRequestPatch(context) {
   catch { return jsonError('Invalid JSON', 400); }
 
   const updates = body && typeof body === 'object' ? body : {};
+  const touchesSecret = Object.keys(updates).some((k) => SECRET_KEYS.has(k) && updates[k]);
+  if (touchesSecret && !(await hasSecretsKey(context.env))) {
+    return jsonError('SECRETS_KEY não configurada nas variáveis do Pages — credenciais não podem ser salvas.', 500);
+  }
   const applied = [];
   for (const k of Object.keys(updates)) {
     if (!ALLOWED_KEYS.has(k)) continue;

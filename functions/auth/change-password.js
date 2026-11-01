@@ -47,7 +47,9 @@ export async function onRequestPost(context) {
   const now = Math.floor(Date.now() / 1000);
   await env.DB.prepare(`
     UPDATE app_users
-       SET password_hash = ?, must_change_password = 0, pwd_expires_at = NULL, updated_at = ?
+       SET password_hash = ?, must_change_password = 0, pwd_expires_at = NULL,
+           pending_password_hash = NULL, pending_expires_at = NULL, pending_issued_at = NULL,
+           updated_at = ?
      WHERE id = ?
   `).bind(hash, now, row.id).run();
 

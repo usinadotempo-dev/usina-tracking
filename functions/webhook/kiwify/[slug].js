@@ -1,13 +1,14 @@
 // -----------------------------------------------------------------------------
 // Kiwify webhook adapter.
 //
-// URL shape: /webhook/kiwify/<KIWIFY_WEBHOOK_SLUG>
-// The per-recipient UUID stored in env.KIWIFY_WEBHOOK_SLUG gates the endpoint.
+// URL shape: /webhook/kiwify/<slug> — slug per workspace
+// (workspace_config.kiwify_webhook_slug); legacy env.KIWIFY_WEBHOOK_SLUG
+// still accepted during the transition (see _utils.js).
 //
 // Platform specifics (confirmed against a real order_approved webhook):
 //   - Whole payload is wrapped under `rawPayload.order`. Root also carries
-//     `url` (destination URL) and `signature` (40-char HMAC-SHA1 hex,
-//     deliberately ignored here — see plan).
+//     `url` (destination URL) and `signature` (40-char HMAC-SHA1 hex),
+//     verified against workspace_config.kiwify_webhook_token when set.
 //   - `trk` arrives as `order.TrackingParameters.sck`. `src`, `s1`, `s2`,
 //     `s3` are additional tracking slots Kiwify exposes; we ignore them.
 //   - `order_id` is a UUID, not a prefixed string.
@@ -22,16 +23,17 @@
 // -----------------------------------------------------------------------------
 
 import { processPurchase } from '../_core.js';
-import { guardSlug } from '../_utils.js';
+import { resolveSalesWebhook, verifyKiwify, jsonResponse } from '../_utils.js';
 
 export async function onRequestPost(context) {
   const { request, env, params } = context;
 
-  const slugFailure = guardSlug(params.slug, env.KIWIFY_WEBHOOK_SLUG);
-  if (slugFailure) return slugFailure;
+  const route = await resolveSalesWebhook(env, 'kiwify', params.slug);
+  if (route.response) return route.response;
 
   try {
-    const rawPayload = await request.json();
+    const rawBody = await request.text();
+    const rawPayload = JSON.parse(rawBody);
     const body = rawPayload.order || {};
 
     // Only process approved orders. subscription renewals fire the same
@@ -90,18 +92,17 @@ export async function onRequestPost(context) {
       },
     };
 
-    const result = await processPurchase({ parsed, env, context });
+    const result = await processPurchase({
+      parsed, env, context,
+      slugWorkspaceId: route.workspaceId,
+      verify: (cfg) => verifyKiwify(request, rawBody, rawPayload, cfg.kiwify_webhook_token),
+    });
+    if (result.rejected) return jsonResponse({ error: 'invalid signature' }, 401);
 
-    return new Response(
-      JSON.stringify({ ok: true, event_id: result.eventId }),
-      { status: 200, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ ok: true, event_id: result.eventId, duplicate: !!result.duplicate });
 
   } catch (err) {
     console.error('Kiwify webhook error:', err.message);
-    return new Response(
-      JSON.stringify({ error: err.message }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } }
-    );
+    return jsonResponse({ error: 'internal error' }, 500);
   }
 }
