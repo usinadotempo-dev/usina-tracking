@@ -111,7 +111,7 @@ Pages Functions não rodam cron, consumidores de fila, Workflows nem Containers 
 | Sprint | Entrega |
 |---|---|
 | 1.1 | Build do front-end (Vite + Tailwind compilado) com deploy no Pages; CSP sem `unsafe-eval`; domínio `app.usinadotempo.com.br` — **código escrito**: `package.json`, `vite.config.js`, `build/copy-static.mjs`, app React em `web/` (login, esqueci a senha, troca de senha, início), CSP estrita em `/app/*`, host `app.` reconhecido |
-| 1.2 | Papéis `tenant_owner` / `tenant_manager` / `tenant_viewer` + `requirePermission`; portal do cliente (usuários e integrações dos próprios workspaces, segredos redigidos) |
+| 1.2 | Papéis `tenant_owner` / `tenant_manager` / `tenant_viewer` + `requirePermission`; portal do cliente (usuários e integrações dos próprios workspaces, segredos redigidos) — **código escrito**: coluna `app_users.tenant_role` (migration 0043; `role` mantido para compatibilidade), matriz `PERMISSIONS`/`can()`/`requireTenantPermission` em `_lib/auth.js`, owner vê todos os workspaces do tenant, rotas `/portal/users`, `/portal/users/:id`, `/portal/workspaces/:id/integrations` (lista `PORTAL_CONFIG_FIELDS` — sem IDs de conta de anúncio/Google Ads), gravação compartilhada em `_lib/workspace-config-write.js`, telas Equipe e Integrações no app, papel no cliente no admin |
 | 1.3 | R2: logo e cor por cliente, avatar por usuário |
 | 1.4 | Planos + módulos contratados + cobrança Asaas (ativa só com pagamento confirmado; trial; limites) |
 | 1.5 | Worker `usina-jobs`: crons nativos substituem cron-job.org; base de Queues/Workflows para o Estúdio |

@@ -107,7 +107,7 @@ export async function lookupSession(env, token) {
   const row = await env.DB.prepare(`
     SELECT s.user_id, s.expires_at,
            u.email, u.role, u.name, u.tenant_id, u.is_active,
-           u.must_change_password,
+           u.must_change_password, u.tenant_role,
            t.is_active AS tenant_active
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
@@ -124,9 +124,48 @@ export async function lookupSession(env, token) {
     role: row.role,
     name: row.name,
     tenant_id: row.tenant_id,
+    tenant_role: row.role === 'usina_admin' ? null : (row.tenant_role || 'viewer'),
     expires_at: row.expires_at,
     must_change_password: !!row.must_change_password,
   };
+}
+
+// ---- Papéis e permissões (Fase 1, sprint 1.2) -------------------------------
+// role 'usina_admin' = equipe da Usina; role 'tenant_viewer' = membro de um
+// cliente, cujo poder vem de tenant_role (owner | manager | viewer).
+
+export function effectiveRole(user) {
+  if (!user) return null;
+  if (user.role === 'usina_admin') return 'usina_admin';
+  return `tenant_${user.tenant_role || 'viewer'}`;
+}
+
+// Matriz única de permissões — toda checagem de servidor passa por aqui.
+export const PERMISSIONS = {
+  'tenant.users.manage': ['tenant_owner'],
+  'tenant.integrations.manage': ['tenant_owner', 'tenant_manager'],
+};
+
+// Papéis que o owner pode atribuir no portal. 'owner' só a Usina define.
+export const ASSIGNABLE_TENANT_ROLES = ['manager', 'viewer'];
+export const TENANT_ROLES = ['owner', 'manager', 'viewer'];
+
+export function can(user, permission) {
+  const role = effectiveRole(user);
+  if (role === 'usina_admin') return true;
+  return (PERMISSIONS[permission] || []).includes(role);
+}
+
+// Como requireAuth, mas para as rotas do portal do cliente: exige um membro
+// de cliente (não a equipe da Usina — essa usa /admin) com a permissão dada.
+export async function requireTenantPermission(context, permission) {
+  const auth = await requireAuth(context);
+  if (auth instanceof Response) return auth;
+  if (auth.user.role === 'usina_admin' || !auth.user.tenant_id) {
+    return jsonError('Use o painel administrativo para gerenciar clientes.', 403);
+  }
+  if (!can(auth.user, permission)) return jsonError('Forbidden', 403);
+  return auth;
 }
 
 // ---- Cookie helpers ---------------------------------------------------------
@@ -220,6 +259,19 @@ export async function loadUserWorkspaces(env, user) {
         LEFT JOIN workspace_config c ON c.workspace_id = w.id
        ORDER BY t.name, w.name
     `).all();
+    rows = results || [];
+  } else if (user.role === 'tenant_viewer' && user.tenant_role === 'owner') {
+    // Owner do cliente vê todos os workspaces do próprio tenant.
+    const { results } = await env.DB.prepare(`
+      SELECT w.id, w.tenant_id, w.slug, w.name,
+             t.slug AS tenant_slug, t.name AS tenant_name,
+             c.business_type, c.dash_modules
+        FROM workspaces w
+        JOIN tenants t ON t.id = w.tenant_id
+        LEFT JOIN workspace_config c ON c.workspace_id = w.id
+       WHERE w.tenant_id = ?
+       ORDER BY w.name
+    `).bind(user.tenant_id).all();
     rows = results || [];
   } else if (user.role === 'tenant_viewer') {
     const { results } = await env.DB.prepare(`

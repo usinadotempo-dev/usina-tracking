@@ -8,7 +8,7 @@
 //   - tenant_viewer: tenant_id required, workspace_ids[] = which of that
 //     tenant's workspaces this user can read
 
-import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk } from '../_lib/auth.js';
+import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk, TENANT_ROLES } from '../_lib/auth.js';
 import { sendProvisionalPasswordEmail } from '../_lib/account-emails.js';
 
 const PROVISIONAL_TTL_SECS = 3600; // 1 hora
@@ -24,7 +24,7 @@ export async function onRequestGet(context) {
   const binds = tenantId ? [tenantId] : [];
 
   const { results } = await context.env.DB.prepare(`
-    SELECT u.id, u.email, u.role, u.name, u.tenant_id, u.is_active, u.last_login_at, u.created_at,
+    SELECT u.id, u.email, u.role, u.tenant_role, u.name, u.tenant_id, u.is_active, u.last_login_at, u.created_at,
            t.name AS tenant_name, t.slug AS tenant_slug,
            (SELECT COUNT(*) FROM user_workspaces uw WHERE uw.user_id = u.id) AS workspace_count
       FROM app_users u
@@ -48,6 +48,10 @@ export async function onRequestPost(context) {
   const name = (body.name || '').toString().trim() || null;
   const tenantId = body.tenant_id ? String(body.tenant_id) : null;
   const workspaceIds = Array.isArray(body.workspace_ids) ? body.workspace_ids.map(String) : [];
+  const tenantRole = String(body.tenant_role || 'viewer');
+  if (role === 'tenant_viewer' && !TENANT_ROLES.includes(tenantRole)) {
+    return jsonError('tenant_role must be owner, manager or viewer', 400);
+  }
 
   if (!email) return jsonError('email is required', 400);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return jsonError('Invalid email', 400);
@@ -80,10 +84,11 @@ export async function onRequestPost(context) {
   const provisional = generateProvisionalPassword();
   const hash = await hashPassword(provisional);
   await context.env.DB.prepare(`
-    INSERT INTO app_users (id, email, password_hash, role, name, tenant_id, is_active,
+    INSERT INTO app_users (id, email, password_hash, role, tenant_role, name, tenant_id, is_active,
                            must_change_password, pwd_expires_at, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
-  `).bind(id, email, hash, role, name, role === 'usina_admin' ? null : tenantId,
+    VALUES (?, ?, ?, ?, ?, ?, ?, 1, 1, ?, ?, ?)
+  `).bind(id, email, hash, role, role === 'usina_admin' ? 'viewer' : tenantRole, name,
+          role === 'usina_admin' ? null : tenantId,
           now + PROVISIONAL_TTL_SECS, now, now).run();
 
   if (role === 'tenant_viewer' && workspaceIds.length) {

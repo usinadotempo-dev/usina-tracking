@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 // Campo de senha com botão de mostrar/ocultar (ícones em SVG inline — sem CDN,
 // compatível com a CSP estrita do /app).
-export default function PasswordInput({ id, value, onChange, autoComplete, required = true, minLength }) {
+export default function PasswordInput({ id, value, onChange, autoComplete, required = true, minLength, placeholder }) {
   const [visible, setVisible] = useState(false);
   return (
     <div className="relative">
@@ -12,6 +12,7 @@ export default function PasswordInput({ id, value, onChange, autoComplete, requi
         required={required}
         minLength={minLength}
         autoComplete={autoComplete}
+        placeholder={placeholder}
         className="input pr-11"
         value={value}
         onChange={onChange}

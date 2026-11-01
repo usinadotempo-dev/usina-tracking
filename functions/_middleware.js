@@ -106,7 +106,8 @@ function isPrivatePath(pathname) {
 // (curl, cron) passa — esses não carregam o cookie de sessão de ninguém.
 function crossOriginWrite(request, url) {
   if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') return false;
-  if (!url.pathname.startsWith('/admin') && !url.pathname.startsWith('/auth/')) return false;
+  if (!url.pathname.startsWith('/admin') && !url.pathname.startsWith('/auth/')
+      && !url.pathname.startsWith('/portal/')) return false;
   const origin = request.headers.get('origin');
   if (!origin) return false;
   try { return new URL(origin).host !== url.host; } catch { return true; }
@@ -167,6 +168,7 @@ export async function onRequest(context) {
     && !url.pathname.startsWith('/admin')
     && !url.pathname.startsWith('/dash')
     && !url.pathname.startsWith('/app')
+    && !url.pathname.startsWith('/portal')
     && !url.pathname.startsWith('/setup');
 
   // Don't set first-party tracking cookies on platform hosts (admin/tenant dashboards).

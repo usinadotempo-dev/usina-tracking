@@ -2271,6 +2271,13 @@ async function loadUsers() {
   }
 }
 
+// Papel do membro dentro do cliente (Fase 1, 1.2).
+const TENANT_ROLE_LABEL = { owner: 'responsável', manager: 'gestor', viewer: 'leitura' };
+function tenantRoleOptions(selected = 'viewer') {
+  return Object.entries(TENANT_ROLE_LABEL)
+    .map(([k, v]) => `<option value="${k}" ${k === selected ? 'selected' : ''}>${v}</option>`).join('');
+}
+
 function renderUsersTable(users) {
   const tbl = $('#users-table');
   if (!users.length) {
@@ -2300,7 +2307,7 @@ function renderUsersTable(users) {
                 </div>
               </div>
             </td>
-            <td>${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : '<span class="badge badge-viewer">viewer</span>'}</td>
+            <td>${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : `<span class="badge badge-viewer">${TENANT_ROLE_LABEL[u.tenant_role] || 'leitura'}</span>`}</td>
             <td>${u.tenant_name ? `<span class="badge badge-tenant">${escapeHtml(u.tenant_name)}</span>` : '<span class="text-brand-gray">—</span>'}</td>
             <td><span class="mono text-[13px]">${u.workspace_count}</span></td>
             <td class="text-brand-gray text-[13px]">${u.last_login_at ? fmtDate(u.last_login_at) : '<span class="text-brand-gray/60">nunca</span>'}</td>
@@ -2336,6 +2343,11 @@ function openUserForm() {
           </select>
         </div>
       </div>
+      <div id="us-trole-wrap">
+        <label class="label">Papel no cliente</label>
+        <select id="us-trole" class="select">${tenantRoleOptions('viewer')}</select>
+        <p class="help">Responsável: gerencia a equipe e as integrações. Gestor: só integrações. Leitura: só dashboard.</p>
+      </div>
       <div>
         <label class="label">Nome</label>
         <input id="us-name" class="input" placeholder="Nome completo">
@@ -2366,6 +2378,7 @@ function openUserForm() {
   function refreshRoleUI() {
     const isViewer = $('#us-role').value === 'tenant_viewer';
     $('#us-tenant-wrap').classList.toggle('hidden', !isViewer);
+    $('#us-trole-wrap').classList.toggle('hidden', !isViewer);
     $('#us-workspaces-wrap').classList.toggle('hidden', !isViewer);
   }
   $('#us-role').addEventListener('change', refreshRoleUI);
@@ -2404,6 +2417,7 @@ function openUserForm() {
       const workspace_ids = $$('input[name="us-ws"]:checked').map(i => i.value);
       payload.tenant_id = tenant_id;
       payload.workspace_ids = workspace_ids;
+      payload.tenant_role = $('#us-trole').value;
     }
     const btn = $('#us-save'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {
@@ -2471,7 +2485,7 @@ async function openUserDetail(id) {
         <div class="text-[12.5px] text-brand-gray mono">${escapeHtml(u.email)}</div>
       </div>
       <div class="ml-auto">
-        ${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : `<span class="badge badge-viewer">viewer · ${escapeHtml(u.tenant_name || '')}</span>`}
+        ${u.role === 'usina_admin' ? '<span class="badge badge-admin">admin Usina</span>' : `<span class="badge badge-viewer">${TENANT_ROLE_LABEL[u.tenant_role] || 'leitura'} · ${escapeHtml(u.tenant_name || '')}</span>`}
       </div>
     </div>
 
@@ -2496,6 +2510,11 @@ async function openUserDetail(id) {
         <p class="help">Encerra todas as sessões ativas desse usuário.</p>
       </div>
       ${u.role === 'tenant_viewer' ? `
+        <div>
+          <label class="label">Papel no cliente</label>
+          <select id="ue-trole" class="select">${tenantRoleOptions(u.tenant_role || 'viewer')}</select>
+          <p class="help">Responsável vê todos os workspaces do cliente, gerencia a equipe e as integrações.</p>
+        </div>
         <div>
           <label class="label">Workspaces visíveis</label>
           <div class="border border-brand-border rounded-lg p-3 max-h-52 overflow-y-auto space-y-1.5 text-sm">
@@ -2543,6 +2562,7 @@ async function openUserDetail(id) {
     };
     if (u.role === 'tenant_viewer') {
       payload.workspace_ids = $$('input[name="ue-ws"]:checked').map(i => i.value);
+      payload.tenant_role = $('#ue-trole').value;
     }
     const btn = $('#ue-save'); btn.disabled = true; btn.textContent = 'Salvando…';
     try {

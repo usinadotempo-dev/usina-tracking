@@ -7,7 +7,7 @@
 //   passing workspace_ids replaces the whole set (only for tenant_viewer)
 // DELETE → delete user (and cascade their sessions + assignments)
 
-import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk } from '../../_lib/auth.js';
+import { requireAuth, hashPassword, generateProvisionalPassword, jsonError, jsonOk, TENANT_ROLES } from '../../_lib/auth.js';
 import { sendProvisionalPasswordEmail } from '../../_lib/account-emails.js';
 
 const PROVISIONAL_TTL_SECS = 3600; // 1 hora
@@ -18,7 +18,7 @@ export async function onRequestGet(context) {
   const id = context.params.id;
 
   const user = await context.env.DB.prepare(`
-    SELECT u.id, u.email, u.role, u.name, u.tenant_id, u.is_active, u.last_login_at, u.created_at,
+    SELECT u.id, u.email, u.role, u.tenant_role, u.name, u.tenant_id, u.is_active, u.last_login_at, u.created_at,
            t.name AS tenant_name, t.slug AS tenant_slug
       FROM app_users u
       LEFT JOIN tenants t ON t.id = u.tenant_id
@@ -55,6 +55,11 @@ export async function onRequestPatch(context) {
   const binds = [];
   if (body.name !== undefined) { updates.push('name = ?'); binds.push(String(body.name).trim() || null); }
   if (body.is_active !== undefined) { updates.push('is_active = ?'); binds.push(body.is_active ? 1 : 0); }
+  if (body.tenant_role !== undefined) {
+    if (user.role !== 'tenant_viewer') return jsonError('tenant_role only applies to tenant users', 400);
+    if (!TENANT_ROLES.includes(String(body.tenant_role))) return jsonError('Invalid tenant_role', 400);
+    updates.push('tenant_role = ?'); binds.push(String(body.tenant_role));
+  }
 
   // Redefinição de senha pelo admin: o sistema gera uma provisória, força
   // a troca no próximo acesso e envia por e-mail (mesmo padrão da criação).

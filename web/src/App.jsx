@@ -4,6 +4,8 @@ import Login from './pages/Login.jsx';
 import Forgot from './pages/Forgot.jsx';
 import ChangePassword from './pages/ChangePassword.jsx';
 import Home from './pages/Home.jsx';
+import Team from './pages/Team.jsx';
+import Integrations from './pages/Integrations.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -16,11 +18,15 @@ function Splash() {
 
 // Rotas que exigem sessão. Senha provisória trava tudo na troca de senha —
 // o servidor também bloqueia (requireAuth), aqui é só para a navegação.
-function Protected({ children }) {
+// `permission`: rota do portal do cliente (equipe da Usina usa o /admin).
+function Protected({ children, permission }) {
   const { loading, user } = useAuth();
   if (loading) return <Splash />;
   if (!user) return <Navigate to="/entrar" replace />;
   if (user.must_change_password) return <Navigate to="/trocar-senha" replace />;
+  if (permission && (user.role === 'usina_admin' || !(user.permissions || []).includes(permission))) {
+    return <Navigate to="/" replace />;
+  }
   return <Shell>{children}</Shell>;
 }
 
@@ -34,6 +40,8 @@ export default function App() {
       <Route path="/esqueci-senha" element={<Forgot />} />
       <Route path="/trocar-senha" element={user ? <ChangePassword /> : <Navigate to="/entrar" replace />} />
       <Route path="/" element={<Protected><Home /></Protected>} />
+      <Route path="/equipe" element={<Protected permission="tenant.users.manage"><Team /></Protected>} />
+      <Route path="/integracoes" element={<Protected permission="tenant.integrations.manage"><Integrations /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
