@@ -1,6 +1,7 @@
 // /admin/tenants/:id — usina_admin only
 // GET    → details + workspaces
-// PATCH  → update {name, slug}
+// PATCH  → update {name, slug, is_active} — is_active=false bloqueia o login
+//          de todos os usuários do tenant (Fase 0, S14)
 // DELETE → delete (only if no workspaces, no users)
 
 import { requireAuth, jsonError, jsonOk } from '../../_lib/auth.js';
@@ -14,7 +15,7 @@ export async function onRequestGet(context) {
   const id = context.params.id;
 
   const tenant = await context.env.DB.prepare(
-    'SELECT id, slug, name, created_at, updated_at FROM tenants WHERE id = ?'
+    'SELECT id, slug, name, is_active, created_at, updated_at FROM tenants WHERE id = ?'
   ).bind(id).first();
   if (!tenant) return jsonError('Not found', 404);
 
@@ -50,6 +51,9 @@ export async function onRequestPatch(context) {
     const name = String(body.name).trim();
     if (!name) return jsonError('Invalid name', 400);
     updates.push('name = ?'); binds.push(name);
+  }
+  if (body.is_active !== undefined) {
+    updates.push('is_active = ?'); binds.push(body.is_active ? 1 : 0);
   }
   if (!updates.length) return jsonError('Nothing to update', 400);
 

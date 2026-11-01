@@ -1251,6 +1251,11 @@ function openTenantForm(id = null) {
         <p class="help">Apenas letras minúsculas, números e hífen. Vira o subdomínio do dashboard do tenant.</p>
       </div>
       ${editing ? `
+        <label class="flex items-center gap-2 text-[13px] cursor-pointer">
+          <input type="checkbox" id="tn-active" ${t.is_active === 0 ? '' : 'checked'}>
+          <span><b>Ativo</b> — desmarcado, todos os usuários deste tenant perdem o acesso na hora.</span>
+        </label>` : ''}
+      ${editing ? `
         <div class="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-[#fff7ec] border border-[#f7c87a] text-[13px] text-[#8a6019]">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
           <span>Mudar o slug muda o subdomínio em que o cliente acessa o dashboard. Avise o cliente antes.</span>
@@ -1278,7 +1283,7 @@ function openTenantForm(id = null) {
     try {
       let response;
       if (editing) {
-        await api('PATCH', `/admin/tenants/${id}`, { name, slug });
+        await api('PATCH', `/admin/tenants/${id}`, { name, slug, is_active: $('#tn-active').checked });
         toast('Tenant atualizado.', 'success');
       } else {
         response = await api('POST', '/admin/tenants', { name, slug });

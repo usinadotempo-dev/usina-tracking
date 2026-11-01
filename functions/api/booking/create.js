@@ -20,6 +20,30 @@ import {
   pickCode, SPEND_BANDS, TRACKING_NOW, DECISION_ROLES,
   spendLabel, trackingLabel, roleLabel,
 } from '../../_lib/booking-actions.js';
+import { lockedFor, hit } from '../../_lib/rate-limit.js';
+
+// Fase 0 (S8): cada agendamento dispara convite do Google, e-mail e Telegram
+// — limita abuso por IP e por e-mail.
+const IP_LIMIT = { max: 5, windowSecs: 3600, lockSecs: 3600 };
+const MAX_FUTURE_PER_EMAIL = 2;
+
+// Turnstile: só exigido quando TURNSTILE_SECRET existe (ligar depois que o
+// widget estiver no formulário da LP, enviando body.turnstile_token).
+async function turnstileOk(env, token, ip) {
+  if (!env.TURNSTILE_SECRET) return true;
+  if (!token) return false;
+  const form = new FormData();
+  form.append('secret', env.TURNSTILE_SECRET);
+  form.append('response', String(token));
+  if (ip) form.append('remoteip', ip);
+  try {
+    const r = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', { method: 'POST', body: form });
+    const j = await r.json();
+    return !!j.success;
+  } catch {
+    return false;
+  }
+}
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -58,6 +82,26 @@ export async function onRequestPost(context) {
   }
   if (typeof body.elapsed_ms === 'number' && body.elapsed_ms >= 0 && body.elapsed_ms < 3000) {
     return json({ ok: false, error: 'rejeitado', detail: 'Tente novamente.' }, 200);
+  }
+
+  const ip = request.headers.get('cf-connecting-ip') || 'unknown';
+  if (!(await turnstileOk(env, body.turnstile_token, ip))) {
+    return json({ ok: false, error: 'verificacao_falhou', detail: 'Confirme que você não é um robô e tente de novo.' }, 400);
+  }
+  const ipBucket = `booking:ip:${ip}`;
+  if (await lockedFor(env, ipBucket)) {
+    return json({ ok: false, error: 'muitas_tentativas', detail: 'Muitos agendamentos seguidos. Tente mais tarde.' }, 429);
+  }
+  await hit(env, ipBucket, IP_LIMIT);
+  try {
+    const future = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM demo_bookings WHERE email = ? AND status = 'agendada' AND slot_start > ?"
+    ).bind(email, Math.floor(Date.now() / 1000)).first();
+    if ((future?.n || 0) >= MAX_FUTURE_PER_EMAIL) {
+      return json({ ok: false, error: 'ja_agendado', detail: 'Você já tem uma apresentação marcada. Confira o convite no seu e-mail.' }, 409);
+    }
+  } catch (e) {
+    console.error('booking/create: checagem por e-mail falhou:', e.message);
   }
 
   const v = validateRequestedSlot(slotISO);

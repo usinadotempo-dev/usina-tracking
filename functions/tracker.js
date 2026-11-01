@@ -3,6 +3,14 @@ import { loadWorkspaceConfig } from './_lib/workspace-config.js';
 import { createKommoLead } from './_lib/kommo.js';
 import { uploadGoogleAdsConversion } from './_lib/google-ads-upload.js';
 import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from './_lib/event-catalog.js';
+import { lockedFor, hit } from './_lib/rate-limit.js';
+
+// Fase 0 (S9): /tracker é público — limita quantos leads um mesmo IP cria no
+// CRM do cliente (Kommo) por hora. Os eventos continuam sendo registrados.
+// Sem sessão da LP (cookie _krob_sid gravado pelo middleware) o limite é mais
+// apertado: alguns hosts (ex.: LP de marketing) não gravam sessão.
+const KOMMO_IP_LIMIT = { max: 10, windowSecs: 3600, lockSecs: 3600 };
+const KOMMO_IP_LIMIT_NO_SESSION = { max: 3, windowSecs: 3600, lockSecs: 3600 };
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -129,11 +137,14 @@ export async function onRequestPost(context) {
 
     // --- Event catalog: resolve a entrada deste event_name + o valor.
     // Sem entrada no catálogo, o evento não vai ao Google Ads (opt-in).
+    // Valor vindo do navegador só vale para eventos do catálogo sem valor fixo
+    // (Fase 0, S9) — fora do catálogo é 0, para ninguém inflar conversões.
     const catalog = parseEventCatalog(cfg);
     const eventEntry = getEventEntry(catalog, body.event_name);
-    const eventValue = (eventEntry && eventEntry.value !== null && eventEntry.value !== undefined)
-      ? eventEntry.value
-      : (parseFloat(body.value) || 0);
+    const clientValue = parseFloat(body.value);
+    const eventValue = !eventEntry ? 0
+      : (eventEntry.value !== null && eventEntry.value !== undefined) ? eventEntry.value
+      : (Number.isFinite(clientValue) && clientValue > 0 ? clientValue : 0);
 
     // --- Fan out to ad platforms (skipped for bot UAs) ---
     // Bots still get logged to event_log so the dashboard's bot-filter
@@ -205,8 +216,17 @@ export async function onRequestPost(context) {
     let kommoStatusCode = 0, kommoResponseOk = 0, kommoResponseBody = '', kommoPayloadSent = null;
     let kommoLeadId = null, kommoContactId = null, sentToKommo = 0;
     const isLeadEvent = (body.event_name || '').toLowerCase() === 'lead';
-    if (!isBot && isLeadEvent && cfg.kommo_long_lived_token && cfg.kommo_subdomain) {
+    // Lead no CRM dentro do limite por IP (mais apertado sem sessão real do
+    // mesmo workspace).
+    const kommoEnabled = !isBot && isLeadEvent && cfg.kommo_long_lived_token && cfg.kommo_subdomain;
+    const hasRealSession = !!sessionData.session_id && sessionData.workspace_id === workspaceId;
+    const kommoBucket = `kommo:${hasRealSession ? 'ip' : 'nosess'}:${clientIp || 'unknown'}`;
+    const kommoLocked = kommoEnabled ? await lockedFor(env, kommoBucket) : 0;
+    if (kommoEnabled && kommoLocked) {
+      kommoResponseBody = 'skipped: limite por IP';
+    } else if (kommoEnabled) {
       sentToKommo = 1;
+      await hit(env, kommoBucket, hasRealSession ? KOMMO_IP_LIMIT : KOMMO_IP_LIMIT_NO_SESSION);
       try {
         const kommoRes = await createKommoLead(cfg, {
           name: ((userData.fn || '') + ' ' + (userData.ln || '')).trim() || null,
@@ -295,7 +315,8 @@ export async function onRequestPost(context) {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('tracker error:', err.message);
+    return new Response(JSON.stringify({ error: 'internal error' }), {
       status: 500,
       headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
     });

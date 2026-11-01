@@ -55,9 +55,26 @@ function withSec(resp) {
   return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers: h });
 }
 
+// Anti-CSRF (Fase 0, baixo): escrita em /admin e /auth só aceita a própria
+// origem. Navegadores sempre mandam Origin em POST/PATCH/DELETE; sem Origin
+// (curl, cron) passa — esses não carregam o cookie de sessão de ninguém.
+function crossOriginWrite(request, url) {
+  if (request.method === 'GET' || request.method === 'HEAD' || request.method === 'OPTIONS') return false;
+  if (!url.pathname.startsWith('/admin') && !url.pathname.startsWith('/auth/')) return false;
+  const origin = request.headers.get('origin');
+  if (!origin) return false;
+  try { return new URL(origin).host !== url.host; } catch { return true; }
+}
+
 export async function onRequest(context) {
   const { request, next, env } = context;
   const url = new URL(request.url);
+
+  if (crossOriginWrite(request, url)) {
+    return withSec(new Response(JSON.stringify({ error: 'Forbidden origin' }), {
+      status: 403, headers: { 'Content-Type': 'application/json' },
+    }));
+  }
 
   // Marketing host: split por Host antes de qualquer lógica de tracking.
   const reqHost = (request.headers.get('host') || '').split(':')[0].toLowerCase();

@@ -107,13 +107,17 @@ export async function lookupSession(env, token) {
   const row = await env.DB.prepare(`
     SELECT s.user_id, s.expires_at,
            u.email, u.role, u.name, u.tenant_id, u.is_active,
-           u.must_change_password
+           u.must_change_password,
+           t.is_active AS tenant_active
       FROM app_sessions s
       JOIN app_users u ON u.id = s.user_id
+      LEFT JOIN tenants t ON t.id = u.tenant_id
      WHERE s.token_hash = ? AND s.expires_at > ?
      LIMIT 1
   `).bind(tokenHash, now).first();
   if (!row || !row.is_active) return null;
+  // Cliente desativado (Fase 0, S14) derruba o acesso de todos os seus usuários.
+  if (row.tenant_id && row.tenant_active === 0) return null;
   return {
     user_id: row.user_id,
     email: row.email,
@@ -174,12 +178,22 @@ export function shouldUseDomainAttribute(host) {
 //   if (auth instanceof Response) return auth;   // unauthorized
 //   const { user, workspaces } = auth;
 
+// Enquanto a senha é provisória, a sessão só serve para trocá-la (Fase 0,
+// S12) — antes isso era imposto apenas pela tela.
+const PASSWORD_CHANGE_PATHS = new Set(['/auth/change-password', '/auth/me', '/auth/logout']);
+
 export async function requireAuth(context, allowedRoles = null) {
   const { request, env } = context;
   const token = readSessionTokenFromRequest(request);
   const session = await lookupSession(env, token);
   if (!session) {
     return jsonError('Unauthorized', 401);
+  }
+  if (session.must_change_password) {
+    const path = new URL(request.url).pathname.replace(/\/+$/, '');
+    if (!PASSWORD_CHANGE_PATHS.has(path)) {
+      return jsonError('Troca de senha obrigatória antes de continuar.', 403);
+    }
   }
   if (allowedRoles && allowedRoles.length && !allowedRoles.includes(session.role)) {
     return jsonError('Forbidden', 403);

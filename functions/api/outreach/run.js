@@ -13,11 +13,11 @@ import { sendEmail, outreachConfig } from '../../_lib/resend.js';
 import {
   buildEmail, EMAIL_STEPS, TOTAL_EMAIL_STEPS, inSendWindow,
 } from '../../_lib/outreach.js';
+import { cronAuthorized } from '../../_lib/cron-auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
-  const sent = request.headers.get('x-sync-secret') || '';
-  if (!env.SYNC_SECRET || sent !== env.SYNC_SECRET) {
+  if (!cronAuthorized(request, env)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

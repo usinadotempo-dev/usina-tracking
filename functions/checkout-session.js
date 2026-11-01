@@ -54,14 +54,33 @@ export async function onRequestPost(context) {
     const gaClientId = gaCookie ? gaCookie.split('.').slice(-2).join('.') : '';
     const now = Math.floor(Date.now() / 1000);
 
+    if (typeof trk !== 'string' || trk.length > 64) {
+      return new Response(JSON.stringify({ error: 'Invalid trk' }), {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (env.DB) {
+      // Re-chamadas com o mesmo trk (reload, clique no botão) atualizam a
+      // atribuição — mas só dentro do MESMO workspace: um trk nunca muda de
+      // dono (Fase 0, baixo).
       await env.DB.prepare(`
-        INSERT OR REPLACE INTO checkout_sessions (
+        INSERT INTO checkout_sessions (
           trk, session_id, workspace_id, ip_address, user_agent, external_id,
           fbp, fbc, gclid, gbraid, wbraid, ga_client_id,
           utm_source, utm_medium, utm_campaign, utm_content, utm_term,
           event_source_url, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(trk) DO UPDATE SET
+          session_id = excluded.session_id, ip_address = excluded.ip_address,
+          user_agent = excluded.user_agent, external_id = excluded.external_id,
+          fbp = excluded.fbp, fbc = excluded.fbc, gclid = excluded.gclid,
+          gbraid = excluded.gbraid, wbraid = excluded.wbraid, ga_client_id = excluded.ga_client_id,
+          utm_source = excluded.utm_source, utm_medium = excluded.utm_medium,
+          utm_campaign = excluded.utm_campaign, utm_content = excluded.utm_content,
+          utm_term = excluded.utm_term, event_source_url = excluded.event_source_url
+        WHERE checkout_sessions.workspace_id IS excluded.workspace_id
       `).bind(
         trk, sessionId, workspaceId, clientIp, userAgent, externalId,
         fbp, fbc, gclid, gbraid, wbraid, gaClientId,
@@ -77,7 +96,8 @@ export async function onRequestPost(context) {
     });
 
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    console.error('checkout-session error:', err.message);
+    return new Response(JSON.stringify({ error: 'internal error' }), {
       status: 500,
       headers: { 'Access-Control-Allow-Origin': '*', 'Content-Type': 'application/json' },
     });

@@ -105,8 +105,9 @@ export async function onRequestPost(context) {
 
   return jsonOk({
     user: { id, email, role, name, tenant_id: role === 'usina_admin' ? null : tenantId },
-    // Fallback pro admin repassar manualmente se o e-mail não saiu.
+    // Fallback pro admin repassar manualmente — SÓ se o e-mail não saiu
+    // (Fase 0, S13): com e-mail enviado, ninguém além do usuário vê a senha.
     emailed: sent.ok,
-    provisional_password: provisional,
+    ...(sent.ok ? {} : { provisional_password: provisional }),
   });
 }

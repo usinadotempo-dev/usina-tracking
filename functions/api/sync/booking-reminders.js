@@ -15,12 +15,12 @@
 
 import { sendReminder, sendNoShow, sendFollowup } from '../../_lib/booking-emails.js';
 import { notifyTelegramReminder, notifyTelegramNoShow } from '../../_lib/booking-telegram.js';
+import { cronAuthorized } from '../../_lib/cron-auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const sent = request.headers.get('x-sync-secret') || '';
-  if (!env.SYNC_SECRET || sent !== env.SYNC_SECRET) {
+  if (!cronAuthorized(request, env)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

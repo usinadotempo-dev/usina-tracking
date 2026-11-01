@@ -45,7 +45,10 @@ export function inSendWindow(nowMs = Date.now()) {
   return dow >= 1 && dow <= 5 && hour >= 9 && hour < 17;
 }
 
-// ---- token de descadastro (HMAC do SYNC_SECRET sobre o id) -----------------
+// ---- token de descadastro (HMAC sobre o id) --------------------------------
+// Chave própria UNSUB_HMAC_KEY (Fase 0, S10), com fallback no SYNC_SECRET.
+// Trocar a chave não quebra links já enviados: o unsubscribe compara com o
+// token gravado em prospects.unsub_token.
 
 async function hmacHex(secret, msg) {
   const key = await crypto.subtle.importKey(
@@ -56,7 +59,7 @@ async function hmacHex(secret, msg) {
   return [...new Uint8Array(sig)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 export function unsubToken(env, prospectId) {
-  return hmacHex(env.SYNC_SECRET || '', `unsub.${prospectId}`);
+  return hmacHex(env.UNSUB_HMAC_KEY || env.SYNC_SECRET || '', `unsub.${prospectId}`);
 }
 export function timingSafeEqual(a, b) {
   if (typeof a !== 'string' || typeof b !== 'string' || a.length !== b.length) return false;
@@ -95,22 +98,22 @@ const BODIES = {
   }),
   2: (p) => ({
     subject: `Caso rápido — recuperaram ~95% do tracking`,
-    lead: `${firstName(p.nome)}, um caso rápido: cliente perdia 40% das conversões só no pixel; com server-side recuperou tracking de ~95% e o CPA caiu.`,
+    lead: `${esc(firstName(p.nome))},um caso rápido: cliente perdia 40% das conversões só no pixel; com server-side recuperou tracking de ~95% e o CPA caiu.`,
     body: `Quer ver como ficaria no seu caso? Respondo aqui mesmo, ou se preferir já agenda 20 min:`,
   }),
   3: (p) => ({
     subject: `Quando o cliente pergunta de onde veio a venda`,
-    lead: `${firstName(p.nome)}, pensando como agência: quando o cliente pergunta de onde veio a venda, o que você mostra hoje?`,
+    lead: `${esc(firstName(p.nome))},pensando como agência: quando o cliente pergunta de onde veio a venda, o que você mostra hoje?`,
     body: `A gente entrega um dashboard de atribuição por lead/venda — a prova de ROAS pronta. Te mostro em 15 min:`,
   }),
   4: (p) => ({
     subject: `Vou parar de te escrever`,
-    lead: `${firstName(p.nome)}, vou parar de te escrever pra não virar chato.`,
+    lead: `${esc(firstName(p.nome))},vou parar de te escrever pra não virar chato.`,
     body: `Última: se em algum momento o CPA subir sem explicação, provável que seja dado faltando — guarda meu contato. Se quiser o diagnóstico agora:`,
   }),
   5: (p) => ({
     subject: `Encerrando por aqui`,
-    lead: `${firstName(p.nome)}, encerrando por aqui pra não incomodar.`,
+    lead: `${esc(firstName(p.nome))},encerrando por aqui pra não incomodar.`,
     body: `Se um dia quiser saber quanto de verba o tracking quebrado está custando, a porta fica aberta. Sucesso com as campanhas.`,
   }),
 };

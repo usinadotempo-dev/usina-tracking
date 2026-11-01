@@ -75,6 +75,23 @@
 | S6 | Checagem de `transaction_id` antes do disparo + `event_id` determinístico |
 | Extra | `kommo_subdomain` validado; respostas 500 dos webhooks sem `err.message` |
 
+S1–S6 **no ar** desde 2026-11-01 (commit a875a99, migration 0041; 13 credenciais cifradas).
+
+### Rodada 2 — médios e baixos (código escrito, aguardando deploy)
+| Item | Implementação |
+|---|---|
+| S7 | Links do Telegram com origem fixa (`BOOKING_PUBLIC_ORIGIN`, padrão `lp.usinadotempo.com.br`); MeetingHeld sempre em `usina-vendas` |
+| S8 | `booking/create`: 5/h por IP, máx. 2 reuniões futuras por e-mail; Turnstile exigido quando `TURNSTILE_SECRET` existir (**falta o widget na LP**) |
+| S9 | `/tracker`: valor do navegador só para evento do catálogo; Kommo 10 leads/h por IP com sessão, 3/h sem sessão |
+| S10 | `SYNC_SECRET` só para crons (comparação constante via `_lib/cron-auth.js`); links de booking com `BOOKING_HMAC_KEY` + expiração (7 dias após a reunião); descadastro com `UNSUB_HMAC_KEY` |
+| S11 | Kommo: etapa e valor lidos da API, não do payload |
+| S12 | `requireAuth` bloqueia tudo exceto troca de senha enquanto a senha é provisória |
+| S13 | Senha provisória só volta ao admin se o e-mail falhou |
+| S14 | `tenants.is_active` (migration 0042) — bloqueia login e sessões; chave "Ativo" no formulário do tenant |
+| Baixos | Escape do nome no cold e-mail; `checkout-session` não troca o workspace de um `trk`; anti-CSRF por `Origin` em `/admin` e `/auth`; erros 500 genéricos no tracker/checkout |
+
+**Pendente (baixo, vai para a Fase 1):** `err.message` nas respostas 500 de `api/*` (só usuários autenticados veem); `ad_spend` sem `workspace_id` na chave (tabela legada); Tailwind compilado + CSP sem `unsafe-eval` (depende do build, D2).
+
 **A confirmar com webhook real antes de preencher o segredo:** formato da assinatura Kiwify (HMAC-SHA1) e Eduzz (HMAC-SHA256 / api_key).
 
 ---

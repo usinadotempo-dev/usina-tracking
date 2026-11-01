@@ -23,12 +23,12 @@
 // once its admin fills in the keys.
 
 import { listWorkspacesWithMetaAds } from '../../_lib/workspace-config.js';
+import { cronAuthorized } from '../../_lib/cron-auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  const sentSecret = request.headers.get('x-sync-secret') || '';
-  if (!env.SYNC_SECRET || sentSecret !== env.SYNC_SECRET) {
+  if (!cronAuthorized(request, env)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

@@ -36,10 +36,13 @@ export async function onRequestPost(context) {
   if (locked) return tooManyRequests(locked);
 
   const user = await env.DB.prepare(`
-    SELECT id, email, password_hash, role, name, tenant_id, is_active,
-           must_change_password, pwd_expires_at,
-           pending_password_hash, pending_expires_at
-      FROM app_users WHERE email = ? LIMIT 1
+    SELECT u.id, u.email, u.password_hash, u.role, u.name, u.tenant_id, u.is_active,
+           u.must_change_password, u.pwd_expires_at,
+           u.pending_password_hash, u.pending_expires_at,
+           t.is_active AS tenant_active
+      FROM app_users u
+      LEFT JOIN tenants t ON t.id = u.tenant_id
+     WHERE u.email = ? LIMIT 1
   `).bind(email).first();
 
   // Always run verifyPassword to avoid leaking via timing whether the email
@@ -58,6 +61,12 @@ export async function onRequestPost(context) {
     await hit(env, ipBucket, IP_LIMIT);
     await hit(env, emailBucket, EMAIL_LIMIT);
     return jsonError('Invalid credentials', 401);
+  }
+
+  // Cliente desativado (Fase 0, S14). Só depois de a senha conferir, para não
+  // revelar a situação do cliente a quem não tem a senha.
+  if (user.tenant_id && user.tenant_active === 0) {
+    return jsonError('O acesso desta empresa está suspenso. Fale com a Usina do Tempo.', 403);
   }
 
   // Senha provisória (criada/redefinida pelo admin) que já passou da validade:

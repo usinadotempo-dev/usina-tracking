@@ -30,21 +30,12 @@ export function heldFanoutEnabled(env) {
   return v === '1' || v === 'on' || v === 'true';
 }
 
-// Resolve o workspace pelo host do landing_url (mesma regra do
-// tracking-config.js), com fallback pro workspace interno da Usina.
-async function resolveWsConfig(env, booking) {
-  let host = '';
-  try { host = new URL(booking.landing_url).host.split(':')[0].toLowerCase(); } catch { /* noop */ }
-
-  let workspaceId = USINA_WS;
-  if (host) {
-    try {
-      const row = await env.DB.prepare(
-        'SELECT workspace_id FROM workspace_domains WHERE domain = ? LIMIT 1'
-      ).bind(host).first();
-      if (row?.workspace_id) workspaceId = row.workspace_id;
-    } catch { /* usa fallback */ }
-  }
+// Agendamentos são o funil de vendas da PRÓPRIA Usina → o MeetingHeld vai
+// sempre para o workspace interno. (Fase 0, S7: antes o workspace saía do
+// landing_url enviado pelo lead, que podia apontar para o domínio de outro
+// cliente e disparar conversão no pixel dele.)
+async function resolveWsConfig(env, _booking) {
+  const workspaceId = USINA_WS;
 
   let cfg = {};
   try {

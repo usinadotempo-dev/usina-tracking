@@ -15,7 +15,7 @@
 // / GA4 / Google Ads) é o PASSO 3 e fica reservado abaixo atrás da flag
 // held_event_sent — ainda NÃO dispara nada para plataformas de anúncio.
 
-import { actionToken, timingSafeEqual } from '../../_lib/booking-actions.js';
+import { actionToken, legacyActionToken, bookingHmacKey, timingSafeEqual } from '../../_lib/booking-actions.js';
 import { heldFanoutEnabled, fireMeetingHeld } from '../../_lib/booking-events.js';
 
 const ACTIONS = {
@@ -29,15 +29,27 @@ export async function onRequestGet(context) {
   const id = url.searchParams.get('id') || '';
   const a = url.searchParams.get('a') || '';
   const t = url.searchParams.get('t') || '';
+  const e = url.searchParams.get('e') || '';
 
   const def = ACTIONS[a];
   if (!id || !def) return page(400, 'Link inválido', 'Ação ou agendamento ausente.');
 
-  if (!env.SYNC_SECRET) {
+  if (!bookingHmacKey(env)) {
     return page(500, 'Indisponível', 'Assinatura de ação não configurada nesta instância.');
   }
-  const expected = await actionToken(env, id, a);
-  if (!timingSafeEqual(t, expected)) {
+  let valid = false;
+  if (e) {
+    const exp = parseInt(e, 10);
+    if (!Number.isFinite(exp) || exp < Math.floor(Date.now() / 1000)) {
+      return page(403, 'Link expirado', 'Este link já passou da validade.');
+    }
+    valid = timingSafeEqual(t, await actionToken(env, id, a, exp));
+  } else if (!env.BOOKING_HMAC_KEY && env.SYNC_SECRET) {
+    // Links enviados antes da Fase 0 (sem expiração) — válidos só até a
+    // BOOKING_HMAC_KEY ser criada.
+    valid = timingSafeEqual(t, await legacyActionToken(env, id, a));
+  }
+  if (!valid) {
     return page(403, 'Link expirado ou inválido', 'Não foi possível validar este link.');
   }
 

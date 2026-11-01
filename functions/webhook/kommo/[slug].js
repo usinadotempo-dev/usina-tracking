@@ -101,12 +101,17 @@ async function processWebhook(env, workspaceId, rawText) {
       continue;
     }
 
+    // Fase 0 (S11): a etapa e o valor valem pelo estado REAL do lead na API
+    // da Kommo — o payload do webhook pode ter sido forjado por quem conhece
+    // a URL (status_id "ganho" + price inflado).
+    if (Number(detail.lead.status_id) !== wonStageId) {
+      await logWebhook(env, workspaceId, rawText, 'lead_won', ev.lead_id, 0, null, null,
+        `etapa real na Kommo (${detail.lead.status_id}) != ganho (${wonStageId}) — ignorado`);
+      continue;
+    }
+
     const pii = extractContactPii(detail.contact);
-    // Prefere o price do payload (string em centavos? na doc é "1000" pra R$10
-    // — testar com pagamento real). Em fallback usa lead.price da API.
-    const priceFromWebhook = ev.price;
-    const priceFromApi = detail.lead.price;
-    const valueReais = parseValue(priceFromWebhook ?? priceFromApi);
+    const valueReais = parseValue(detail.lead.price);
 
     const eventId = `kommo-${ev.lead_id}`;       // dedup determinístico se webhook re-tentar
     const eventTime = Math.floor(Date.now() / 1000);

@@ -20,11 +20,12 @@
 
 import { loadPlatformConfigFromEnv } from '../../_lib/platform-config.js';
 import { createMetaClient, toCents, toInt, toFloat, pickAction, ymd, addDays } from '../../_lib/meta-graph.js';
+import { cronAuthorized } from '../../_lib/cron-auth.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  if (!env.SYNC_SECRET || (request.headers.get('x-sync-secret') || '') !== env.SYNC_SECRET) {
+  if (!cronAuthorized(request, env)) {
     return json({ error: 'Unauthorized' }, 401);
   }
 

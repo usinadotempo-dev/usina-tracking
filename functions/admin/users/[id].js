@@ -119,7 +119,8 @@ export async function onRequestPatch(context) {
 
   return jsonOk({
     ok: true,
-    ...(provisional ? { emailed, provisional_password: provisional } : {}),
+    // Senha provisória só volta ao admin se o e-mail falhou (Fase 0, S13).
+    ...(provisional ? { emailed, ...(emailed ? {} : { provisional_password: provisional }) } : {}),
   });
 }
 

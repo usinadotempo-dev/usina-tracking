@@ -9,8 +9,10 @@
 //
 // Os links de ação são URL buttons (abrem no navegador) — não usam
 // callback_query, então NÃO exigem registrar webhook do bot nem polling.
-// Token = HMAC-SHA256(SYNC_SECRET, "<id>.<action>") em hex; o segredo nunca
-// trafega. Reusa o SYNC_SECRET (mesmo gate dos crons) — sem secret novo.
+// Token = HMAC-SHA256(BOOKING_HMAC_KEY, "<id>.<action>.<exp>") em hex; o
+// segredo nunca trafega. Fase 0 (S7/S10): chave própria (cai no SYNC_SECRET
+// enquanto BOOKING_HMAC_KEY não existir), link expira 7 dias após a reunião
+// e a origem do link é fixa — nunca derivada do landing_url do lead.
 
 // ---- vocabulário do form (códigos estáveis ↔ rótulos) ---------------------
 
@@ -102,8 +104,25 @@ async function hmacHex(secret, msg) {
   return [...new Uint8Array(sig)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-export function actionToken(env, id, action) {
+export function bookingHmacKey(env) {
+  return env.BOOKING_HMAC_KEY || env.SYNC_SECRET || '';
+}
+
+export function actionToken(env, id, action, exp) {
+  return hmacHex(bookingHmacKey(env), `${id}.${action}.${exp}`);
+}
+
+// Formato antigo (sem expiração), aceito só até BOOKING_HMAC_KEY ser criada.
+export function legacyActionToken(env, id, action) {
   return hmacHex(env.SYNC_SECRET || '', `${id}.${action}`);
+}
+
+const LINK_TTL_AFTER_MEETING = 7 * 86400;
+
+function actionExpiry(b) {
+  const start = Number(b.slot_start) || Math.floor(Date.parse(b.slot_start_iso || '') / 1000);
+  const base = Number.isFinite(start) && start > 0 ? start : Math.floor(Date.now() / 1000) + 14 * 86400;
+  return base + LINK_TTL_AFTER_MEETING;
 }
 
 export function timingSafeEqual(a, b) {
@@ -113,22 +132,21 @@ export function timingSafeEqual(a, b) {
   return r === 0;
 }
 
-// Origem absoluta p/ montar os links — deriva do landing_url gravado no
-// agendamento (mesmo Pages project serve a LP e /api/booking/*); cai num
-// default seguro se o campo vier vazio (cliente em cache antigo).
-export function baseOrigin(b) {
-  try { return new URL(b.landing_url).origin; } catch { /* noop */ }
-  return 'https://lp.usinadotempo.com.br';
+// Origem absoluta p/ montar os links. FIXA (env ou default): o landing_url
+// vem do lead e não pode decidir para onde o botão da equipe aponta.
+export function baseOrigin(env) {
+  return env.BOOKING_PUBLIC_ORIGIN || 'https://lp.usinadotempo.com.br';
 }
 
-// inline_keyboard com URL buttons assinados. Sem SYNC_SECRET não há como
+// inline_keyboard com URL buttons assinados. Sem chave não há como
 // assinar com segurança → não anexa botões (a mensagem ainda sai).
 export async function actionKeyboard(env, b) {
-  if (!env.SYNC_SECRET) return null;
-  const origin = baseOrigin(b);
+  if (!bookingHmacKey(env)) return null;
+  const origin = baseOrigin(env);
+  const exp = actionExpiry(b);
   const mk = async (action, text) => {
-    const t = await actionToken(env, b.id, action);
-    const url = `${origin}/api/booking/mark?id=${encodeURIComponent(b.id)}&a=${action}&t=${t}`;
+    const t = await actionToken(env, b.id, action, exp);
+    const url = `${origin}/api/booking/mark?id=${encodeURIComponent(b.id)}&a=${action}&e=${exp}&t=${t}`;
     return { text, url };
   };
   return {
