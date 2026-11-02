@@ -12,7 +12,7 @@ import { deleteImage } from './media.js';
 // porque é o alvo da subconsulta e sai depois de todas.
 export const WORKSPACE_TABLES = [
   'user_workspaces',
-  'sessions', 'event_log', 'purchase_items', 'purchase_log', 'checkout_sessions',
+  'sessions', 'event_log', 'purchase_items', 'purchase_refunds', 'purchase_log', 'checkout_sessions',
   'ad_spend', 'sync_log',
   'meta_campaigns', 'meta_ad_sets', 'meta_ads', 'meta_campaign_insights', 'meta_ad_insights',
   'meta_ig_accounts', 'meta_ig_media', 'meta_ig_account_insights', 'meta_ig_audience',

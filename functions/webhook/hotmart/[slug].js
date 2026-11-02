@@ -32,6 +32,7 @@
 // -----------------------------------------------------------------------------
 
 import { processPurchase } from '../_core.js';
+import { processRefund } from '../../_lib/refunds.js';
 import { resolveSalesWebhook, verifyHotmart, jsonResponse } from '../_utils.js';
 
 export async function onRequestPost(context) {
@@ -45,9 +46,24 @@ export async function onRequestPost(context) {
     const body = rawPayload.data || {};
     const eventName = rawPayload.event || '';
 
+    // Reembolso/chargeback: registra contra a compra original (Produtos).
+    const refundKind = { PURCHASE_REFUNDED: 'refund', PURCHASE_CHARGEBACK: 'chargeback' }[eventName];
+    if (refundKind) {
+      const p = body.purchase || {};
+      const r = await processRefund({
+        parsed: {
+          platform: 'hotmart', transactionId: p.transaction || '', kind: refundKind,
+          value: parseFloat((p.price || p.full_price || {}).value), currency: (p.price || {}).currency_value,
+        },
+        env, context, slugWorkspaceId: route.workspaceId,
+        verify: (cfg) => verifyHotmart(request, rawPayload, cfg.hotmart_hottok),
+      });
+      if (r.rejected) return jsonResponse({ error: 'invalid signature' }, 401);
+      return jsonResponse({ ok: true, refund: refundKind, ...r });
+    }
+
     // Only process approved purchases. Every other event (PURCHASE_COMPLETE,
-    // PURCHASE_REFUNDED, PURCHASE_CHARGEBACK, PURCHASE_DELAYED,
-    // PURCHASE_CANCELED, SUBSCRIPTION_*) returns 200 and skips.
+    // PURCHASE_DELAYED, PURCHASE_CANCELED, SUBSCRIPTION_*) returns 200 and skips.
     if (eventName !== 'PURCHASE_APPROVED' || body.purchase?.status !== 'APPROVED') {
       return new Response(
         JSON.stringify({ ok: true, skipped: 'not an approved purchase', event: eventName, status: body.purchase?.status }),

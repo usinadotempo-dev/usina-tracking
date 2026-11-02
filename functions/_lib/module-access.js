@@ -11,7 +11,7 @@ export async function moduleAccess(context, workspaceId, { module, permission, w
   if (!hasModule(auth.user, module)) return moduleBlocked(module);
   const ws = auth.workspaces.find((w) => w.id === workspaceId);
   if (!ws) return jsonError('Workspace não encontrado.', 404);
-  const canManage = can(auth.user, permission);
+  const canManage = permission ? can(auth.user, permission) : false;
   if (write && !canManage) return jsonError('Sem permissão para alterar.', 403);
   return { ...auth, workspace: ws, canManage };
 }

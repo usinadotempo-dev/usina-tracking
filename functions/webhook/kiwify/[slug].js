@@ -23,6 +23,7 @@
 // -----------------------------------------------------------------------------
 
 import { processPurchase } from '../_core.js';
+import { processRefund } from '../../_lib/refunds.js';
 import { resolveSalesWebhook, verifyKiwify, jsonResponse } from '../_utils.js';
 
 export async function onRequestPost(context) {
@@ -41,6 +42,23 @@ export async function onRequestPost(context) {
     // new purchases and DO get processed. The `transaction_id` unique
     // index on `purchase_log` prevents double-logging duplicate retries
     // for the same order.
+    // Reembolso/chargeback: registra contra a compra original (Produtos).
+    const refundKind = (body.webhook_event_type === 'order_refunded' || body.order_status === 'refunded') ? 'refund'
+      : (body.webhook_event_type === 'chargeback' || body.order_status === 'chargedback') ? 'chargeback' : null;
+    if (refundKind) {
+      const amount = (body.Commissions || {}).charge_amount;
+      const r = await processRefund({
+        parsed: {
+          platform: 'kiwify', transactionId: body.order_id || '', kind: refundKind,
+          value: Number.isFinite(amount) ? amount / 100 : NaN, currency: (body.Commissions || {}).currency,
+        },
+        env, context, slugWorkspaceId: route.workspaceId,
+        verify: (cfg) => verifyKiwify(request, rawBody, rawPayload, cfg.kiwify_webhook_token),
+      });
+      if (r.rejected) return jsonResponse({ error: 'invalid signature' }, 401);
+      return jsonResponse({ ok: true, refund: refundKind, ...r });
+    }
+
     const isApproved = body.webhook_event_type === 'order_approved'
       && body.order_status === 'paid';
     if (!isApproved) {

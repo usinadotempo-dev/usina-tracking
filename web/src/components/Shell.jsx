@@ -18,6 +18,7 @@ const PORTAL_NAV = [
   { to: '/crm', label: 'CRM', module: 'crm' },
   { to: '/funis', label: 'Funis', module: 'funis' },
   { to: '/trafego', label: 'Tráfego', module: 'trafego' },
+  { to: '/produtos', label: 'Produtos', module: 'produtos' },
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },
   { to: '/integracoes', label: 'Integrações', permission: 'tenant.integrations.manage' },
   { to: '/empresa', label: 'Empresa', permission: 'tenant.branding.manage' },
@@ -73,7 +74,7 @@ export default function Shell({ children }) {
               <img src="/assets/usina-brand/logo-color.png" alt="Usina do Tempo" className="h-8" />
             )}
             {nav.length > 1 && (
-              <nav className="flex gap-1 text-sm">
+              <nav className="flex gap-1 overflow-x-auto whitespace-nowrap text-sm">
                 {nav.map((i) => (
                   <NavLink key={i.to} to={i.to} end={i.end}
                     style={({ isActive }) => (isActive ? { boxShadow: `inset 0 -2px 0 ${brand}` } : undefined)}

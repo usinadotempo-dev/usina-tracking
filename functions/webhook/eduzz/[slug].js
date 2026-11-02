@@ -13,6 +13,7 @@
 // -----------------------------------------------------------------------------
 
 import { processPurchase } from '../_core.js';
+import { processRefund } from '../../_lib/refunds.js';
 import { resolveSalesWebhook, verifyEduzz, jsonResponse } from '../_utils.js';
 
 export async function onRequestPost(context) {
@@ -32,6 +33,22 @@ export async function onRequestPost(context) {
     // Only process paid sales. Other statuses (pending, refunded, chargeback)
     // get acknowledged with 200 so Eduzz stops retrying.
     const saleStatus = body.status || '';
+
+    // Reembolso/chargeback: registra contra a compra original (Produtos).
+    const refundKind = { refunded: 'refund', chargeback: 'chargeback' }[saleStatus];
+    if (refundKind) {
+      const r = await processRefund({
+        parsed: {
+          platform: 'eduzz', transactionId: body.transaction?.id || body.id || '', kind: refundKind,
+          value: Number(body.paid?.value || body.price?.value), currency: body.paid?.currency || body.price?.currency,
+        },
+        env, context, slugWorkspaceId: route.workspaceId,
+        verify: (cfg) => verifyEduzz(request, rawBody, rawPayload, cfg.eduzz_webhook_secret),
+      });
+      if (r.rejected) return jsonResponse({ error: 'invalid signature' }, 401);
+      return jsonResponse({ ok: true, refund: refundKind, ...r });
+    }
+
     if (saleStatus !== 'paid') {
       return new Response(
         JSON.stringify({ ok: true, skipped: 'not paid', status: saleStatus }),
