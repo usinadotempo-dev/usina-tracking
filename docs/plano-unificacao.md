@@ -229,6 +229,7 @@ Cada passo com IA termina como no `youtube-agent`: proposta + "aprovar ou ajusta
 | Etapa | Entrega | Valor |
 |---|---|---|
 | E1 | Base de conhecimento + perfil de voz + Roteirista + Embalagem + SEO/legenda com link rastreado | Valor imediato, só texto |
+| E1 ✎ | *Status (2026-11-01): **código escrito*** — migration 0049 (`studio_profiles`, `studio_videos`, `studio_generations`); `_lib/claude.js` (SDK `@anthropic-ai/sdk`, modelo `CLAUDE_MODEL` padrão `claude-opus-5-5`, saída em JSON Schema, fallback de recusa do servidor, erros tipados → mensagem legível); `_lib/studio.js` (prompts PT-BR: 5 ganchos de 21 fórmulas com nota e top 2, virada, batidas fala + tela, pedido único, `pending_facts` com [CONFIRMAR] — nada fora da base; 5 pares título+capa com checagem de 60 caracteres, 4 palavras e repetição; descrição com `{LINK}` → link rastreado, tags, 3 buscas-alvo, legenda IG); perfil de voz a partir de transcrições; link `/v/<código>?s=yt\|ig` conta clique e redireciona com `utm_source/medium=video/campaign=estudio/content=<código>`; limite diário de gerações por workspace (`STUDIO_DAILY_LIMIT`, padrão 30) e registro de tokens; tela Estúdio (Vídeos / Base e voz). | |
 | E2 | Publicador (OAuth YouTube + Instagram, agendamento) para vídeos prontos + Atribuição | Fecha publicar → medir |
 | E3 | Trilha A: upload, transcrição, Decupagem, Cortador, render no Container | Produção de verdade |
 | E4 | Retenção, Comentários, Auditoria, Radar de tendências, Planejador com dados reais | Ciclo de aprendizado |

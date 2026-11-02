@@ -21,6 +21,7 @@ export const WORKSPACE_TABLES = [
   'kommo_webhook_log',
   'traffic_alerts', 'traffic_rules',
   'crm_activities', 'crm_deals', 'crm_contacts', 'crm_stages', 'crm_templates',
+  'studio_generations', 'studio_videos', 'studio_profiles',
   'workspace_domains', 'workspace_config',
 ];
 

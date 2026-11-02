@@ -160,6 +160,8 @@ export const PERMISSIONS = {
   'traffic.manage': ['tenant_owner', 'tenant_manager'],
   // CRM: mover negócios, anotar, criar tarefas. Leitura = qualquer membro.
   'crm.manage': ['tenant_owner', 'tenant_manager'],
+  // Estúdio de Vídeo: base/voz e gerar roteiros (custa IA).
+  'studio.manage': ['tenant_owner', 'tenant_manager'],
 };
 
 // O cliente tem o módulo liberado pelo plano? Equipe da Usina sempre tem.

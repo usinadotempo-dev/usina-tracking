@@ -19,6 +19,7 @@ const PORTAL_NAV = [
   { to: '/funis', label: 'Funis', module: 'funis' },
   { to: '/trafego', label: 'Tráfego', module: 'trafego' },
   { to: '/produtos', label: 'Produtos', module: 'produtos' },
+  { to: '/estudio', label: 'Estúdio', module: 'estudio' },
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },
   { to: '/integracoes', label: 'Integrações', permission: 'tenant.integrations.manage' },
   { to: '/empresa', label: 'Empresa', permission: 'tenant.branding.manage' },

@@ -21,6 +21,9 @@ parcialmente desatualizado — o plano vivo é `docs/plano-unificacao.md`.
   **Sempre aplicar a migration ANTES do push** do código que usa as colunas novas
   (em 2026-11-01 a ordem invertida da 0045 derrubou o app inteiro). Ao entregar
   instruções de deploy, a migration vem como passo 1, separado.
+- **IA (Claude):** `functions/_lib/claude.js` — secret `ANTHROPIC_API_KEY` no Pages,
+  modelo em `CLAUDE_MODEL` (padrão `claude-opus-5-5`). Toda geração é registrada em
+  `studio_generations` (tokens) e limitada por workspace/dia.
 - **Tabela nova com `workspace_id`:** incluir em `WORKSPACE_TABLES`
   (`functions/_lib/purge.js`), senão a exclusão de cliente deixa dados órfãos.
 - **Commits:** autor `suporte@usinadotempo.com.br`; o Claude não tem shell nesta

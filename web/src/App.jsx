@@ -13,6 +13,7 @@ import Traffic from './pages/Traffic.jsx';
 import Funnel from './pages/Funnel.jsx';
 import Crm from './pages/Crm.jsx';
 import Products from './pages/Products.jsx';
+import Studio from './pages/Studio.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -60,6 +61,7 @@ export default function App() {
       <Route path="/funis" element={<Protected module="funis"><Funnel /></Protected>} />
       <Route path="/crm" element={<Protected module="crm"><Crm /></Protected>} />
       <Route path="/produtos" element={<Protected module="produtos"><Products /></Protected>} />
+      <Route path="/estudio" element={<Protected module="estudio"><Studio /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
