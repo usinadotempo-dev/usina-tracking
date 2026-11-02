@@ -9,6 +9,7 @@ import Integrations from './pages/Integrations.jsx';
 import Company from './pages/Company.jsx';
 import Profile from './pages/Profile.jsx';
 import Billing from './pages/Billing.jsx';
+import Traffic from './pages/Traffic.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -22,12 +23,16 @@ function Splash() {
 // Rotas que exigem sessão. Senha provisória trava tudo na troca de senha —
 // o servidor também bloqueia (requireAuth), aqui é só para a navegação.
 // `permission`: rota do portal do cliente (equipe da Usina usa o /admin).
-function Protected({ children, permission }) {
-  const { loading, user } = useAuth();
+// `module`: módulo do plano (equipe da Usina sempre tem).
+function Protected({ children, permission, module }) {
+  const { loading, user, tenant } = useAuth();
   if (loading) return <Splash />;
   if (!user) return <Navigate to="/entrar" replace />;
   if (user.must_change_password) return <Navigate to="/trocar-senha" replace />;
   if (permission && (user.role === 'usina_admin' || !(user.permissions || []).includes(permission))) {
+    return <Navigate to="/" replace />;
+  }
+  if (module && user.role !== 'usina_admin' && !(tenant?.entitlements?.modules || []).includes(module)) {
     return <Navigate to="/" replace />;
   }
   return <Shell>{children}</Shell>;
@@ -48,6 +53,7 @@ export default function App() {
       <Route path="/empresa" element={<Protected permission="tenant.branding.manage"><Company /></Protected>} />
       <Route path="/perfil" element={<Protected><Profile /></Protected>} />
       <Route path="/assinatura" element={<Protected permission="tenant.billing.manage"><Billing /></Protected>} />
+      <Route path="/trafego" element={<Protected module="trafego"><Traffic /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

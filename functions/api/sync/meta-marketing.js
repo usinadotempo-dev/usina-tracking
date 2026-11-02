@@ -21,6 +21,7 @@
 import { loadPlatformConfigFromEnv } from '../../_lib/platform-config.js';
 import { createMetaClient, toCents, toInt, toFloat, pickAction, ymd, addDays } from '../../_lib/meta-graph.js';
 import { cronAuthorized } from '../../_lib/cron-auth.js';
+import { evaluateWorkspaceRules } from '../../_lib/traffic.js';
 
 export async function onRequestPost(context) {
   const { request, env } = context;
@@ -188,7 +189,14 @@ async function syncWorkspace(env, meta, ws, dateFrom, dateTo) {
     ).run();
   } catch (_) { /* best effort */ }
 
-  return { workspace_id: wsId, status, campaigns, ad_sets: adSets, ads, campaign_insights: campaignInsights, ad_insights: adInsights, duration_ms: durationMs, error: errorMessage };
+  // Gestão de Tráfego: avalia as regras com os dados recém-sincronizados.
+  let traffic = null;
+  if (status !== 'error') {
+    try { traffic = await evaluateWorkspaceRules(env, wsId); }
+    catch (e) { console.error('traffic rules:', e.message); }
+  }
+
+  return { workspace_id: wsId, status, traffic, campaigns, ad_sets: adSets, ads, campaign_insights: campaignInsights, ad_insights: adInsights, duration_ms: durationMs, error: errorMessage };
 }
 
 // ---- Upserts -----------------------------------------------------------------

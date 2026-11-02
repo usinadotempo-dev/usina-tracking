@@ -19,6 +19,7 @@ export const WORKSPACE_TABLES = [
   'meta_workspace_reach',
   'meta_pages', 'meta_page_insights', 'meta_page_posts',
   'kommo_webhook_log',
+  'traffic_alerts', 'traffic_rules',
   'workspace_domains', 'workspace_config',
 ];
 

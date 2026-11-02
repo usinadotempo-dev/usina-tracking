@@ -10,10 +10,12 @@ const ROLE_LABEL = {
 
 const USINA_COLOR = '#dc4a30';
 
-// Itens do menu do cliente, filtrados pelas permissões que o servidor
-// informou em /auth/me (o servidor checa de novo em cada rota).
+// Itens do menu, filtrados pelas permissões e módulos que o servidor
+// informou em /auth/me (o servidor checa de novo em cada rota). Itens com
+// `permission` são do portal do cliente; a equipe da Usina vê só os demais.
 const PORTAL_NAV = [
   { to: '/', label: 'Início', end: true },
+  { to: '/trafego', label: 'Tráfego', module: 'trafego' },
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },
   { to: '/integracoes', label: 'Integrações', permission: 'tenant.integrations.manage' },
   { to: '/empresa', label: 'Empresa', permission: 'tenant.branding.manage' },
@@ -47,7 +49,10 @@ export default function Shell({ children }) {
   const { user, tenant, logout } = useAuth();
   const isAdmin = user.role === 'usina_admin';
   const perms = new Set(user.permissions || []);
-  const nav = isAdmin ? [] : PORTAL_NAV.filter((i) => !i.permission || perms.has(i.permission));
+  const modules = new Set(tenant?.entitlements?.modules || []);
+  const nav = PORTAL_NAV.filter((i) => (isAdmin
+    ? !i.permission
+    : (!i.permission || perms.has(i.permission)) && (!i.module || modules.has(i.module))));
   const brand = (!isAdmin && tenant?.brand_color) || USINA_COLOR;
 
   return (
