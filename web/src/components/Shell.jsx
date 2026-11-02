@@ -15,6 +15,7 @@ const USINA_COLOR = '#dc4a30';
 // `permission` são do portal do cliente; a equipe da Usina vê só os demais.
 const PORTAL_NAV = [
   { to: '/', label: 'Início', end: true },
+  { to: '/crm', label: 'CRM', module: 'crm' },
   { to: '/funis', label: 'Funis', module: 'funis' },
   { to: '/trafego', label: 'Tráfego', module: 'trafego' },
   { to: '/equipe', label: 'Equipe', permission: 'tenant.users.manage' },

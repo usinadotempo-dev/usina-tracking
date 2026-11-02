@@ -1,6 +1,7 @@
 import { resolveHost } from './_lib/workspace.js';
 import { loadWorkspaceConfig } from './_lib/workspace-config.js';
 import { createKommoLead } from './_lib/kommo.js';
+import { captureTrackerLead } from './_lib/crm.js';
 import { uploadGoogleAdsConversion } from './_lib/google-ads-upload.js';
 import { parseEventCatalog, getEventEntry, resolveGoogleAdsActionId, resolveMetaEventName, resolveGa4EventName } from './_lib/event-catalog.js';
 import { lockedFor, hit } from './_lib/rate-limit.js';
@@ -254,6 +255,30 @@ export async function onRequestPost(context) {
       } catch (e) {
         kommoResponseBody = `Fetch error: ${e.message}`;
       }
+    }
+
+    // --- CRM nativo (Fase 2): sem Kommo, o lead vira negócio em "Lead novo".
+    // Mesmo limite por IP do Kommo. Em segundo plano (não atrasa a resposta).
+    const crmEnabled = !isBot && isLeadEvent && !(cfg.kommo_long_lived_token && cfg.kommo_subdomain)
+      && (userData.em || userData.ph);
+    if (crmEnabled) {
+      context.waitUntil((async () => {
+        const bucket = `crm:${hasRealSession ? 'ip' : 'nosess'}:${clientIp || 'unknown'}`;
+        if (await lockedFor(env, bucket)) return;
+        await hit(env, bucket, hasRealSession ? KOMMO_IP_LIMIT : KOMMO_IP_LIMIT_NO_SESSION);
+        await captureTrackerLead(env, workspaceId, {
+          name: ((userData.fn || '') + ' ' + (userData.ln || '')).trim() || null,
+          email: userData.em || null,
+          phone: userData.ph || null,
+          country_code: cfg.default_country_code,
+          utm_source: sessionData.utm_source || null,
+          utm_medium: sessionData.utm_medium || null,
+          utm_campaign: sessionData.utm_campaign || null,
+          utm_content: sessionData.utm_content || null,
+          session_id: sessionId || null,
+          landing_path: (() => { try { return new URL(body.event_source_url || '').pathname; } catch { return null; } })(),
+        });
+      })());
     }
 
     const rawEmail = userData.em || '';

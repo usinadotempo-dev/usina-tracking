@@ -11,6 +11,7 @@ import Profile from './pages/Profile.jsx';
 import Billing from './pages/Billing.jsx';
 import Traffic from './pages/Traffic.jsx';
 import Funnel from './pages/Funnel.jsx';
+import Crm from './pages/Crm.jsx';
 import Shell from './components/Shell.jsx';
 
 function Splash() {
@@ -56,6 +57,7 @@ export default function App() {
       <Route path="/assinatura" element={<Protected permission="tenant.billing.manage"><Billing /></Protected>} />
       <Route path="/trafego" element={<Protected module="trafego"><Traffic /></Protected>} />
       <Route path="/funis" element={<Protected module="funis"><Funnel /></Protected>} />
+      <Route path="/crm" element={<Protected module="crm"><Crm /></Protected>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

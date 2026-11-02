@@ -14,6 +14,7 @@ const JOBS = [
   { name: 'meta-marketing', path: '/api/sync/meta-marketing', everyHours: 1 },
   { name: 'booking-reminders', path: '/api/sync/booking-reminders', everyHours: 1 },
   { name: 'outreach', path: '/api/outreach/run', everyHours: 1 },
+  { name: 'crm-reminders', path: '/api/sync/crm-reminders', everyHours: 1 },
   { name: 'meta-instagram', path: '/api/sync/meta-instagram', everyHours: 4 },
   { name: 'meta-pages', path: '/api/sync/meta-pages', everyHours: 6 },
 ];
